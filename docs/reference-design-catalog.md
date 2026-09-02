@@ -31,7 +31,7 @@ Run:
 python3 scripts/validate_catalog.py
 ```
 
-The validator checks JSON syntax, IDs, required fields, license caution visibility, and references from designs to seed materials, manufacturing methods, and capability ratings.
+The validator checks JSON syntax, IDs, top-level and nested required fields, field types, license caution visibility, and references from designs to seed materials, manufacturing methods, and capability ratings.
 
 ## Adding a new reference design
 

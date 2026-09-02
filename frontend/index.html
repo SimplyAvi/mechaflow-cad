@@ -47,6 +47,7 @@
       }
       .badge {
         display: inline-block;
+        justify-self: start;
         margin-bottom: 10px;
         padding: 4px 10px;
         border-radius: 999px;
@@ -78,34 +79,6 @@
       <section id="status">Loading catalog from <code>/api/catalog/reference-designs</code>...</section>
       <section id="catalog" class="grid" aria-live="polite"></section>
     </main>
-    <script>
-      async function loadCatalog() {
-        const status = document.getElementById('status');
-        const catalog = document.getElementById('catalog');
-        try {
-          const response = await fetch('/api/catalog/reference-designs');
-          if (!response.ok) throw new Error(`API returned ${response.status}`);
-          const payload = await response.json();
-          status.textContent = `Loaded ${payload.items.length} reference designs from the backend API.`;
-          catalog.innerHTML = payload.items.map((item) => {
-            const caution = item.license.compatibility === 'appears-compatible'
-              ? ''
-              : '<p class="warning">License review required before import or redistribution.</p>';
-            return `<article>
-              <p class="badge">${item.license.compatibility}</p>
-              <h2>${item.name}</h2>
-              <p>${item.summary}</p>
-              <p><strong>License:</strong> ${item.license.declared}</p>
-              <p><strong>Example tasks:</strong> ${item.engineering_intent.example_tasks.join(', ')}</p>
-              ${caution}
-              <p><a href="${item.source.url}">Upstream source</a></p>
-            </article>`;
-          }).join('');
-        } catch (error) {
-          status.textContent = `Failed to load catalog: ${error.message}`;
-        }
-      }
-      loadCatalog();
-    </script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

@@ -13,6 +13,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = REPO_ROOT / "catalog" / "reference-designs" / "reference-designs.seed.json"
@@ -23,7 +24,7 @@ DATASETS = {
     "capability-ratings": REPO_ROOT / "data" / "capability-ratings.seed.json",
     "standards-advisory-rules": REPO_ROOT / "data" / "standards-advisory-rules.seed.json",
 }
-FRONTEND_ROOT = REPO_ROOT / "frontend"
+FRONTEND_ROOT = (REPO_ROOT / "frontend").resolve()
 
 
 def load_json(path: Path) -> Any:
@@ -37,22 +38,25 @@ class MechaFlowHandler(SimpleHTTPRequestHandler):
     server_version = "MechaFlowCADSeed/0.1"
 
     def translate_path(self, path: str) -> str:
-        if path == "/":
-            return str(FRONTEND_ROOT / "index.html")
-        frontend_path = FRONTEND_ROOT / path.lstrip("/")
-        if frontend_path.exists():
-            return str(frontend_path)
-        return str(FRONTEND_ROOT / "index.html")
+        index_page = FRONTEND_ROOT / "index.html"
+        relative = unquote(urlsplit(path).path).lstrip("/")
+        if not relative:
+            return str(index_page)
+        candidate = (FRONTEND_ROOT / relative).resolve()
+        if FRONTEND_ROOT not in candidate.parents or not candidate.is_file():
+            return str(index_page)
+        return str(candidate)
 
     def do_GET(self) -> None:  # noqa: N802, required by BaseHTTPRequestHandler
-        if self.path == "/api/health":
+        route = urlsplit(self.path).path
+        if route == "/api/health":
             self._send_json({"ok": True, "service": "mechaflow-cad-seed"})
             return
-        if self.path == "/api/catalog/reference-designs":
+        if route == "/api/catalog/reference-designs":
             self._send_json({"items": load_json(CATALOG_PATH)})
             return
-        if self.path.startswith("/api/data/"):
-            dataset = self.path.removeprefix("/api/data/").split("?", 1)[0]
+        if route.startswith("/api/data/"):
+            dataset = route.removeprefix("/api/data/")
             path = DATASETS.get(dataset)
             if path is None:
                 self._send_json({"error": f"unknown dataset: {dataset}"}, HTTPStatus.NOT_FOUND)

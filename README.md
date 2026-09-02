@@ -97,6 +97,9 @@ python3 scripts/validate_catalog.py
 python3 tests/smoke_test.py
 ```
 
+The smoke test additionally needs Node.js, an open-source test-only dependency, to prove the browser
+frontend really talks to the backend API.
+
 ## Hosting philosophy
 
 Keep hosting cheap by making the platform cloud-assisted rather than cloud-dependent.

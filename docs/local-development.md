@@ -44,7 +44,14 @@ Run the end-to-end smoke test:
 python3 tests/smoke_test.py
 ```
 
-The test starts the app on an OS-selected port, verifies `/api/health`, verifies `/api/catalog/reference-designs`, and verifies the frontend HTML references the backend API.
+The test starts the app on an OS-selected port (override with `MECHAFLOW_PORT`), verifies `/api/health`,
+verifies `/api/catalog/reference-designs`, and verifies that the static frontend cannot serve files
+outside `frontend/`.
+
+It then runs `tests/frontend_smoke.mjs`, which loads `frontend/app.js` from the running server, executes
+its real fetch-and-render path against the live API on the same configurable base URL, and asserts the
+rendered cards match the backend response. Node.js is the only extra requirement, and it is an
+open-source test-only dependency: the app itself still runs on the Python standard library alone.
 
 ## Catalog validation
 

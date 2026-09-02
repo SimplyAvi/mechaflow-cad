@@ -105,7 +105,7 @@
       "url": "https://github.com/anvil-robotics/anvil-gripper-hw",
       "repository": "anvil-robotics/anvil-gripper-hw",
       "retrieved_at": "2026-09-02",
-      "upstream_license_url": "https://github.com/anvil-robotics/anvil-gripper-hw/blob/main/LICENSE"
+      "upstream_license_url": "https://github.com/anvil-robotics/anvil-gripper-hw/blob/main/LICENSE.txt"
     },
     "license": {
       "declared": "CERN Open Hardware Licence Version 2 Strongly Reciprocal reported by repository license metadata",
