@@ -73,7 +73,7 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": ["deliver target joint torque", "hold a static leg load", "survive repeated robot gait cycles"],
+      "example_task_ids": ["lift-static-payload", "manufacturing-substitution"],
       "capability_rating_ids": ["payload-static", "joint-torque", "fatigue-life-advisory"],
       "primary_material_ids": ["aluminum-6061-t6", "pla-generic"],
       "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing"],
@@ -160,7 +160,7 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": ["grasp a small payload", "compare printed and machined finger materials", "check fingertip deflection"],
+      "example_task_ids": ["grasp-object", "lift-static-payload", "manufacturing-substitution"],
       "capability_rating_ids": ["payload-static", "grip-force", "deflection-limit"],
       "primary_material_ids": ["aluminum-6061-t6", "petg-generic", "carbon-fiber-nylon-generic"],
       "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing"],
@@ -248,7 +248,7 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": ["reach a target envelope", "lift a small payload", "avoid cable interference across joints"],
+      "example_task_ids": ["reach-envelope", "lift-static-payload", "wire-clearance-check"],
       "capability_rating_ids": ["reach-envelope", "payload-static", "joint-torque"],
       "primary_material_ids": ["aluminum-6061-t6", "pla-generic"],
       "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing", "off-the-shelf-parts"],
@@ -344,7 +344,7 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": ["grasp small objects", "compare finger materials", "check PCB and wire clearances"],
+      "example_task_ids": ["grasp-object", "manufacturing-substitution", "wire-clearance-check"],
       "capability_rating_ids": ["grip-force", "payload-static", "wire-clearance"],
       "primary_material_ids": ["pla-generic", "petg-generic", "carbon-fiber-nylon-generic"],
       "manufacturing_method_ids": ["fdm-3d-printing", "pcb-fabrication", "wire-harness"],

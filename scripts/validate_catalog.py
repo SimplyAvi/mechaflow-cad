@@ -8,8 +8,10 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+REFERENCE_SCHEMA = ROOT / "catalog" / "schemas" / "reference-design.schema.json"
 REFERENCE_DESIGNS = ROOT / "catalog" / "reference-designs" / "reference-designs.seed.json"
 DATA_FILES = {
     "materials": ROOT / "data" / "materials.seed.json",
@@ -19,34 +21,21 @@ DATA_FILES = {
     "standards-advisory-rules": ROOT / "data" / "standards-advisory-rules.seed.json",
 }
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-REFERENCE_REQUIRED = {
-    "schema_version",
-    "id",
-    "name",
-    "summary",
-    "source",
-    "license",
-    "openness",
-    "assets",
-    "engineering_intent",
-    "integration_notes",
-    "review",
+JSON_TYPES: dict[str, Any] = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "boolean": bool,
+    "number": (int, float),
+    "integer": int,
 }
-NESTED_REQUIRED = {
-    "source": {"url", "retrieved_at"},
-    "license": {"declared", "compatibility", "evidence", "cautions"},
-    "openness": {"design_files_available", "commercial_use_known", "redistribution_known"},
-    "assets": {"cad", "electronics", "bom", "documentation"},
-    "engineering_intent": {
-        "example_tasks",
-        "capability_rating_ids",
-        "primary_material_ids",
-        "manufacturing_method_ids",
-    },
-    "review": {"status", "reviewed_by", "reviewed_at", "next_actions"},
-}
-LICENSE_COMPATIBILITY = {"appears-compatible", "conditional", "not-compatible", "uncertain"}
-REVIEW_STATUSES = {"seed", "needs-license-review", "ready-for-import", "blocked"}
+BLOCKING_COMPATIBILITY = {"uncertain", "conditional", "not-compatible"}
+CROSS_REFERENCES = (
+    ("example_task_ids", "tasks", "task"),
+    ("primary_material_ids", "materials", "material"),
+    ("manufacturing_method_ids", "manufacturing-methods", "manufacturing method"),
+    ("capability_rating_ids", "capability-ratings", "capability rating"),
+)
 
 
 def load_json(path: Path) -> Any:
@@ -60,6 +49,56 @@ def load_json(path: Path) -> Any:
 def ensure(condition: bool, message: str, errors: list[str]) -> None:
     if not condition:
         errors.append(message)
+
+
+def has_json_type(value: Any, expected: str) -> bool:
+    python_type = JSON_TYPES.get(expected)
+    if python_type is None:
+        return True
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected in {"number", "integer"} and isinstance(value, bool):
+        return False
+    return isinstance(value, python_type)
+
+
+def check_schema(value: Any, schema: dict[str, Any], defs: dict[str, Any], path: str, errors: list[str]) -> None:
+    """Check a value against the subset of JSON Schema used by the catalog schema."""
+    if "$ref" in schema:
+        schema = defs[schema["$ref"].rsplit("/", 1)[-1]]
+
+    expected = schema.get("type")
+    if expected is not None and not has_json_type(value, expected):
+        errors.append(f"{path} must be a JSON {expected}")
+        return
+    if "const" in schema and value != schema["const"]:
+        errors.append(f"{path} must be {schema['const']!r}")
+    if "enum" in schema and value not in schema["enum"]:
+        errors.append(f"{path} must be one of {sorted(schema['enum'])}")
+
+    if isinstance(value, str):
+        if len(value) < schema.get("minLength", 0):
+            errors.append(f"{path} must not be empty")
+        pattern = schema.get("pattern")
+        if pattern is not None and not re.match(pattern, value):
+            errors.append(f"{path} must match {pattern}")
+        if schema.get("format") == "uri" and not urlsplit(value).scheme:
+            errors.append(f"{path} must be an absolute URI")
+
+    if isinstance(value, dict):
+        properties = schema.get("properties", {})
+        missing = set(schema.get("required", [])) - set(value)
+        ensure(not missing, f"{path} missing required fields: {sorted(missing)}", errors)
+        if schema.get("additionalProperties") is False:
+            unknown = set(value) - set(properties)
+            ensure(not unknown, f"{path} has unknown fields: {sorted(unknown)}", errors)
+        for key, child in value.items():
+            if key in properties:
+                check_schema(child, properties[key], defs, f"{path}.{key}", errors)
+
+    if isinstance(value, list) and "items" in schema:
+        for index, child in enumerate(value):
+            check_schema(child, schema["items"], defs, f"{path}[{index}]", errors)
 
 
 def validate_unique_ids(name: str, items: list[Any], errors: list[str]) -> set[str]:
@@ -77,47 +116,26 @@ def validate_unique_ids(name: str, items: list[Any], errors: list[str]) -> set[s
 
 
 def validate_reference_designs(dataset_ids: dict[str, set[str]], errors: list[str]) -> None:
+    schema = load_json(REFERENCE_SCHEMA)
+    defs = schema.get("$defs", {})
     designs = load_json(REFERENCE_DESIGNS)
     ensure(isinstance(designs, list), "reference designs root must be a list", errors)
     if not isinstance(designs, list):
         return
     validate_unique_ids("reference-designs", designs, errors)
 
-    material_ids = dataset_ids.get("materials", set())
-    manufacturing_ids = dataset_ids.get("manufacturing-methods", set())
-    rating_ids = dataset_ids.get("capability-ratings", set())
-
     for index, design in enumerate(designs):
         if not isinstance(design, dict):
             continue
-        design_id = design.get("id", f"<index {index}>")
-        missing = REFERENCE_REQUIRED - set(design)
-        ensure(not missing, f"{design_id} missing required fields: {sorted(missing)}", errors)
-        ensure(design.get("schema_version") == "reference-design.v1", f"{design_id} has wrong schema_version", errors)
+        design_id = design["id"] if isinstance(design.get("id"), str) else f"reference-designs[{index}]"
+        check_schema(design, schema, defs, design_id, errors)
 
-        sections: dict[str, dict[str, Any]] = {}
-        for section_name, required_keys in NESTED_REQUIRED.items():
-            if section_name not in design:
-                continue
-            section = design[section_name]
-            if not isinstance(section, dict):
-                errors.append(f"{design_id}.{section_name} must be an object")
-                continue
-            sections[section_name] = section
-            missing_nested = required_keys - set(section)
-            ensure(
-                not missing_nested,
-                f"{design_id}.{section_name} missing required fields: {sorted(missing_nested)}",
-                errors,
-            )
-
-        license_data = sections.get("license", {})
-        review = sections.get("review", {})
+        license_data = design.get("license")
+        review = design.get("review")
+        if not isinstance(license_data, dict) or not isinstance(review, dict):
+            continue
         compatibility = license_data.get("compatibility")
-        ensure(compatibility in LICENSE_COMPATIBILITY, f"{design_id} has invalid license compatibility", errors)
-        ensure(bool(license_data.get("declared")), f"{design_id} must record declared license text", errors)
-        ensure(bool(license_data.get("evidence")), f"{design_id} must record license evidence", errors)
-        if compatibility in {"uncertain", "conditional", "not-compatible"}:
+        if compatibility in BLOCKING_COMPATIBILITY:
             ensure(
                 bool(license_data.get("cautions")),
                 f"{design_id} must include cautions when compatibility is {compatibility}",
@@ -129,20 +147,19 @@ def validate_reference_designs(dataset_ids: dict[str, set[str]], errors: list[st
                 errors,
             )
 
-        ensure(review.get("status") in REVIEW_STATUSES, f"{design_id} has invalid review status", errors)
-
-        intent = sections.get("engineering_intent", {})
-        for field, known_ids, label in (
-            ("primary_material_ids", material_ids, "material"),
-            ("manufacturing_method_ids", manufacturing_ids, "manufacturing method"),
-            ("capability_rating_ids", rating_ids, "capability rating"),
-        ):
+        intent = design.get("engineering_intent")
+        if not isinstance(intent, dict):
+            continue
+        for field, dataset, label in CROSS_REFERENCES:
             values = intent.get(field, [])
             if not isinstance(values, list):
-                errors.append(f"{design_id}.engineering_intent.{field} must be a list")
                 continue
             for value in values:
-                ensure(value in known_ids, f"{design_id} references unknown {label} {value}", errors)
+                ensure(
+                    value in dataset_ids.get(dataset, set()),
+                    f"{design_id} references unknown {label} {value}",
+                    errors,
+                )
 
 
 def validate_datasets(errors: list[str]) -> dict[str, set[str]]:

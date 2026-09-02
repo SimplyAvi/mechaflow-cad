@@ -25,6 +25,7 @@ DATASETS = {
     "standards-advisory-rules": REPO_ROOT / "data" / "standards-advisory-rules.seed.json",
 }
 FRONTEND_ROOT = (REPO_ROOT / "frontend").resolve()
+DATA_ROUTE_PREFIX = "/api/data/"
 
 
 def load_json(path: Path) -> Any:
@@ -55,8 +56,8 @@ class MechaFlowHandler(SimpleHTTPRequestHandler):
         if route == "/api/catalog/reference-designs":
             self._send_json({"items": load_json(CATALOG_PATH)})
             return
-        if route.startswith("/api/data/"):
-            dataset = route.removeprefix("/api/data/")
+        if route.startswith(DATA_ROUTE_PREFIX):
+            dataset = route[len(DATA_ROUTE_PREFIX):]
             path = DATASETS.get(dataset)
             if path is None:
                 self._send_json({"error": f"unknown dataset: {dataset}"}, HTTPStatus.NOT_FOUND)

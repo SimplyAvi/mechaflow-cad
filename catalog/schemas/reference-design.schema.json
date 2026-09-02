@@ -92,9 +92,9 @@
     "engineering_intent": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["example_tasks", "capability_rating_ids", "primary_material_ids", "manufacturing_method_ids"],
+      "required": ["example_task_ids", "capability_rating_ids", "primary_material_ids", "manufacturing_method_ids"],
       "properties": {
-        "example_tasks": { "type": "array", "items": { "type": "string" } },
+        "example_task_ids": { "type": "array", "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" } },
         "capability_rating_ids": { "type": "array", "items": { "type": "string" } },
         "primary_material_ids": { "type": "array", "items": { "type": "string" } },
         "manufacturing_method_ids": { "type": "array", "items": { "type": "string" } },

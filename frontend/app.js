@@ -1,4 +1,5 @@
 export const CATALOG_ENDPOINT = '/api/catalog/reference-designs';
+export const TASKS_ENDPOINT = '/api/data/tasks';
 
 const SAFE_URL_SCHEMES = new Set(['http:', 'https:']);
 
@@ -25,10 +26,23 @@ function labelledElement(doc, tagName, label, value) {
   return node;
 }
 
-export function buildDesignCard(doc, item) {
+async function loadTaskNames(fetchImpl, endpoint) {
+  try {
+    const response = await fetchImpl(endpoint);
+    if (!response.ok) return new Map();
+    const payload = await response.json();
+    const items = Array.isArray(payload.items) ? payload.items : [];
+    return new Map(items.map((task) => [task.id, task.name ?? task.id]));
+  } catch {
+    return new Map();
+  }
+}
+
+export function buildDesignCard(doc, item, taskNames = new Map()) {
   const license = item.license ?? {};
   const intent = item.engineering_intent ?? {};
-  const exampleTasks = Array.isArray(intent.example_tasks) ? intent.example_tasks : [];
+  const taskIds = Array.isArray(intent.example_task_ids) ? intent.example_task_ids : [];
+  const taskLabels = taskIds.map((taskId) => taskNames.get(taskId) ?? taskId);
   const compatibility = license.compatibility ?? 'unknown';
 
   const card = doc.createElement('article');
@@ -37,7 +51,7 @@ export function buildDesignCard(doc, item) {
     textElement(doc, 'h2', item.name ?? item.id ?? 'Untitled reference design'),
     textElement(doc, 'p', item.summary ?? ''),
     labelledElement(doc, 'p', 'License:', license.declared ?? 'unknown'),
-    labelledElement(doc, 'p', 'Example tasks:', exampleTasks.join(', ') || 'none recorded'),
+    labelledElement(doc, 'p', 'Example tasks:', taskLabels.join(', ') || 'none recorded'),
   );
 
   if (compatibility !== 'appears-compatible') {
@@ -64,6 +78,7 @@ export async function renderCatalog({
   document: doc,
   fetch: fetchImpl = globalThis.fetch,
   endpoint = CATALOG_ENDPOINT,
+  tasksEndpoint = TASKS_ENDPOINT,
 } = {}) {
   const status = doc.getElementById('status');
   const catalog = doc.getElementById('catalog');
@@ -72,7 +87,8 @@ export async function renderCatalog({
     if (!response.ok) throw new Error(`API returned ${response.status}`);
     const payload = await response.json();
     const items = Array.isArray(payload.items) ? payload.items : [];
-    catalog.replaceChildren(...items.map((item) => buildDesignCard(doc, item)));
+    const taskNames = await loadTaskNames(fetchImpl, tasksEndpoint);
+    catalog.replaceChildren(...items.map((item) => buildDesignCard(doc, item, taskNames)));
     status.textContent = `Loaded ${items.length} reference designs from the backend API.`;
     return items.length;
   } catch (error) {
@@ -81,6 +97,7 @@ export async function renderCatalog({
   }
 }
 
-if (typeof window !== 'undefined' && typeof window.document !== 'undefined') {
-  renderCatalog({ document: window.document }).catch(() => {});
-}
+export const pageLoad =
+  typeof window !== 'undefined' && typeof window.document !== 'undefined'
+    ? renderCatalog({ document: window.document }).catch(() => null)
+    : null;
