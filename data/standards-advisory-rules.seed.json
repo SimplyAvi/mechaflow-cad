@@ -1,0 +1,38 @@
+[
+  {
+    "id": "advisory-safety-factor-prompt",
+    "name": "Prompt for an explicit safety factor target",
+    "rule_type": "open-advisory",
+    "applies_to": ["payload-static", "grip-force", "joint-torque"],
+    "logic": "If no safety_factor_target is set for a load-bearing task, require the user to select or justify one before a green report state is shown.",
+    "confidence": "heuristic",
+    "source_notes": ["General engineering practice. Not a substitute for a specific standard."]
+  },
+  {
+    "id": "advisory-printed-part-anisotropy",
+    "name": "Warn when FDM printed parts carry structural load",
+    "rule_type": "open-advisory",
+    "applies_to": ["fdm-3d-printing", "payload-static", "deflection-limit"],
+    "logic": "If manufacturing_method_id is fdm-3d-printing and the part is load-bearing, add print orientation and layer adhesion warnings.",
+    "confidence": "heuristic",
+    "source_notes": ["Seed heuristic. Require material datasheet or test coupons for engineering claims."]
+  },
+  {
+    "id": "manufacturer-bend-radius-required",
+    "name": "Require manufacturer bend-radius data for moving cables",
+    "rule_type": "manufacturer-data-required",
+    "applies_to": ["wire-clearance", "wire-harness"],
+    "logic": "If a cable crosses a moving joint and no manufacturer bend radius is recorded, mark the rating as needs review.",
+    "confidence": "manufacturer-data-needed",
+    "source_notes": ["Do not invent cable flex ratings. Link or attach supplier datasheets in project data."]
+  },
+  {
+    "id": "licensed-standards-not-redistributed",
+    "name": "Do not redistribute protected standards text",
+    "rule_type": "licensed-authority-boundary",
+    "applies_to": ["all"],
+    "logic": "Catalogs may store standard identifiers, links, and user-provided pack references, but must not copy protected standards text unless redistribution rights are documented.",
+    "confidence": "policy",
+    "source_notes": ["Repository policy. Legal review required before shipping authoritative standards packs."]
+  }
+]

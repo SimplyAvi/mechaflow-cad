@@ -62,6 +62,10 @@ Examples:
 - Manufacturing process limits.
 - Maintenance access requirements.
 
+## Seed data files
+
+Initial machine-readable seed data lives in `data/*.seed.json` and is validated by `python3 scripts/validate_catalog.py`. These files are advisory starter data for backend and frontend workers, not certified engineering references.
+
 ## Material database
 
 Initial fields:
@@ -94,6 +98,8 @@ Initial fields:
 - License or terms.
 
 ## Reference design catalog
+
+The documented schema lives in `catalog/schemas/reference-design.schema.json`, with seed entries in `catalog/reference-designs/reference-designs.seed.json`.
 
 Initial fields:
 

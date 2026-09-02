@@ -8,16 +8,26 @@ Example: open a robot hand or gripper design, set the task to "pick and place a 
 
 ## What this repository contains
 
-This repository starts as product and technical documentation.
+This repository starts as product, technical, catalog, and integration foundation documentation.
 
 - [Product requirements](docs/product-requirements.md)
 - [Technical architecture](docs/technical-architecture.md)
 - [User experience](docs/user-experience.md)
+- [Reference design catalog](docs/reference-design-catalog.md)
 - [Open-source integration candidates](docs/open-source-integrations.md)
+- [Integration adapter plan](docs/integrations/README.md)
+- [Dependency license verification](docs/dependency-license-verification.md)
+- [Local development](docs/local-development.md)
 - [Business model](docs/business-model.md)
 - [Cheap hosting plan](docs/hosting-plan.md)
 - [MVP roadmap](docs/mvp-roadmap.md)
 - [Data and standards strategy](docs/data-and-standards.md)
+
+Machine-readable seeds:
+
+- `catalog/reference-designs/reference-designs.seed.json`
+- `catalog/schemas/reference-design.schema.json`
+- `data/*.seed.json`
 
 ## Core product idea
 
@@ -54,7 +64,7 @@ The MVP should:
 
 ## Open-source first
 
-The intended foundation should use open-source components wherever possible.
+The intended foundation should use open-source components wherever possible. Required runtime dependencies must not be closed-source or paid-only, and every GitHub project or design asset must pass the license checklist before adoption.
 
 Candidate foundations include:
 
@@ -69,6 +79,23 @@ Candidate foundations include:
 Some engineering standards are not freely redistributable.
 
 The platform should clearly separate open advisory rules from licensed authoritative standards packs.
+
+## Local seed app
+
+Run the frontend and backend catalog API together with no required third-party runtime dependencies:
+
+```bash
+PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
+```
+
+The process prints the selected URL. Use `python3 scripts/find_unused_port.py` when you need an explicit unused port.
+
+Validate seed data and the working app path:
+
+```bash
+python3 scripts/validate_catalog.py
+python3 tests/smoke_test.py
+```
 
 ## Hosting philosophy
 

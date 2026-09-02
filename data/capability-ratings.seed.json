@@ -1,0 +1,74 @@
+[
+  {
+    "id": "payload-static",
+    "name": "Static payload rating",
+    "inputs": ["load_case", "materials", "part_geometry", "fastener_assumptions"],
+    "methods": ["quick beam heuristic", "FreeCAD FEM plus CalculiX"],
+    "outputs": ["rated_payload_kg", "factor_of_safety", "limiting_part", "confidence"],
+    "minimum_confidence_for_green": "calculated-from-user-inputs",
+    "report_caution": "Payload ratings are advisory until reviewed by a qualified engineer."
+  },
+  {
+    "id": "grip-force",
+    "name": "Grip force margin",
+    "inputs": ["actuator_force", "linkage_ratio", "contact_material", "friction_estimate"],
+    "methods": ["static force balance", "optional contact FEA"],
+    "outputs": ["normal_force", "slip_margin", "actuator_limit", "confidence"],
+    "minimum_confidence_for_green": "estimated-from-heuristic",
+    "report_caution": "Grip force depends strongly on contact conditions."
+  },
+  {
+    "id": "joint-torque",
+    "name": "Joint torque margin",
+    "inputs": ["joint_load", "gear_ratio", "motor_curve", "thermal_assumptions"],
+    "methods": ["static torque balance", "supplier motor curve lookup"],
+    "outputs": ["torque_margin", "thermal_warning", "actuator_limit", "confidence"],
+    "minimum_confidence_for_green": "verified-from-manufacturer-data",
+    "report_caution": "Continuous and peak torque must be reported separately."
+  },
+  {
+    "id": "deflection-limit",
+    "name": "Deflection limit",
+    "inputs": ["load_case", "materials", "geometry", "task_tolerance"],
+    "methods": ["beam heuristic", "FreeCAD FEM plus CalculiX"],
+    "outputs": ["max_displacement_mm", "task_margin", "confidence"],
+    "minimum_confidence_for_green": "calculated-from-user-inputs",
+    "report_caution": "Fixture compliance and joint play can exceed part deflection."
+  },
+  {
+    "id": "fatigue-life-advisory",
+    "name": "Fatigue life advisory",
+    "inputs": ["cycle_count", "stress_range", "material", "surface_finish", "stress_concentrations"],
+    "methods": ["screening heuristic", "future fatigue solver"],
+    "outputs": ["fatigue_risk", "review_required", "confidence"],
+    "minimum_confidence_for_green": "verified-from-authoritative-source",
+    "report_caution": "Do not treat seed fatigue outputs as certified life predictions."
+  },
+  {
+    "id": "reach-envelope",
+    "name": "Reach envelope",
+    "inputs": ["urdf", "joint_limits", "tool_frame", "target_pose"],
+    "methods": ["URDF kinematic check"],
+    "outputs": ["reachable", "joint_limit_margin", "collision_review_required", "confidence"],
+    "minimum_confidence_for_green": "calculated-from-user-inputs",
+    "report_caution": "Collision and cable sweep checks are separate from pure reach."
+  },
+  {
+    "id": "wire-clearance",
+    "name": "Wire clearance and bend-radius rating",
+    "inputs": ["wire_route", "connector_locations", "bend_radius_rules", "moving_link_sweeps"],
+    "methods": ["WireViz data parse", "FreeCAD clearance check"],
+    "outputs": ["minimum_clearance_mm", "bend_radius_margin", "strain_relief_notes", "confidence"],
+    "minimum_confidence_for_green": "verified-from-manufacturer-data",
+    "report_caution": "Cable manufacturer data controls bend radius and flex life."
+  },
+  {
+    "id": "manufacturability",
+    "name": "Manufacturability rating",
+    "inputs": ["geometry", "material", "manufacturing_method", "quantity", "tolerances"],
+    "methods": ["process rule checks", "quote packet completeness"],
+    "outputs": ["manufacturability_status", "cost_band", "lead_time_band", "supplier_questions", "confidence"],
+    "minimum_confidence_for_green": "estimated-from-heuristic",
+    "report_caution": "A supplier quote or DFM review can override seed manufacturability ratings."
+  }
+]

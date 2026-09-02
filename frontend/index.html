@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MechaFlow CAD Seed Catalog</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+      body {
+        margin: 0;
+        background: #10141f;
+        color: #eef3ff;
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      header {
+        display: grid;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 4rem);
+      }
+      .subhead {
+        max-width: 760px;
+        color: #b9c5dc;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      article {
+        border: 1px solid #2d3854;
+        border-radius: 18px;
+        padding: 18px;
+        background: #171d2b;
+        box-shadow: 0 12px 32px rgb(0 0 0 / 0.25);
+      }
+      .badge {
+        display: inline-block;
+        margin-bottom: 10px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #24324d;
+        color: #d8e5ff;
+        font-size: 0.82rem;
+      }
+      .warning {
+        color: #ffd999;
+      }
+      code {
+        background: #0c1019;
+        border-radius: 6px;
+        padding: 2px 5px;
+      }
+      a { color: #8cc8ff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="badge">Open-source-first catalog seed</p>
+        <h1>MechaFlow CAD reference designs</h1>
+        <p class="subhead">
+          This local app serves the static frontend and backend catalog API from one process.
+          License uncertainty is visible by design, and no upstream CAD assets are copied here.
+        </p>
+      </header>
+      <section id="status">Loading catalog from <code>/api/catalog/reference-designs</code>...</section>
+      <section id="catalog" class="grid" aria-live="polite"></section>
+    </main>
+    <script>
+      async function loadCatalog() {
+        const status = document.getElementById('status');
+        const catalog = document.getElementById('catalog');
+        try {
+          const response = await fetch('/api/catalog/reference-designs');
+          if (!response.ok) throw new Error(`API returned ${response.status}`);
+          const payload = await response.json();
+          status.textContent = `Loaded ${payload.items.length} reference designs from the backend API.`;
+          catalog.innerHTML = payload.items.map((item) => {
+            const caution = item.license.compatibility === 'appears-compatible'
+              ? ''
+              : '<p class="warning">License review required before import or redistribution.</p>';
+            return `<article>
+              <p class="badge">${item.license.compatibility}</p>
+              <h2>${item.name}</h2>
+              <p>${item.summary}</p>
+              <p><strong>License:</strong> ${item.license.declared}</p>
+              <p><strong>Example tasks:</strong> ${item.engineering_intent.example_tasks.join(', ')}</p>
+              ${caution}
+              <p><a href="${item.source.url}">Upstream source</a></p>
+            </article>`;
+          }).join('');
+        } catch (error) {
+          status.textContent = `Failed to load catalog: ${error.message}`;
+        }
+      }
+      loadCatalog();
+    </script>
+  </body>
+</html>
