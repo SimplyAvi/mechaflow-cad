@@ -1,6 +1,6 @@
-// Frontend-to-backend smoke proof. Loads the frontend module the running server
-// actually serves, executes its real fetch-and-render path against the live API,
-// and asserts the rendered nodes came from the backend response.
+// Frontend-to-backend smoke proof. Discovers the module the served page loads,
+// runs it under browser-like globals so the page bootstrap itself executes, and
+// asserts the rendered nodes came from the live backend API.
 //
 // Usage: node tests/frontend_smoke.mjs <base-url>
 
@@ -8,6 +8,8 @@ import assert from 'node:assert/strict';
 
 const baseUrl = (process.argv[2] ?? process.env.MECHAFLOW_BASE_URL ?? '').replace(/\/$/, '');
 assert.ok(baseUrl, 'usage: node tests/frontend_smoke.mjs <base-url>');
+
+const originFetch = globalThis.fetch;
 
 function createElement(tagName) {
   return {
@@ -58,39 +60,62 @@ function descendants(node) {
   return node.children.flatMap((child) => [child, ...descendants(child)]);
 }
 
-const pageResponse = await fetch(`${baseUrl}/`);
+function stubFetch(items) {
+  return async (url) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ items: String(url).includes('/data/tasks') ? [] : items }),
+  });
+}
+
+const pageResponse = await originFetch(`${baseUrl}/`);
 assert.equal(pageResponse.status, 200, 'server must serve the frontend page');
 const html = await pageResponse.text();
-assert.match(html, /<script[^>]+src="app\.js"/, 'page must load the frontend module');
 
-const moduleResponse = await fetch(`${baseUrl}/app.js`);
-assert.equal(moduleResponse.status, 200, 'server must serve the frontend module');
+const scriptSources = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(
+  (match) => new URL(match[1], `${baseUrl}/`).href,
+);
+assert.ok(scriptSources.length > 0, 'served page must load at least one script');
+
+const moduleUrl = scriptSources[0];
+const moduleResponse = await originFetch(moduleUrl);
+assert.equal(moduleResponse.status, 200, `server must serve ${moduleUrl}`);
 assert.match(
   moduleResponse.headers.get('content-type') ?? '',
   /javascript/,
   'frontend module must be served as JavaScript',
 );
 const moduleSource = await moduleResponse.text();
+
+// Browser-like globals: the module's page bootstrap runs on import and resolves
+// its relative endpoints against the page origin, exactly as a browser would.
+const pageDocument = createDocument();
+globalThis.document = pageDocument;
+globalThis.window = { document: pageDocument, location: new URL(`${baseUrl}/`) };
+globalThis.fetch = (input, init) => originFetch(new URL(input, `${baseUrl}/`), init);
+
 const frontend = await import(
   `data:text/javascript;base64,${Buffer.from(moduleSource, 'utf-8').toString('base64')}`
 );
 
-const apiItems = (await (await fetch(`${baseUrl}${frontend.CATALOG_ENDPOINT}`)).json()).items;
+assert.notEqual(frontend.pageLoad, null, 'module must bootstrap itself when loaded by a page');
+const rendered = await frontend.pageLoad;
+
+const apiItems = (await originFetch(`${baseUrl}${frontend.CATALOG_ENDPOINT}`).then((r) => r.json()))
+  .items;
+const apiTasks = (await originFetch(`${baseUrl}${frontend.TASKS_ENDPOINT}`).then((r) => r.json()))
+  .items;
 assert.ok(apiItems.length > 0, 'backend must return catalog items');
 
-const doc = createDocument();
-const rendered = await frontend.renderCatalog({
-  document: doc,
-  endpoint: `${baseUrl}${frontend.CATALOG_ENDPOINT}`,
-});
-
-assert.equal(rendered, apiItems.length, 'frontend must render every item the backend returned');
-const cards = doc.byId.catalog.children;
+assert.equal(rendered, apiItems.length, 'page bootstrap must render every item the backend returned');
+const cards = pageDocument.byId.catalog.children;
 assert.equal(cards.length, apiItems.length, 'one card per backend item');
 assert.equal(
-  doc.byId.status.textContent,
+  pageDocument.byId.status.textContent,
   `Loaded ${apiItems.length} reference designs from the backend API.`,
 );
+
+const taskNames = new Map(apiTasks.map((task) => [task.id, task.name]));
 for (const [index, item] of apiItems.entries()) {
   const cardText = cards[index].textContent;
   assert.ok(cardText.includes(item.name), `card ${index} must show the backend name`);
@@ -98,8 +123,23 @@ for (const [index, item] of apiItems.entries()) {
     cardText.includes(item.license.compatibility),
     `card ${index} must show the backend license compatibility`,
   );
+  for (const taskId of item.engineering_intent.example_task_ids) {
+    const taskName = taskNames.get(taskId);
+    assert.ok(taskName, `catalog task id ${taskId} must exist in the tasks dataset`);
+    assert.ok(
+      cardText.includes(taskName),
+      `card ${index} must resolve task ${taskId} to its seeded name`,
+    );
+  }
+
+  const expectedHref = frontend.safeSourceUrl(item.source?.url);
   const link = descendants(cards[index]).find((node) => node.tagName === 'a');
-  assert.equal(link.getAttribute('href'), item.source.url, `card ${index} must link upstream`);
+  if (expectedHref === null) {
+    assert.equal(link, undefined, `card ${index} must not link an unsupported source URL`);
+  } else {
+    assert.ok(link, `card ${index} must link upstream`);
+    assert.equal(link.getAttribute('href'), expectedHref, `card ${index} must link upstream`);
+  }
 }
 
 const hostileItems = [
@@ -108,7 +148,7 @@ const hostileItems = [
     name: '<img src=x onerror=alert(1)>',
     summary: 'hostile summary',
     license: { declared: 'MIT', compatibility: 'appears-compatible' },
-    engineering_intent: { example_tasks: ['t1'] },
+    engineering_intent: { example_task_ids: ['grasp-object'] },
     source: { url: 'javascript:alert(1)' },
   },
 ];
@@ -116,7 +156,7 @@ const hostileDoc = createDocument();
 await frontend.renderCatalog({
   document: hostileDoc,
   endpoint: '/stub',
-  fetch: async () => ({ ok: true, status: 200, json: async () => ({ items: hostileItems }) }),
+  fetch: stubFetch(hostileItems),
 });
 const hostileCard = hostileDoc.byId.catalog.children[0];
 const hostileHeading = descendants(hostileCard).find((node) => node.tagName === 'h2');
@@ -133,11 +173,7 @@ const missingFieldsDoc = createDocument();
 await frontend.renderCatalog({
   document: missingFieldsDoc,
   endpoint: '/stub',
-  fetch: async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ items: [{ id: 'partial', name: 'Partial entry' }] }),
-  }),
+  fetch: stubFetch([{ id: 'partial', name: 'Partial entry' }]),
 });
 assert.equal(
   missingFieldsDoc.byId.catalog.children.length,
