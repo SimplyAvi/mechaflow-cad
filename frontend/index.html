@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MechaFlow CAD Local Dev</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Local integration shell</p>
+        <h1>MechaFlow CAD</h1>
+        <p>
+          This simple frontend shell proves that the backend API exposes the product concepts a future design
+          system and CAD viewer can consume. Visual defaults are intentionally plain and replaceable.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Backend connection</h2>
+        <p id="connection-status">Checking API...</p>
+      </section>
+      <section class="grid">
+        <article class="card">
+          <h2>Product concepts</h2>
+          <ul id="concepts"></ul>
+        </article>
+        <article class="card">
+          <h2>Reference designs</h2>
+          <ul id="reference-designs"></ul>
+        </article>
+      </section>
+    </main>
+    <script src="/runtime-config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
