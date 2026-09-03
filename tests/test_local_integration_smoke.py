@@ -67,11 +67,14 @@ def test_local_frontend_backend_smoke_path() -> None:
         assert config == {
             "apiBaseUrl": api_base_url,
             "catalogApiUrl": f"{api_base_url}/api/catalog/reference-designs",
+            "tasksApiUrl": f"{api_base_url}/api/catalog/tasks",
         }
         metadata = json.loads(read_url(f"{api_base_url}/api/metadata"))
         assert "reference_designs" in metadata["concepts"]
         catalog = json.loads(read_url(f"{api_base_url}/api/catalog/reference-designs"))
         assert any(design["id"] == "gaiahand" for design in catalog["items"])
+        tasks = json.loads(read_url(f"{api_base_url}/api/catalog/tasks"))
+        assert any(task["id"] == "lift-static-payload" for task in tasks["items"])
     finally:
         dev_runner.terminate()
         try:

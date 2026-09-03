@@ -150,7 +150,7 @@ function App() {
           </div>
           <div className="viewer-footer">
             <span>Explode progress: {isExploded ? design.assembly.explodedProgress : 0}%</span>
-            <span>Blue lines show wiring routes and service loops.</span>
+            <span>Blue lines show wiring routes and service-loop review state.</span>
           </div>
         </section>
 
@@ -438,7 +438,8 @@ function WiringPanel({ design, selectedPart }: { design: ReferenceDesign; select
             <div className={`wiring-card status-${route.clearanceStatus}`} key={route.id}>
               <strong>{route.name}</strong>
               <small>
-                Bend radius {route.bendRadiusMm} mm - service loop {route.serviceLoop ? 'planned' : 'missing'}
+                Bend radius {route.bendRadiusMm} mm - service loop{' '}
+                {route.serviceLoop == null ? 'review required' : route.serviceLoop ? 'planned' : 'missing'}
               </small>
               <p>{route.note}</p>
             </div>

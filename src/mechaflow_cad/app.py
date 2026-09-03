@@ -61,7 +61,13 @@ class MechaFlowHandler(SimpleHTTPRequestHandler):
         if request_path == "/runtime-config.js":
             self._send_javascript(
                 "window.MECHA_FLOW_CONFIG = "
-                + json.dumps({"apiBaseUrl": "", "catalogApiUrl": "/api/catalog/reference-designs"})
+                + json.dumps(
+                    {
+                        "apiBaseUrl": "",
+                        "catalogApiUrl": "/api/catalog/reference-designs",
+                        "tasksApiUrl": "/api/data/tasks",
+                    }
+                )
                 + ";\n"
             )
             return

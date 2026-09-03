@@ -77,6 +77,31 @@ class SeedDataValidationTest(unittest.TestCase):
 
         self.assertTrue(errors)
 
+    def test_malformed_adapter_entries_report_errors_without_crashing(self) -> None:
+        sys.path.insert(0, str(ROOT))
+        from scripts import validate_catalog
+
+        adapters = [
+            None,
+            {
+                "id": "malformed-adapter",
+                "documentation_path": "docs/integrations/README.md",
+                "stub_class": "MalformedAdapter",
+                "required_tools": [],
+                "dependency_policy": {},
+                "capabilities": [None],
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            invalid_adapters = Path(temporary_directory) / "integration-adapters.json"
+            invalid_adapters.write_text(json.dumps(adapters), encoding="utf-8")
+            errors: list[str] = []
+            with patch.object(validate_catalog, "INTEGRATION_ADAPTERS", invalid_adapters):
+                validate_catalog.validate_integration_adapters(errors)
+
+        self.assertIn("integration-adapters[0] must be an object", errors)
+        self.assertIn("malformed-adapter capability must be an object", errors)
+
     def test_handoff_aliases_match_backend_runtime_contract(self) -> None:
         sys.path.insert(0, str(ROOT / "backend"))
         from mechaflow_api.adapters import ADAPTERS
@@ -106,6 +131,10 @@ class SeedDataValidationTest(unittest.TestCase):
         self.assertTrue(
             {item["id"] for item in handoff["mvp_seed_project"]["sample_wiring_routes"]}.issubset(sample_route_ids)
         )
+        handoff_parts = {item["id"]: item for item in handoff["mvp_seed_project"]["sample_parts"]}
+        for route in handoff["mvp_seed_project"]["sample_wiring_routes"]:
+            self.assertIn(route["id"], handoff_parts[route["from_part_id"]]["wiring_route_ids"])
+            self.assertIn(route["id"], handoff_parts[route["to_part_id"]]["wiring_route_ids"])
 
 
 if __name__ == "__main__":

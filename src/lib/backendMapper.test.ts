@@ -8,4 +8,10 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
 
     expect(design.assembly.parts.find((part) => part.id === 'part-palm-plate')?.stressRisk).toBe('high');
   });
+
+  it('keeps service-loop state unknown without explicit backend evidence', () => {
+    const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
+
+    expect(design.wiringRoutes.every((route) => route.serviceLoop === null)).toBe(true);
+  });
 });

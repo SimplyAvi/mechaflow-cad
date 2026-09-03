@@ -114,7 +114,11 @@ def main() -> int:
         assert runtime_status == 200
         assert runtime_content_type.startswith("application/javascript")
         runtime_config = json.loads(runtime_body.decode("utf-8").partition(" = ")[2].removesuffix(";\n"))
-        assert runtime_config == {"apiBaseUrl": "", "catalogApiUrl": "/api/catalog/reference-designs"}
+        assert runtime_config == {
+            "apiBaseUrl": "",
+            "catalogApiUrl": "/api/catalog/reference-designs",
+            "tasksApiUrl": "/api/data/tasks",
+        }
 
         unknown_status, _, _ = request_path(base_url, "/api/does-not-exist")
         assert unknown_status == 404
@@ -139,10 +143,6 @@ def main() -> int:
 
     print("Smoke test passed")
     return 0
-
-
-def test_seed_app_end_to_end() -> None:
-    assert main() == 0
 
 
 if __name__ == "__main__":

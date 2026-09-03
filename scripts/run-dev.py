@@ -42,6 +42,7 @@ class RuntimeConfigHandler(http.server.SimpleHTTPRequestHandler):
             payload = {
                 "apiBaseUrl": self.api_base_url,
                 "catalogApiUrl": f"{self.api_base_url}/api/catalog/reference-designs",
+                "tasksApiUrl": f"{self.api_base_url}/api/catalog/tasks",
             }
             body = f"window.MECHA_FLOW_CONFIG = {json.dumps(payload)};\n".encode()
             self.send_response(200)

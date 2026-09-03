@@ -333,7 +333,21 @@
         "local_compute_preferred": true,
         "input_summary": { "files": ["gripper.step", "gripper.FCStd"] },
         "result_summary": { "message": "STEP assembly imported and metadata normalized for selectable parts.", "progress": 100 },
-        "artifacts": [{ "kind": "cad_metadata", "title": "Starter CAD metadata" }]
+        "artifacts": [
+          {
+            "id": "artifact-cad-metadata",
+            "job_id": "job-import-design",
+            "kind": "cad_metadata",
+            "title": "Starter CAD metadata",
+            "summary": "Selectable part and assembly metadata normalized from the starter design.",
+            "payload": {},
+            "confidence": "estimated_from_heuristic",
+            "generated_by": "freecad-worker",
+            "created_at": "2026-09-03T00:00:00Z"
+          }
+        ],
+        "created_at": "2026-09-03T00:00:00Z",
+        "updated_at": "2026-09-03T00:00:00Z"
       },
       {
         "id": "job-exploded-view",
@@ -345,7 +359,21 @@
         "local_compute_preferred": true,
         "input_summary": { "assembly": "asm-open-gripper-demo" },
         "result_summary": { "message": "Exploded transforms are available for concept animation.", "progress": 100 },
-        "artifacts": [{ "kind": "exploded_view", "title": "Exploded view transform set" }]
+        "artifacts": [
+          {
+            "id": "artifact-exploded-view",
+            "job_id": "job-exploded-view",
+            "kind": "exploded_view",
+            "title": "Exploded view transform set",
+            "summary": "Concept transforms are ready for the local cockpit animation.",
+            "payload": {},
+            "confidence": "estimated_from_heuristic",
+            "generated_by": "freecad-worker",
+            "created_at": "2026-09-03T00:00:00Z"
+          }
+        ],
+        "created_at": "2026-09-03T00:00:00Z",
+        "updated_at": "2026-09-03T00:00:00Z"
       },
       {
         "id": "job-rerate-payload",
@@ -357,7 +385,9 @@
         "local_compute_preferred": true,
         "input_summary": { "task": "task-lift-50lb" },
         "result_summary": { "message": "Quick load heuristic is estimating payload after the active material choice.", "progress": 66 },
-        "artifacts": []
+        "artifacts": [],
+        "created_at": "2026-09-03T00:00:00Z",
+        "updated_at": "2026-09-03T00:00:00Z"
       },
       {
         "id": "job-wire-clearance",
@@ -369,7 +399,9 @@
         "local_compute_preferred": true,
         "input_summary": { "route": "route-finger-sensor" },
         "result_summary": { "message": "Wiring route check is queued behind CAD geometry extraction.", "progress": 18 },
-        "artifacts": []
+        "artifacts": [],
+        "created_at": "2026-09-03T00:00:00Z",
+        "updated_at": "2026-09-03T00:00:00Z"
       },
       {
         "id": "job-manufacturing-report",
@@ -381,7 +413,9 @@
         "local_compute_preferred": true,
         "input_summary": { "selected_part_ids": ["part-finger-link"] },
         "result_summary": { "message": "Supplier and fabrication estimates are ready for a low-cost worker handoff.", "progress": 28 },
-        "artifacts": []
+        "artifacts": [],
+        "created_at": "2026-09-03T00:00:00Z",
+        "updated_at": "2026-09-03T00:00:00Z"
       }
     ],
     "reports": [
@@ -423,11 +457,11 @@
       "id": "bom-part-finger-link",
       "part_id": "part-finger-link",
       "name": "Finger link",
-      "quantity": 2,
+      "quantity": 1,
       "unit": "part",
       "supplier": null,
       "supplier_part_number": null,
-      "price": { "currency": "USD", "min": 25, "max": 80, "confidence": "estimated_from_heuristic" },
+      "price": null,
       "datasheet_url": null,
       "license_or_terms": "Derived from local project assembly metadata"
     },
@@ -439,21 +473,33 @@
       "unit": "part",
       "supplier": null,
       "supplier_part_number": null,
-      "price": { "currency": "USD", "min": 45, "max": 120, "confidence": "estimated_from_heuristic" },
+      "price": null,
       "datasheet_url": null,
       "license_or_terms": "Derived from local project assembly metadata"
     },
     {
-      "id": "bom-harness",
-      "part_id": null,
-      "name": "Main and fingertip harness set",
+      "id": "bom-part-actuator-bracket",
+      "part_id": "part-actuator-bracket",
+      "name": "Actuator bracket",
       "quantity": 1,
-      "unit": "set",
+      "unit": "part",
       "supplier": null,
       "supplier_part_number": null,
-      "price": { "currency": "USD", "min": 28, "max": 64, "confidence": "estimated_from_heuristic" },
+      "price": null,
       "datasheet_url": null,
-      "license_or_terms": "Open wire harness placeholder"
+      "license_or_terms": "Derived from local project assembly metadata"
+    },
+    {
+      "id": "bom-part-controller-pcb",
+      "part_id": "part-controller-pcb",
+      "name": "Controller PCB placeholder",
+      "quantity": 1,
+      "unit": "part",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": null,
+      "datasheet_url": null,
+      "license_or_terms": "Derived from local project assembly metadata"
     }
   ],
   "manufacturing_options": [
@@ -500,6 +546,42 @@
           "lead_time_days_max": 10,
           "supplier_url": null,
           "risk_notes": ["Cable pass-through requires a clearance review."],
+          "confidence": "estimated_from_heuristic"
+        }
+      ]
+    },
+    {
+      "part_id": "part-actuator-bracket",
+      "part_name": "Actuator bracket",
+      "material_id": "mat-low-carbon-steel",
+      "options": [
+        {
+          "id": "mfg-bracket-sheet",
+          "process": "sheet_metal",
+          "description": "Laser cut and bent low-carbon steel bracket.",
+          "cost": { "currency": "USD", "min": 18, "max": 48, "confidence": "estimated_from_heuristic" },
+          "lead_time_days_min": 3,
+          "lead_time_days_max": 8,
+          "supplier_url": null,
+          "risk_notes": ["Bend tolerance can shift actuator alignment."],
+          "confidence": "estimated_from_heuristic"
+        }
+      ]
+    },
+    {
+      "part_id": "part-controller-pcb",
+      "part_name": "Controller PCB placeholder",
+      "material_id": "mat-fr4-generic",
+      "options": [
+        {
+          "id": "mfg-controller-pcb",
+          "process": "pcb_fabrication",
+          "description": "Prototype PCB fabrication for fit and connector placement review.",
+          "cost": { "currency": "USD", "min": 10, "max": 40, "confidence": "estimated_from_heuristic" },
+          "lead_time_days_min": 5,
+          "lead_time_days_max": 12,
+          "supplier_url": null,
+          "risk_notes": [],
           "confidence": "estimated_from_heuristic"
         }
       ]

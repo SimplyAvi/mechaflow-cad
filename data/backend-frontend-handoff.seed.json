@@ -207,7 +207,7 @@
         "material_id": "fr4-generic",
         "manufacturing_method_id": "pcb-fabrication",
         "capability_rating_ids": ["wire-clearance", "manufacturability"],
-        "wiring_route_ids": ["route-main-harness"]
+        "wiring_route_ids": ["route-finger-sensor", "route-main-harness"]
       }
     ],
     "sample_wiring_routes": [

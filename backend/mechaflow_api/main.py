@@ -115,12 +115,17 @@ CONCEPTS = {
     "reports": "Advisory summaries of task status, payload re-rating, cost, manufacturing, wiring, risks, and unknowns.",
 }
 CATALOG_SEED_PATH = Path(__file__).resolve().parents[2] / "catalog" / "reference-designs" / "reference-designs.seed.json"
+CATALOG_TASKS_PATH = Path(__file__).resolve().parents[2] / "data" / "tasks.seed.json"
 
 
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
     project_store = project_store or build_default_project_store()
-    job_store: dict[str, AnalysisJob] = {}
+    job_store = {
+        job.id: job
+        for project in project_store.list_projects()
+        for job in project.analysis_jobs
+    }
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -221,6 +226,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.get(f"{settings.api_prefix}/catalog/reference-designs", tags=["catalog"])
     def catalog_reference_designs() -> dict[str, list[dict]]:
         with CATALOG_SEED_PATH.open("r", encoding="utf-8") as handle:
+            return {"items": json.load(handle)}
+
+    @app.get(f"{settings.api_prefix}/catalog/tasks", tags=["catalog"])
+    def catalog_tasks() -> dict[str, list[dict]]:
+        with CATALOG_TASKS_PATH.open("r", encoding="utf-8") as handle:
             return {"items": json.load(handle)}
 
     @app.get(f"{settings.api_prefix}/materials", response_model=list[Material], tags=["catalog"])

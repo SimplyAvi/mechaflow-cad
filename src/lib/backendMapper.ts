@@ -300,7 +300,7 @@ const mapWiring = (routes: BackendWiringRoute[]): WiringRoute[] =>
     connectedParts: [route.from_connector.part_id, route.to_connector.part_id].filter((value): value is string => Boolean(value)),
     clearanceStatus: route.clearance_min_mm == null ? 'watch' : route.clearance_min_mm < 3 ? 'watch' : 'passes',
     bendRadiusMm: route.bend_radius_min_mm ?? 0,
-    serviceLoop: route.harness_bom.length > 0 || route.risk_notes.length > 0,
+    serviceLoop: null,
     note: route.risk_notes[0] ?? `Connects ${route.from_connector.name} to ${route.to_connector.name}.`,
   }));
 

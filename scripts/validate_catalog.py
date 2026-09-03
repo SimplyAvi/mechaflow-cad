@@ -175,13 +175,22 @@ def validate_integration_adapters(errors: list[str]) -> set[str]:
         return set()
     adapter_ids = validate_unique_ids("integration-adapters", adapters, errors)
     for adapter in adapters:
+        if not isinstance(adapter, dict):
+            continue
         adapter_id = adapter.get("id", "<unknown>")
         doc_path = adapter.get("documentation_path")
         ensure(isinstance(doc_path, str) and (ROOT / doc_path).exists(), f"{adapter_id} documentation_path is missing", errors)
         ensure(bool(adapter.get("stub_class")), f"{adapter_id} must record stub_class", errors)
         ensure(isinstance(adapter.get("required_tools"), list), f"{adapter_id} required_tools must be a list", errors)
         ensure(adapter.get("dependency_policy") is not None, f"{adapter_id} must record dependency_policy", errors)
-        for capability in adapter.get("capabilities", []):
+        capabilities = adapter.get("capabilities", [])
+        ensure(isinstance(capabilities, list), f"{adapter_id} capabilities must be a list", errors)
+        if not isinstance(capabilities, list):
+            continue
+        for capability in capabilities:
+            if not isinstance(capability, dict):
+                ensure(False, f"{adapter_id} capability must be an object", errors)
+                continue
             capability_id = capability.get("id", "<unknown>")
             for job_type in capability.get("backend_job_types", []):
                 ensure(job_type in BACKEND_JOB_TYPES, f"{adapter_id}:{capability_id} has unknown job type {job_type}", errors)
@@ -227,7 +236,19 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
     reference_design_id = project.get("reference_design_id")
     ensure(reference_design_id in design_ids, f"handoff mvp_seed_project references unknown design {reference_design_id}", errors)
     ensure(bool(project.get("license_gate")), "handoff mvp_seed_project must keep license_gate visible", errors)
-    for part in project.get("sample_parts", []):
+    sample_parts = project.get("sample_parts", [])
+    parts_by_id = {
+        part.get("id"): part
+        for part in sample_parts
+        if isinstance(part, dict) and isinstance(part.get("id"), str)
+    }
+    sample_routes = project.get("sample_wiring_routes", [])
+    routes_by_id = {
+        route.get("id"): route
+        for route in sample_routes
+        if isinstance(route, dict) and isinstance(route.get("id"), str)
+    }
+    for part in sample_parts:
         part_id = part.get("id", "<unknown>")
         ensure(part.get("material_id") in ids_by_name.get("materials", set()), f"{part_id} references unknown material", errors)
         ensure(
@@ -237,8 +258,27 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
         )
         for rating_id in part.get("capability_rating_ids", []):
             ensure(rating_id in ids_by_name.get("capability-ratings", set()), f"{part_id} references unknown rating {rating_id}", errors)
-    for route in project.get("sample_wiring_routes", []):
+        for route_id in part.get("wiring_route_ids", []):
+            route = routes_by_id.get(route_id)
+            ensure(route is not None, f"{part_id} references unknown wiring route {route_id}", errors)
+            if route is not None:
+                ensure(
+                    part_id in {route.get("from_part_id"), route.get("to_part_id")},
+                    f"{part_id} lists unrelated wiring route {route_id}",
+                    errors,
+                )
+    for route in sample_routes:
         route_id = route.get("id", "<unknown>")
+        for endpoint_field in ("from_part_id", "to_part_id"):
+            endpoint_id = route.get(endpoint_field)
+            endpoint = parts_by_id.get(endpoint_id)
+            ensure(endpoint is not None, f"{route_id} references unknown endpoint part {endpoint_id}", errors)
+            if endpoint is not None:
+                ensure(
+                    route_id in endpoint.get("wiring_route_ids", []),
+                    f"{endpoint_id} does not list endpoint wiring route {route_id}",
+                    errors,
+                )
         for adapter_id in route.get("adapter_ids", []):
             ensure(adapter_id in adapter_ids, f"{route_id} references unknown adapter {adapter_id}", errors)
     for job in project.get("analysis_job_sequence", []):

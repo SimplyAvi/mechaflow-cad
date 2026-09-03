@@ -140,7 +140,7 @@ export interface WiringRoute {
   connectedParts: string[];
   clearanceStatus: RatingStatus;
   bendRadiusMm: number;
-  serviceLoop: boolean;
+  serviceLoop: boolean | null;
   note: string;
 }
 

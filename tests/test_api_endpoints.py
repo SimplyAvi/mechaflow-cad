@@ -66,6 +66,10 @@ def test_catalog_and_sample_project_are_structured() -> None:
     assert catalog_designs.status_code == 200
     assert any(design["id"] == "gaiahand" for design in catalog_designs.json()["items"])
 
+    catalog_tasks = client.get("/api/catalog/tasks")
+    assert catalog_tasks.status_code == 200
+    assert any(task["id"] == "lift-static-payload" for task in catalog_tasks.json()["items"])
+
     materials = client.get("/api/materials")
     assert materials.status_code == 200
     assert {material["id"] for material in materials.json()} >= {
@@ -92,32 +96,18 @@ def test_catalog_and_sample_project_are_structured() -> None:
 
 
 def test_frontend_mock_projection_matches_backend_seed_contract() -> None:
-    backend_project = client.get("/api/projects/sample").json()
+    backend_panel = client.get("/api/projects/project-open-gripper-demo/panel-data").json()
     with (ROOT / "src" / "data" / "backendPanelData.json").open(encoding="utf-8") as handle:
         frontend_panel = json.load(handle)
 
-    frontend_project = frontend_panel["project"]
-    backend_assembly = backend_project["assemblies"][0]
-    frontend_assembly = frontend_project["assemblies"][0]
-    assert frontend_project["id"] == backend_project["id"]
-    assert frontend_project["reference_design_id"] == backend_project["reference_design_id"]
-    assert {part["id"] for part in frontend_assembly["parts"]} == {part["id"] for part in backend_assembly["parts"]}
-    assert {material["id"] for material in frontend_project["materials"]} == {
-        material["id"] for material in backend_project["materials"]
-    }
-    assert frontend_panel["task_requirements"] == [backend_project["active_task"]]
-    assert {
-        route["id"]: (route["from_connector"]["part_id"], route["to_connector"]["part_id"])
-        for route in frontend_assembly["wiring_routes"]
-    } == {
-        route["id"]: (route["from_connector"]["part_id"], route["to_connector"]["part_id"])
-        for route in backend_assembly["wiring_routes"]
-    }
+    assert frontend_panel == backend_panel
 
 
 def test_project_panel_endpoints_expose_frontend_handoff_data() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-panel-flow"
+    sample["analysis_jobs"] = []
+    sample["reports"] = []
     client.put("/api/projects/project-panel-flow", json=sample)
 
     panel = client.get("/api/projects/project-panel-flow/panel-data")
@@ -168,6 +158,7 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
 def test_project_modification_endpoint_updates_part_and_returns_report() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-modification-flow"
+    sample["reports"] = []
     client.put("/api/projects/project-modification-flow", json=sample)
 
     response = client.post(

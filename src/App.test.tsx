@@ -54,8 +54,9 @@ describe('MechaFlow cockpit', () => {
     await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Palm plate/i }));
 
     expect(screen.getByRole('heading', { name: /Palm plate/i })).toBeInTheDocument();
-    expect(screen.getByText(/Finger force sensor lead/i)).toBeInTheDocument();
-    expect(screen.getByText(/Main wrist harness/i)).toBeInTheDocument();
+    expect(screen.getByText(/Main palm harness/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Finger force sensor lead/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/service loop review required/i)).toBeInTheDocument();
   });
 
   it('loads the backend project panel endpoint when an API base URL is configured', async () => {
