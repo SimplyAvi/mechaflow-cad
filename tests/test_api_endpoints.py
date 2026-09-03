@@ -64,7 +64,7 @@ def test_catalog_and_sample_project_are_structured() -> None:
     assert payload["assemblies"][0]["wiring_routes"][0]["bend_radius_min_mm"] == 12
 
 
-def test_create_project_validates_core_schema() -> None:
+def test_project_endpoints_store_and_return_local_projects() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-test"
     sample["name"] = "Schema validation project"
@@ -73,6 +73,24 @@ def test_create_project_validates_core_schema() -> None:
 
     assert response.status_code == 201
     assert response.json()["id"] == "project-test"
+
+    duplicate = client.post("/api/projects", json=sample)
+    assert duplicate.status_code == 409
+
+    listed = client.get("/api/projects")
+    assert listed.status_code == 200
+    assert {project["id"] for project in listed.json()} >= {"project-open-gripper-demo", "project-test"}
+
+    fetched = client.get("/api/projects/project-test")
+    assert fetched.status_code == 200
+    assert fetched.json()["name"] == "Schema validation project"
+
+    sample["id"] = "ignored-client-id"
+    sample["name"] = "Updated local project"
+    updated = client.put("/api/projects/project-test", json=sample)
+    assert updated.status_code == 200
+    assert updated.json()["id"] == "project-test"
+    assert updated.json()["name"] == "Updated local project"
 
 
 def test_create_analysis_job_selects_matching_stub_adapter() -> None:

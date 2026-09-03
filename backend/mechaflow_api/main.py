@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .adapters import choose_adapter, list_adapter_statuses
-from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
+from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS
 from .models import (
     AnalysisArtifact,
     AnalysisJob,
@@ -28,6 +28,7 @@ from .models import (
     WiringRoute,
 )
 from .settings import Settings, get_settings
+from .storage import ProjectAlreadyExistsError, ProjectStore, build_default_project_store
 
 
 class HealthResponse(BaseModel):
@@ -90,8 +91,9 @@ CONCEPTS = {
 }
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
+    project_store = project_store or build_default_project_store()
     job_store: dict[str, AnalysisJob] = {}
     app = FastAPI(
         title=settings.app_name,
@@ -179,23 +181,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def sample_assembly() -> Assembly:
         return DEFAULT_ASSEMBLY
 
+    @app.get(f"{settings.api_prefix}/projects", response_model=list[Project], tags=["projects"])
+    def projects() -> list[Project]:
+        return project_store.list_projects()
+
     @app.get(f"{settings.api_prefix}/projects/sample", response_model=Project, tags=["projects"])
     def sample_project() -> Project:
-        return Project(
-            id="project-open-gripper-demo",
-            name="Open gripper task-preserving edit demo",
-            description="Local seed project for frontend integration before persistence is added.",
-            reference_design_id=DEFAULT_REFERENCE_DESIGNS[0].id,
-            active_task=GRIPPER_TASK,
-            assemblies=[DEFAULT_ASSEMBLY],
-            materials=DEFAULT_MATERIALS,
-        )
+        project = project_store.get_project("project-open-gripper-demo")
+        if project is None:
+            raise HTTPException(status_code=404, detail="sample project not found")
+        return project
+
+    @app.get(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
+    def project(project_id: str) -> Project:
+        stored_project = project_store.get_project(project_id)
+        if stored_project is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        return stored_project
 
     @app.post(f"{settings.api_prefix}/projects", response_model=Project, status_code=201, tags=["projects"])
     def create_project(project: Project) -> Project:
-        # Persistence will be added with SQLite/PostgreSQL. For now this endpoint
-        # validates the public schema and echoes a normalized project.
-        return project
+        try:
+            return project_store.create_project(project)
+        except ProjectAlreadyExistsError as exc:
+            raise HTTPException(status_code=409, detail="project already exists") from exc
+
+    @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
+    def upsert_project(project_id: str, project: Project) -> Project:
+        return project_store.upsert_project(project_id, project)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
     def analysis_jobs(project_id: str | None = None) -> list[AnalysisJob]:
