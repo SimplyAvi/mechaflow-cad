@@ -8,7 +8,7 @@ Example: open a robot hand or gripper design, set the task to "pick and place a 
 
 ## What this repository contains
 
-This repository starts as product and technical documentation.
+This repository starts with product and technical documentation plus a first backend scaffold.
 
 - [Product requirements](docs/product-requirements.md)
 - [Technical architecture](docs/technical-architecture.md)
@@ -18,6 +18,7 @@ This repository starts as product and technical documentation.
 - [Cheap hosting plan](docs/hosting-plan.md)
 - [MVP roadmap](docs/mvp-roadmap.md)
 - [Data and standards strategy](docs/data-and-standards.md)
+- [Backend development](docs/backend.md)
 
 ## Core product idea
 
@@ -80,11 +81,36 @@ Keep hosting cheap by making the platform cloud-assisted rather than cloud-depen
 - Use cloud compute only for heavy simulation jobs or collaboration.
 - Support bring-your-own AI keys during early prototypes to control cost.
 
+## Backend quick start
+
+The first implementation is a Python FastAPI backend under `backend/mechaflow_api` with a tiny frontend integration shell under `frontend/`.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+pytest
+```
+
+Run the backend on an explicit local port:
+
+```bash
+export MECHAFLOW_API_PORT=8123
+mechaflow-api
+```
+
+Or run the backend and frontend shell together on available ports:
+
+```bash
+python scripts/run-dev.py
+```
+
+Use `python scripts/find-free-port.py` to identify an unused port before setting `MECHAFLOW_API_PORT` or `MECHAFLOW_FRONTEND_PORT`. See [Backend development](docs/backend.md) for details.
+
 ## Repository status
 
-This repository is currently a planning and requirements repository.
-
-No production implementation exists yet.
+This repository now contains planning documents and a first backend foundation. Heavy CAD, FEA, electronics, wiring, and supplier integrations are exposed as clean stubs and are not wired to FreeCAD, CalculiX, KiCad, WireViz, or external supplier APIs yet.
 
 ## License
 
