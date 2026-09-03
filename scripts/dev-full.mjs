@@ -2,16 +2,22 @@
 import { spawn } from 'node:child_process';
 import { getFreePort, parsePort } from './port-utils.mjs';
 
-const frontendHost = process.env.FRONTEND_HOST || '127.0.0.1';
-const backendHost = process.env.BACKEND_HOST || '127.0.0.1';
-const backendPort = parsePort(process.env.BACKEND_PORT || process.env.API_PORT, 'BACKEND_PORT') ?? (await getFreePort(backendHost));
-const frontendPort = parsePort(process.env.FRONTEND_PORT || process.env.PORT, 'FRONTEND_PORT') ?? (await getFreePort(frontendHost));
+const frontendHost = process.env.MECHAFLOW_FRONTEND_HOST || process.env.FRONTEND_HOST || '127.0.0.1';
+const backendHost = process.env.MECHAFLOW_API_HOST || process.env.BACKEND_HOST || '127.0.0.1';
+const backendPort = parsePort(
+  process.env.MECHAFLOW_API_PORT || process.env.BACKEND_PORT || process.env.API_PORT,
+  'MECHAFLOW_API_PORT',
+) ?? (await getFreePort(backendHost));
+const frontendPort = parsePort(
+  process.env.MECHAFLOW_FRONTEND_PORT || process.env.FRONTEND_PORT || process.env.PORT,
+  'MECHAFLOW_FRONTEND_PORT',
+) ?? (await getFreePort(frontendHost));
 const apiBaseUrl = `http://${backendHost}:${backendPort}`;
 
 console.log('Starting MechaFlow CAD local stack with explicit ports:');
 console.log(`  backend:  ${apiBaseUrl}`);
 console.log(`  frontend: http://${frontendHost}:${frontendPort}`);
-console.log('Override with BACKEND_PORT and FRONTEND_PORT, or run npm run ports:find first.');
+console.log('Override with MECHAFLOW_API_PORT and MECHAFLOW_FRONTEND_PORT, or run npm run ports:find first.');
 
 const children = [];
 
@@ -40,12 +46,16 @@ const shutdown = (code = 0) => {
 
 start('api', process.execPath, ['scripts/mock-backend.mjs'], {
   BACKEND_HOST: backendHost,
+  MECHAFLOW_API_HOST: backendHost,
   BACKEND_PORT: String(backendPort),
+  MECHAFLOW_API_PORT: String(backendPort),
 });
 
 start('web', 'npx', ['vite', '--host', frontendHost, '--port', String(frontendPort), '--strictPort'], {
   FRONTEND_HOST: frontendHost,
+  MECHAFLOW_FRONTEND_HOST: frontendHost,
   FRONTEND_PORT: String(frontendPort),
+  MECHAFLOW_FRONTEND_PORT: String(frontendPort),
   VITE_API_BASE_URL: apiBaseUrl,
 });
 

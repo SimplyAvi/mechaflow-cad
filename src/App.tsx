@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { loadCockpitDesign } from './lib/api';
-import type { MaterialOption, Part, ReferenceDesign } from './types';
+import type { AdvisoryReport, MaterialOption, Part, ReferenceDesign } from './types';
 import './App.css';
 
 const formatCurrency = (value: number): string =>
@@ -81,6 +81,9 @@ function App() {
           <small>
             Target: {design.task.targetPayloadLb} lb, {design.task.cycleTimeSeconds}s cycle, {design.task.reachMeters}m reach
           </small>
+          <small>
+            Data source: {design.backend.source.replaceAll('-', ' ')} via {design.backend.endpoint}
+          </small>
         </div>
       </header>
 
@@ -104,6 +107,11 @@ function App() {
               </dd>
             </div>
           </dl>
+          <div className="backend-summary">
+            <strong>Backend handoff mirrored</strong>
+            <small>Project {design.backend.projectId}</small>
+            <small>{design.backend.concepts.slice(0, 5).join(', ')}</small>
+          </div>
           <PartTree parts={design.assembly.parts} selectedPartId={selectedPart.id} onSelect={setSelectedPartId} />
         </aside>
 
@@ -170,6 +178,7 @@ function App() {
           </dl>
           <CapabilityCard rating={activeRating} targetPayloadLb={design.task.targetPayloadLb} />
           <MaterialSubstitution options={materialOptions} selectedOption={selectedOption} onSelect={setSelectedOptionId} />
+          <ModificationPreview selectedOption={selectedOption} />
         </aside>
       </section>
 
@@ -178,6 +187,8 @@ function App() {
         <BomPanel design={design} total={bomTotal} />
         <ManufacturingPanel design={design} />
         <WiringPanel design={design} selectedPart={selectedPart} />
+        <ReportPanel reports={design.reports} selectedOption={selectedOption} />
+        <BackendContractPanel design={design} />
       </section>
 
       <section className="panel foundation-note">
@@ -271,6 +282,23 @@ function MaterialSubstitution({
   );
 }
 
+function ModificationPreview({ selectedOption }: { selectedOption?: MaterialOption }) {
+  if (!selectedOption) {
+    return null;
+  }
+
+  return (
+    <div className="modification-preview" aria-label="Backend modification preview">
+      <h3>Local modification preview</h3>
+      <small>
+        {selectedOption.backendModification.method} {selectedOption.backendModification.endpoint}
+      </small>
+      <p>{selectedOption.backendModification.reportSummary}</p>
+      <code>{JSON.stringify(selectedOption.backendModification.payload, null, 2)}</code>
+    </div>
+  );
+}
+
 function AnalysisPanel({ design }: { design: ReferenceDesign }) {
   return (
     <article className="panel">
@@ -327,6 +355,70 @@ function ManufacturingPanel({ design }: { design: ReferenceDesign }) {
           </div>
         ))}
       </div>
+    </article>
+  );
+}
+
+function ReportPanel({ reports, selectedOption }: { reports: AdvisoryReport[]; selectedOption?: MaterialOption }) {
+  const previewReport: AdvisoryReport | undefined = selectedOption
+    ? {
+        id: selectedOption.backendModification.payload.id,
+        title: selectedOption.backendModification.reportTitle,
+        status: selectedOption.backendModification.reportStatus,
+        summary: selectedOption.backendModification.reportSummary,
+        risks: [selectedOption.manufacturingImpact, selectedOption.wiringImpact],
+        recommendations: ['Queue mass properties, payload re-rating, wiring clearance, and manufacturing report workers.'],
+        unknowns: ['CAD geometry, fatigue life, supplier price, and harness clearance are still advisory.'],
+      }
+    : undefined;
+  const visibleReports = previewReport ? [previewReport, ...reports] : reports;
+
+  return (
+    <article className="panel">
+      <p className="eyebrow">Reports</p>
+      <h2>Advisory edit report</h2>
+      <div className="option-stack">
+        {visibleReports.map((report) => (
+          <div className="report-card" key={report.id}>
+            <strong>{report.title}</strong>
+            <small>{report.status.replaceAll('_', ' ')}</small>
+            <p>{report.summary}</p>
+            <ul>
+              {report.risks.slice(0, 2).map((risk) => (
+                <li key={risk}>{risk}</li>
+              ))}
+              {report.recommendations.slice(0, 1).map((recommendation) => (
+                <li key={recommendation}>{recommendation}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function BackendContractPanel({ design }: { design: ReferenceDesign }) {
+  const endpointBase = design.backend.apiBaseUrl ?? 'configured backend URL';
+  const endpoints = [
+    '/api/metadata',
+    '/api/catalog/seed',
+    '/api/projects/sample',
+    design.backend.endpoint,
+    `/api/projects/${design.backend.projectId}/modifications`,
+  ];
+
+  return (
+    <article className="panel">
+      <p className="eyebrow">Backend contract</p>
+      <h2>Ready for API handoff</h2>
+      <p>{design.backend.advisoryNotice}</p>
+      <div className="endpoint-list">
+        {endpoints.map((endpoint) => (
+          <code key={endpoint}>{endpointBase}{endpoint}</code>
+        ))}
+      </div>
+      <small>Worker stubs: {design.backend.integrationStubs.join(', ')}</small>
     </article>
   );
 }

@@ -8,7 +8,7 @@ Example: open a robot hand or gripper design, set the task to "pick and place a 
 
 ## What this repository contains
 
-This repository starts as product and technical documentation plus a first frontend foundation.
+This repository starts as product and technical documentation plus a first frontend foundation that mirrors the backend handoff contracts for project panel data, modification previews, reports, and worker status.
 
 - [Frontend development](docs/frontend.md)
 - [Product requirements](docs/product-requirements.md)
@@ -83,9 +83,9 @@ Keep hosting cheap by making the platform cloud-assisted rather than cloud-depen
 
 ## Repository status
 
-This repository now includes an initial Vite, React, and TypeScript frontend cockpit under `src/` with mocked CAD orchestration data. It is not production CAD software yet, but developers can run the UI, checks, tests, and a local frontend-to-mock-backend smoke test.
+This repository now includes an initial Vite, React, and TypeScript frontend cockpit under `src/` with backend-shaped mocked CAD orchestration data. It is not production CAD software yet, but developers can run the UI, checks, tests, and a local frontend-to-mock-backend smoke test.
 
-See [Frontend development](docs/frontend.md) for install, configurable ports, local stack, and backend connection notes.
+See [Frontend development](docs/frontend.md) for install, configurable ports, local stack, backend panel endpoints, and backend connection notes.
 
 ## License
 

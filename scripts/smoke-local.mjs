@@ -4,9 +4,9 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { getFreePort } from './port-utils.mjs';
 
-const host = process.env.FRONTEND_HOST || '127.0.0.1';
-const backendPort = Number(process.env.BACKEND_PORT) || (await getFreePort(host));
-const frontendPort = Number(process.env.FRONTEND_PORT) || (await getFreePort(host));
+const host = process.env.FRONTEND_HOST || process.env.BACKEND_HOST || process.env.MECHAFLOW_API_HOST || '127.0.0.1';
+const backendPort = Number(process.env.BACKEND_PORT || process.env.MECHAFLOW_API_PORT) || (await getFreePort(host));
+const frontendPort = Number(process.env.FRONTEND_PORT || process.env.MECHAFLOW_FRONTEND_PORT) || (await getFreePort(host));
 const apiBaseUrl = `http://${host}:${backendPort}`;
 const frontendUrl = `http://${host}:${frontendPort}`;
 const children = [];
@@ -66,9 +66,17 @@ try {
   });
   await waitForJson(`${apiBaseUrl}/health`);
 
-  const backendDesign = await waitForJson(`${apiBaseUrl}/api/reference-designs/gripper-cad-cockpit`);
-  if (backendDesign.name !== 'Backend mock open gripper design') {
-    throw new Error('Mock backend did not return the expected reference design.');
+  const metadata = await waitForJson(`${apiBaseUrl}/api/metadata`);
+  if (!metadata.concepts.includes('projects') || !metadata.concepts.includes('wiring_routes')) {
+    throw new Error('Mock backend metadata did not expose expected concepts.');
+  }
+
+  const panelData = await waitForJson(`${apiBaseUrl}/api/projects/sample/panel-data`);
+  if (panelData.project.id !== 'project-open-gripper-demo') {
+    throw new Error('Mock backend did not return the expected project panel data.');
+  }
+  if (panelData.wiring_routes[0].id !== 'route-finger-sensor') {
+    throw new Error('Mock backend did not return wiring panel data.');
   }
 
   await new Promise((resolve, reject) => {
@@ -98,7 +106,7 @@ try {
     throw new Error('Built frontend asset does not include the configured backend URL.');
   }
 
-  console.log('Smoke test passed: backend health, design API, frontend preview, and configured API URL are wired.');
+  console.log('Smoke test passed: backend health, metadata, project panel API, frontend preview, and configured API URL are wired.');
 } finally {
   shutdown();
 }

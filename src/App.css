@@ -158,9 +158,22 @@ small,
   margin: 0;
 }
 
+.backend-summary,
 .part-tree {
   display: grid;
   gap: 10px;
+}
+
+.backend-summary {
+  background: rgba(2, 132, 199, 0.14);
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 16px;
+  margin-bottom: 18px;
+  padding: 12px;
+}
+
+.backend-summary small {
+  display: block;
 }
 
 .part-tree button,
@@ -369,10 +382,38 @@ small,
   padding-left: 20px;
 }
 
+.modification-preview {
+  background: rgba(15, 23, 42, 0.54);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 16px;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+}
+
+.modification-preview p {
+  margin-bottom: 0;
+}
+
+.modification-preview code,
+.endpoint-list code {
+  background: rgba(2, 6, 23, 0.76);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  color: #dbeafe;
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
 .insight-grid {
   display: grid;
   gap: 18px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   margin: 0 auto 18px;
   max-width: 1500px;
 }
@@ -387,7 +428,8 @@ small,
 .job-row,
 .bom-list div,
 .manufacturing-card,
-.wiring-card {
+.wiring-card,
+.report-card {
   background: rgba(15, 23, 42, 0.54);
   border: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 16px;
@@ -401,7 +443,9 @@ small,
 
 .job-row p,
 .manufacturing-card p,
-.wiring-card p {
+.wiring-card p,
+.report-card p,
+.endpoint-list + small {
   color: #b8c7d8;
   font-size: 0.9rem;
   margin-bottom: 0;
@@ -411,7 +455,8 @@ small,
 .bom-list small,
 .manufacturing-card small,
 .wiring-card small,
-.manufacturing-card span {
+.manufacturing-card span,
+.report-card small {
   display: block;
   margin-top: 4px;
 }
@@ -453,6 +498,18 @@ small,
 
 .job-status.blocked {
   background: #fca5a5;
+}
+
+.report-card ul {
+  color: #cbd5e1;
+  margin: 10px 0 0;
+  padding-left: 18px;
+}
+
+.endpoint-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
 }
 
 .foundation-note {
