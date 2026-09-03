@@ -57,11 +57,42 @@ def test_catalog_and_sample_project_are_structured() -> None:
         "mat-low-carbon-steel",
     }
 
+    tasks = client.get("/api/task-requirements/sample")
+    assert tasks.status_code == 200
+    assert tasks.json()[0]["kind"] == "lift_payload"
+
+    seed = client.get("/api/catalog/seed")
+    assert seed.status_code == 200
+    seed_payload = seed.json()
+    assert seed_payload["sample_project"]["id"] == "project-open-gripper-demo"
+    assert seed_payload["task_requirements"][0]["safety_factor_min"] == 2.0
+
     project = client.get("/api/projects/sample")
     assert project.status_code == 200
     payload = project.json()
     assert payload["active_task"]["target_value"] == 50
     assert payload["assemblies"][0]["wiring_routes"][0]["bend_radius_min_mm"] == 12
+
+
+def test_project_panel_endpoints_expose_frontend_handoff_data() -> None:
+    sample = client.get("/api/projects/sample").json()
+    sample["id"] = "project-panel-flow"
+    client.put("/api/projects/project-panel-flow", json=sample)
+
+    panel = client.get("/api/projects/project-panel-flow/panel-data")
+    assert panel.status_code == 200
+    panel_payload = panel.json()
+    assert panel_payload["task_requirements"][0]["kind"] == "lift_payload"
+    assert panel_payload["bom_items"][0]["part_id"] == "part-finger-link"
+    assert panel_payload["manufacturing_options"][0]["options"][0]["process"] == "cnc_machining"
+    assert panel_payload["wiring_routes"][0]["id"] == "route-finger-sensor"
+    assert panel_payload["reports"] == []
+
+    assert client.get("/api/projects/project-panel-flow/task-requirements").json()[0]["unit"] == "lb"
+    assert client.get("/api/projects/project-panel-flow/bom").json()[0]["unit"] == "part"
+    assert client.get("/api/projects/project-panel-flow/manufacturing-options").json()[0]["part_name"] == "Finger link"
+    assert client.get("/api/projects/project-panel-flow/wiring-routes").json()[0]["clearance_min_mm"] == 2
+    assert client.get("/api/projects/project-panel-flow/reports").json() == []
 
 
 def test_project_endpoints_store_and_return_local_projects() -> None:

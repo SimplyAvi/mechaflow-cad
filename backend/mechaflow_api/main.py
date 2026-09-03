@@ -19,17 +19,31 @@ from .models import (
     AnalysisJobStatus,
     AnalysisReport,
     Assembly,
+    BOMItem,
+    CatalogSeedResponse,
     ManufacturingOption,
     Material,
     Modification,
     Part,
+    PartManufacturingOptions,
     Project,
     ProjectModificationResponse,
+    ProjectPanelData,
     ReferenceDesign,
     TaskRequirement,
     WiringRoute,
 )
-from .services import InvalidDimensionChangeError, MaterialNotFoundError, PartNotFoundError, apply_project_modification
+from .services import (
+    InvalidDimensionChangeError,
+    MaterialNotFoundError,
+    PartNotFoundError,
+    apply_project_modification,
+    build_project_panel_data,
+    collect_project_bom_items,
+    collect_project_manufacturing_options,
+    collect_project_task_requirements,
+    collect_project_wiring_routes,
+)
 from .settings import Settings, get_settings
 from .storage import ProjectAlreadyExistsError, ProjectStore, build_default_project_store
 
@@ -79,6 +93,10 @@ SCHEMA_MODELS = [
     AnalysisReport,
     Modification,
     ProjectModificationResponse,
+    CatalogSeedResponse,
+    PartManufacturingOptions,
+    ProjectPanelData,
+    BOMItem,
 ]
 
 
@@ -120,6 +138,12 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    def get_project_or_404(project_id: str) -> Project:
+        stored_project = project_store.get_project(project_id)
+        if stored_project is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        return stored_project
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:
@@ -174,6 +198,18 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def integrations() -> list[dict]:
         return [adapter.model_dump(mode="json") for adapter in list_adapter_statuses()]
 
+    @app.get(f"{settings.api_prefix}/catalog/seed", response_model=CatalogSeedResponse, tags=["catalog"])
+    def catalog_seed() -> CatalogSeedResponse:
+        sample = project_store.get_project("project-open-gripper-demo")
+        if sample is None:
+            raise HTTPException(status_code=404, detail="sample project not found")
+        return CatalogSeedResponse(
+            reference_designs=DEFAULT_REFERENCE_DESIGNS,
+            materials=DEFAULT_MATERIALS,
+            task_requirements=[task for design in DEFAULT_REFERENCE_DESIGNS for task in design.example_tasks],
+            sample_project=sample,
+        )
+
     @app.get(f"{settings.api_prefix}/reference-designs", response_model=list[ReferenceDesign], tags=["catalog"])
     def reference_designs() -> list[ReferenceDesign]:
         return DEFAULT_REFERENCE_DESIGNS
@@ -181,6 +217,10 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.get(f"{settings.api_prefix}/materials", response_model=list[Material], tags=["catalog"])
     def materials() -> list[Material]:
         return DEFAULT_MATERIALS
+
+    @app.get(f"{settings.api_prefix}/task-requirements/sample", response_model=list[TaskRequirement], tags=["catalog"])
+    def sample_task_requirements() -> list[TaskRequirement]:
+        return [task for design in DEFAULT_REFERENCE_DESIGNS for task in design.example_tasks]
 
     @app.get(f"{settings.api_prefix}/assemblies/sample", response_model=Assembly, tags=["catalog"])
     def sample_assembly() -> Assembly:
@@ -192,17 +232,14 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.get(f"{settings.api_prefix}/projects/sample", response_model=Project, tags=["projects"])
     def sample_project() -> Project:
-        project = project_store.get_project("project-open-gripper-demo")
-        if project is None:
+        sample = project_store.get_project("project-open-gripper-demo")
+        if sample is None:
             raise HTTPException(status_code=404, detail="sample project not found")
-        return project
+        return sample
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def project(project_id: str) -> Project:
-        stored_project = project_store.get_project(project_id)
-        if stored_project is None:
-            raise HTTPException(status_code=404, detail="project not found")
-        return stored_project
+        return get_project_or_404(project_id)
 
     @app.post(f"{settings.api_prefix}/projects", response_model=Project, status_code=201, tags=["projects"])
     def create_project(project: Project) -> Project:
@@ -214,6 +251,42 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
         return project_store.upsert_project(project_id, project)
+
+    @app.get(f"{settings.api_prefix}/projects/{{project_id}}/panel-data", response_model=ProjectPanelData, tags=["projects"])
+    def project_panel_data(project_id: str) -> ProjectPanelData:
+        return build_project_panel_data(get_project_or_404(project_id))
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/task-requirements",
+        response_model=list[TaskRequirement],
+        tags=["projects"],
+    )
+    def project_task_requirements(project_id: str) -> list[TaskRequirement]:
+        return collect_project_task_requirements(get_project_or_404(project_id))
+
+    @app.get(f"{settings.api_prefix}/projects/{{project_id}}/bom", response_model=list[BOMItem], tags=["projects"])
+    def project_bom(project_id: str) -> list[BOMItem]:
+        return collect_project_bom_items(get_project_or_404(project_id))
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/manufacturing-options",
+        response_model=list[PartManufacturingOptions],
+        tags=["projects"],
+    )
+    def project_manufacturing_options(project_id: str) -> list[PartManufacturingOptions]:
+        return collect_project_manufacturing_options(get_project_or_404(project_id))
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/wiring-routes",
+        response_model=list[WiringRoute],
+        tags=["projects"],
+    )
+    def project_wiring_routes(project_id: str) -> list[WiringRoute]:
+        return collect_project_wiring_routes(get_project_or_404(project_id))
+
+    @app.get(f"{settings.api_prefix}/projects/{{project_id}}/reports", response_model=list[AnalysisReport], tags=["projects"])
+    def project_reports(project_id: str) -> list[AnalysisReport]:
+        return get_project_or_404(project_id).reports
 
     @app.post(
         f"{settings.api_prefix}/projects/{{project_id}}/modifications",

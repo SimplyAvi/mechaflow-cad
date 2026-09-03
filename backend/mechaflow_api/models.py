@@ -352,3 +352,26 @@ class Project(BaseModel):
 class ProjectModificationResponse(BaseModel):
     project: Project
     report: AnalysisReport
+
+
+class CatalogSeedResponse(BaseModel):
+    reference_designs: list[ReferenceDesign] = Field(default_factory=list)
+    materials: list[Material] = Field(default_factory=list)
+    task_requirements: list[TaskRequirement] = Field(default_factory=list)
+    sample_project: Project
+
+
+class PartManufacturingOptions(BaseModel):
+    part_id: str
+    part_name: str
+    material_id: str | None = None
+    options: list[ManufacturingOption] = Field(default_factory=list)
+
+
+class ProjectPanelData(BaseModel):
+    project: Project
+    task_requirements: list[TaskRequirement] = Field(default_factory=list)
+    bom_items: list[BOMItem] = Field(default_factory=list)
+    manufacturing_options: list[PartManufacturingOptions] = Field(default_factory=list)
+    wiring_routes: list[WiringRoute] = Field(default_factory=list)
+    reports: list[AnalysisReport] = Field(default_factory=list)

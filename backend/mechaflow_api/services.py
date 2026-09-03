@@ -9,12 +9,17 @@ from pydantic import ValidationError
 
 from .models import (
     AnalysisReport,
+    BOMItem,
     Modification,
     Part,
     PartDimensions,
+    PartManufacturingOptions,
     Project,
     ProjectModificationResponse,
+    ProjectPanelData,
     ReportStatus,
+    TaskRequirement,
+    WiringRoute,
 )
 
 
@@ -168,4 +173,63 @@ def _build_modification_report(
         ],
         assumptions=["Part-level schema update is enough for frontend edit flow prototyping."],
         generated_at=generated_at,
+    )
+
+
+def collect_project_task_requirements(project: Project) -> list[TaskRequirement]:
+    return [project.active_task] if project.active_task else []
+
+
+def collect_project_bom_items(project: Project) -> list[BOMItem]:
+    items: list[BOMItem] = []
+    for assembly in project.assemblies:
+        for part in assembly.parts:
+            items.append(
+                BOMItem(
+                    id=f"bom-{part.id}",
+                    part_id=part.id,
+                    name=part.name,
+                    quantity=1,
+                    unit="part",
+                    license_or_terms="Derived from local project assembly metadata",
+                )
+            )
+    return items
+
+
+def collect_project_manufacturing_options(project: Project) -> list[PartManufacturingOptions]:
+    options: list[PartManufacturingOptions] = []
+    for assembly in project.assemblies:
+        for part in assembly.parts:
+            options.append(
+                PartManufacturingOptions(
+                    part_id=part.id,
+                    part_name=part.name,
+                    material_id=part.material_id,
+                    options=part.manufacturing_options,
+                )
+            )
+    return options
+
+
+def collect_project_wiring_routes(project: Project) -> list[WiringRoute]:
+    routes: list[WiringRoute] = []
+    seen_ids: set[str] = set()
+    for assembly in project.assemblies:
+        for route in assembly.wiring_routes:
+            if route.id in seen_ids:
+                continue
+            routes.append(route)
+            seen_ids.add(route.id)
+    return routes
+
+
+def build_project_panel_data(project: Project) -> ProjectPanelData:
+    return ProjectPanelData(
+        project=project,
+        task_requirements=collect_project_task_requirements(project),
+        bom_items=collect_project_bom_items(project),
+        manufacturing_options=collect_project_manufacturing_options(project),
+        wiring_routes=collect_project_wiring_routes(project),
+        reports=project.reports,
     )
