@@ -347,3 +347,8 @@ class Project(BaseModel):
     reports: list[AnalysisReport] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ProjectModificationResponse(BaseModel):
+    project: Project
+    report: AnalysisReport

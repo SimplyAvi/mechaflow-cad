@@ -21,12 +21,15 @@ from .models import (
     Assembly,
     ManufacturingOption,
     Material,
+    Modification,
     Part,
     Project,
+    ProjectModificationResponse,
     ReferenceDesign,
     TaskRequirement,
     WiringRoute,
 )
+from .services import InvalidDimensionChangeError, MaterialNotFoundError, PartNotFoundError, apply_project_modification
 from .settings import Settings, get_settings
 from .storage import ProjectAlreadyExistsError, ProjectStore, build_default_project_store
 
@@ -74,6 +77,8 @@ SCHEMA_MODELS = [
     ManufacturingOption,
     WiringRoute,
     AnalysisReport,
+    Modification,
+    ProjectModificationResponse,
 ]
 
 
@@ -209,6 +214,24 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
         return project_store.upsert_project(project_id, project)
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/modifications",
+        response_model=ProjectModificationResponse,
+        tags=["projects"],
+    )
+    def modify_project(project_id: str, modification: Modification) -> ProjectModificationResponse:
+        stored_project = project_store.get_project(project_id)
+        if stored_project is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        try:
+            result = apply_project_modification(stored_project, modification)
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="target part not found") from exc
+        except (MaterialNotFoundError, InvalidDimensionChangeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        project_store.upsert_project(project_id, result.project)
+        return result
 
     @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
     def analysis_jobs(project_id: str | None = None) -> list[AnalysisJob]:

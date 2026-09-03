@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from mechaflow_api.main import app
-from mechaflow_api.models import AnalysisJobType
+from mechaflow_api.models import AnalysisJobType, ManufacturingProcess
 
 
 client = TestClient(app)
@@ -91,6 +91,65 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
     assert updated.status_code == 200
     assert updated.json()["id"] == "project-test"
     assert updated.json()["name"] == "Updated local project"
+
+
+def test_project_modification_endpoint_updates_part_and_returns_report() -> None:
+    sample = client.get("/api/projects/sample").json()
+    sample["id"] = "project-modification-flow"
+    client.put("/api/projects/project-modification-flow", json=sample)
+
+    response = client.post(
+        "/api/projects/project-modification-flow/modifications",
+        json={
+            "id": "mod-finger-material-thickness",
+            "target_part_id": "part-finger-link",
+            "description": "Switch finger link to printed composite and thicken it for prototype review.",
+            "material_id": "mat-carbon-fiber-nylon",
+            "dimension_changes": {"thickness_mm": 8},
+            "manufacturing_process": ManufacturingProcess.additive_fdm.value,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    edited_part = payload["project"]["assemblies"][0]["parts"][0]
+    assert edited_part["material_id"] == "mat-carbon-fiber-nylon"
+    assert edited_part["dimensions"]["thickness_mm"] == 8
+    assert edited_part["metadata"]["preferred_manufacturing_process"] == "additive_fdm"
+    assert payload["report"]["status"] == "requires_review"
+    assert payload["report"]["task_results"][0]["status"] == "requires_review"
+
+    stored = client.get("/api/projects/project-modification-flow").json()
+    assert stored["modifications"][0]["id"] == "mod-finger-material-thickness"
+    assert stored["reports"][0]["id"] == payload["report"]["id"]
+
+
+def test_project_modification_rejects_unknown_material_and_dimension() -> None:
+    sample = client.get("/api/projects/sample").json()
+    sample["id"] = "project-invalid-modification-flow"
+    client.put("/api/projects/project-invalid-modification-flow", json=sample)
+
+    bad_material = client.post(
+        "/api/projects/project-invalid-modification-flow/modifications",
+        json={
+            "id": "mod-bad-material",
+            "target_part_id": "part-finger-link",
+            "description": "Use unknown material.",
+            "material_id": "mat-does-not-exist",
+        },
+    )
+    assert bad_material.status_code == 422
+
+    bad_dimension = client.post(
+        "/api/projects/project-invalid-modification-flow/modifications",
+        json={
+            "id": "mod-bad-dimension",
+            "target_part_id": "part-finger-link",
+            "description": "Use unsupported dimension key.",
+            "dimension_changes": {"diameter_mm": 10},
+        },
+    )
+    assert bad_dimension.status_code == 422
 
 
 def test_create_analysis_job_selects_matching_stub_adapter() -> None:
