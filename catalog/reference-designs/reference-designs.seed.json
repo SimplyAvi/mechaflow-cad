@@ -1,0 +1,624 @@
+[
+  {
+    "schema_version": "reference-design.v1",
+    "id": "open-robot-actuator-hardware",
+    "name": "Open Dynamic Robot Initiative open robot actuator hardware",
+    "summary": "Open actuator hardware reference for legged and dynamic robot joints, useful as a seed for actuator-centric assemblies and capability re-rating workflows.",
+    "source": {
+      "url": "https://github.com/open-dynamic-robot-initiative/open_robot_actuator_hardware",
+      "repository": "open-dynamic-robot-initiative/open_robot_actuator_hardware",
+      "retrieved_at": "2026-09-02",
+      "upstream_license_url": "https://github.com/open-dynamic-robot-initiative/open_robot_actuator_hardware/blob/master/LICENSE",
+      "upstream_docs_url": "https://open-dynamic-robot-initiative.github.io/"
+    },
+    "license": {
+      "declared": "BSD 3-Clause reported by upstream project materials and repository license file",
+      "spdx": "BSD-3-Clause",
+      "compatibility": "appears-compatible",
+      "evidence": [
+        "Repository contains a LICENSE file and public project documentation identifies BSD 3-Clause licensing for the initiative.",
+        "Catalog entry records only metadata and source links. No upstream CAD assets are copied into this repository."
+      ],
+      "cautions": [
+        "Verify that every imported CAD, drawing, and documentation file in the selected commit is covered by the same license before mirroring or redistributing assets.",
+        "Check third-party components in the actuator BOM separately."
+      ],
+      "review_required_before_import": true
+    },
+    "openness": {
+      "design_files_available": true,
+      "commercial_use_known": "yes",
+      "redistribution_known": "yes",
+      "notes": [
+        "Treat as a preferred mechanical reference after per-file license review."
+      ]
+    },
+    "assets": {
+      "cad": [
+        {
+          "kind": "mechanical CAD",
+          "format": "STEP, STL, native CAD files depending on subfolder",
+          "path_or_url": "https://github.com/open-dynamic-robot-initiative/open_robot_actuator_hardware",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Import adapters should resolve exact files at a pinned commit."
+        }
+      ],
+      "electronics": [],
+      "bom": [
+        {
+          "kind": "actuator BOM",
+          "format": "repository tables and documents",
+          "path_or_url": "https://github.com/open-dynamic-robot-initiative/open_robot_actuator_hardware",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Supplier terms and component datasheets require separate checks."
+        }
+      ],
+      "documentation": [
+        {
+          "kind": "project documentation",
+          "format": "Markdown and website",
+          "path_or_url": "https://open-dynamic-robot-initiative.github.io/",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Use for import planning, not as authoritative safety guidance."
+        }
+      ]
+    },
+    "assembly": {
+      "structure_confidence": "medium",
+      "known_subassemblies": [
+        "motor",
+        "gear train",
+        "output linkage",
+        "housing",
+        "sensors"
+      ],
+      "exploded_view_seed": {
+        "strategy": "assembly-tree",
+        "notes": [
+          "Start with actuator axis separation, then explode fastener and housing groups."
+        ]
+      }
+    },
+    "engineering_intent": {
+      "example_tasks": [
+        "deliver target joint torque",
+        "hold a static leg load",
+        "survive repeated robot gait cycles"
+      ],
+      "capability_rating_ids": [
+        "payload-static",
+        "joint-torque",
+        "fatigue-life-advisory"
+      ],
+      "primary_material_ids": [
+        "aluminum-6061-t6",
+        "pla-generic"
+      ],
+      "manufacturing_method_ids": [
+        "cnc-milling",
+        "fdm-3d-printing"
+      ],
+      "electronics_awareness": "bom-only"
+    },
+    "integration_notes": {
+      "freecad": [
+        "Import STEP or native interchange files into a pinned project workspace."
+      ],
+      "fea": [
+        "Begin with static load cases on housings, brackets, and output links."
+      ],
+      "kicad_wireviz": [
+        "Capture motor, encoder, and controller connectors as harness endpoints when data exists."
+      ],
+      "ros_urdf": [
+        "Map actuator geometry and joint limits into URDF links and joints."
+      ],
+      "manufacturing": [
+        "Generate quote packets for machined housings and printed fixtures separately."
+      ]
+    },
+    "review": {
+      "status": "needs-license-review",
+      "reviewed_by": "firstmate-catalog-seed",
+      "reviewed_at": "2026-09-02",
+      "next_actions": [
+        "Pin a commit and run the dependency license checklist.",
+        "Extract one actuator assembly into a local import fixture after legal review."
+      ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "joint torque re-rating",
+        "actuator selectable subassembly",
+        "fatigue advisory"
+      ],
+      "sample_project_id": "project-actuator-metadata-demo",
+      "backend_reference_design_id": "ref-open-robot-actuator-hardware",
+      "frontend_panel_tags": [
+        "actuator",
+        "torque",
+        "assembly-tree"
+      ],
+      "required_adapter_ids": [
+        "freecad",
+        "calculix-gmsh",
+        "ros-urdf",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "extract_part_list",
+        "generate_exploded_view",
+        "rerate_payload_capability",
+        "generate_manufacturing_report"
+      ],
+      "license_gate": "appears-compatible metadata only; pin and review exact CAD and BOM files before import"
+    }
+  },
+  {
+    "schema_version": "reference-design.v1",
+    "id": "anvil-gripper-hw",
+    "name": "Anvil robotics gripper hardware",
+    "summary": "Open gripper hardware repository suitable for testing part selection, gripper payload re-rating, exploded views, and manufacturing packet generation.",
+    "source": {
+      "url": "https://github.com/anvil-robotics/anvil-gripper-hw",
+      "repository": "anvil-robotics/anvil-gripper-hw",
+      "retrieved_at": "2026-09-02",
+      "upstream_license_url": "https://github.com/anvil-robotics/anvil-gripper-hw/blob/main/LICENSE"
+    },
+    "license": {
+      "declared": "CERN Open Hardware Licence Version 2 Strongly Reciprocal reported by repository license metadata",
+      "spdx": "CERN-OHL-S-2.0",
+      "compatibility": "conditional",
+      "evidence": [
+        "Public repository license metadata identifies CERN-OHL-S-2.0.",
+        "Catalog entry references upstream only and does not copy source assets."
+      ],
+      "cautions": [
+        "Strong reciprocal hardware terms may impose obligations on redistributed modified hardware sources.",
+        "Implementation must preserve license notices and expose modified design sources as required."
+      ],
+      "review_required_before_import": true
+    },
+    "openness": {
+      "design_files_available": true,
+      "commercial_use_known": "yes",
+      "redistribution_known": "yes",
+      "notes": [
+        "Likely useful as a reciprocal open hardware test case, not a permissive baseline."
+      ]
+    },
+    "assets": {
+      "cad": [
+        {
+          "kind": "gripper CAD",
+          "format": "repository CAD assets",
+          "path_or_url": "https://github.com/anvil-robotics/anvil-gripper-hw",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Resolve exact file formats from a pinned commit before import."
+        }
+      ],
+      "electronics": [],
+      "bom": [],
+      "documentation": [
+        {
+          "kind": "repository documentation",
+          "format": "Markdown",
+          "path_or_url": "https://github.com/anvil-robotics/anvil-gripper-hw",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Use upstream docs for assembly notes after license check."
+        }
+      ]
+    },
+    "assembly": {
+      "structure_confidence": "low",
+      "known_subassemblies": [
+        "finger",
+        "base",
+        "actuation",
+        "fasteners"
+      ],
+      "exploded_view_seed": {
+        "strategy": "manual",
+        "notes": [
+          "Manual transform seeds should group paired fingers symmetrically."
+        ]
+      }
+    },
+    "engineering_intent": {
+      "example_tasks": [
+        "grasp a small payload",
+        "compare printed and machined finger materials",
+        "check fingertip deflection"
+      ],
+      "capability_rating_ids": [
+        "payload-static",
+        "grip-force",
+        "deflection-limit"
+      ],
+      "primary_material_ids": [
+        "aluminum-6061-t6",
+        "petg-generic",
+        "carbon-fiber-nylon-generic"
+      ],
+      "manufacturing_method_ids": [
+        "cnc-milling",
+        "fdm-3d-printing"
+      ],
+      "electronics_awareness": "unknown"
+    },
+    "integration_notes": {
+      "freecad": [
+        "Import gripper assembly and tag mirrored fingers as selectable part groups."
+      ],
+      "fea": [
+        "Use initial cantilever load cases on fingers and base mounts."
+      ],
+      "kicad_wireviz": [
+        "Represent actuator leads as harness endpoints if wiring data is added."
+      ],
+      "ros_urdf": [
+        "Represent finger motion as mimic joints when kinematics are known."
+      ],
+      "manufacturing": [
+        "Compare printed finger, machined finger, and bought actuator options."
+      ]
+    },
+    "review": {
+      "status": "needs-license-review",
+      "reviewed_by": "firstmate-catalog-seed",
+      "reviewed_at": "2026-09-02",
+      "next_actions": [
+        "Confirm every CAD file is covered by CERN-OHL-S-2.0.",
+        "Document reciprocal obligations in the imported design report."
+      ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "gripper payload flow",
+        "selectable fingers",
+        "manufacturing substitution"
+      ],
+      "sample_project_id": "project-anvil-gripper-metadata-demo",
+      "backend_reference_design_id": "ref-anvil-gripper-hw",
+      "frontend_panel_tags": [
+        "gripper",
+        "conditional-license",
+        "parts"
+      ],
+      "required_adapter_ids": [
+        "freecad",
+        "calculix-gmsh",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "generate_exploded_view",
+        "quick_load_heuristic",
+        "rerate_payload_capability",
+        "generate_manufacturing_report"
+      ],
+      "license_gate": "conditional CERN-OHL-S-2.0 metadata only; reciprocal obligations must be surfaced before import"
+    }
+  },
+  {
+    "schema_version": "reference-design.v1",
+    "id": "robotis-open-manipulator",
+    "name": "ROBOTIS OpenMANIPULATOR",
+    "summary": "Open robot manipulator ecosystem candidate for URDF, ROS, assembly viewing, and actuator-aware design workflows.",
+    "source": {
+      "url": "https://github.com/ROBOTIS-GIT/open_manipulator",
+      "repository": "ROBOTIS-GIT/open_manipulator",
+      "retrieved_at": "2026-09-02",
+      "upstream_license_url": "https://github.com/ROBOTIS-GIT/open_manipulator/blob/main/LICENSE",
+      "upstream_docs_url": "https://ai.robotis.com/opensource.html"
+    },
+    "license": {
+      "declared": "Apache-2.0 reported for the public ROS package/repository metadata",
+      "spdx": "Apache-2.0",
+      "compatibility": "uncertain",
+      "evidence": [
+        "ROS package metadata and public repository metadata identify Apache-2.0 for software components.",
+        "CAD and mechanical source coverage must be confirmed separately because some materials point to external CAD hosting."
+      ],
+      "cautions": [
+        "Do not mirror CAD assets until the exact CAD source license and export permissions are verified.",
+        "DYNAMIXEL actuator models and vendor documentation may have separate terms."
+      ],
+      "review_required_before_import": true
+    },
+    "openness": {
+      "design_files_available": true,
+      "commercial_use_known": "unknown",
+      "redistribution_known": "unknown",
+      "notes": [
+        "Treat as a ROS and URDF integration candidate until CAD asset licensing is verified."
+      ]
+    },
+    "assets": {
+      "cad": [
+        {
+          "kind": "manipulator CAD",
+          "format": "external CAD and repository assets",
+          "path_or_url": "https://github.com/ROBOTIS-GIT/open_manipulator",
+          "availability": "referenced",
+          "license_inherits": false,
+          "notes": "License compatibility for CAD assets is not proven by this seed entry."
+        }
+      ],
+      "electronics": [],
+      "bom": [],
+      "documentation": [
+        {
+          "kind": "ROS package documentation",
+          "format": "Markdown, package metadata, docs website",
+          "path_or_url": "https://github.com/ROBOTIS-GIT/open_manipulator",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Use for software and robot description exploration only until CAD review completes."
+        }
+      ]
+    },
+    "assembly": {
+      "structure_confidence": "medium",
+      "known_subassemblies": [
+        "base",
+        "links",
+        "joints",
+        "gripper",
+        "actuators"
+      ],
+      "exploded_view_seed": {
+        "strategy": "assembly-tree",
+        "notes": [
+          "Use URDF links to seed selectable assembly nodes when CAD import is unavailable."
+        ]
+      }
+    },
+    "engineering_intent": {
+      "example_tasks": [
+        "reach a target envelope",
+        "lift a small payload",
+        "avoid cable interference across joints"
+      ],
+      "capability_rating_ids": [
+        "reach-envelope",
+        "payload-static",
+        "joint-torque"
+      ],
+      "primary_material_ids": [
+        "aluminum-6061-t6",
+        "pla-generic"
+      ],
+      "manufacturing_method_ids": [
+        "cnc-milling",
+        "fdm-3d-printing",
+        "off-the-shelf-parts"
+      ],
+      "electronics_awareness": "bom-only"
+    },
+    "integration_notes": {
+      "freecad": [
+        "Use only license-cleared CAD exports for geometry import."
+      ],
+      "fea": [
+        "Start with link bending checks after materials and load paths are known."
+      ],
+      "kicad_wireviz": [
+        "Model actuator power and data harnesses as WireViz connectors and cables."
+      ],
+      "ros_urdf": [
+        "Use ROS package data as the first URDF import and kinematics smoke test."
+      ],
+      "manufacturing": [
+        "Split vendor actuators from custom brackets in quote packets."
+      ]
+    },
+    "review": {
+      "status": "needs-license-review",
+      "reviewed_by": "firstmate-catalog-seed",
+      "reviewed_at": "2026-09-02",
+      "next_actions": [
+        "Verify CAD source license and export permissions.",
+        "Confirm Apache-2.0 coverage for the exact files imported."
+      ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "URDF kinematics",
+        "reach envelope",
+        "actuator and harness awareness"
+      ],
+      "sample_project_id": "project-open-manipulator-urdf-demo",
+      "backend_reference_design_id": "ref-robotis-open-manipulator",
+      "frontend_panel_tags": [
+        "robot-arm",
+        "urdf",
+        "uncertain-cad-license"
+      ],
+      "required_adapter_ids": [
+        "ros-urdf",
+        "freecad",
+        "wireviz",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "generate_exploded_view",
+        "extract_part_list",
+        "check_wire_routing"
+      ],
+      "license_gate": "uncertain CAD coverage; use URDF metadata for planning only until CAD asset terms are verified"
+    }
+  },
+  {
+    "schema_version": "reference-design.v1",
+    "id": "gaiahand",
+    "name": "GaiaHand open-source robotic hand",
+    "summary": "Robotic hand design candidate with CAD, PCB, and software assets reported by public repository metadata, useful for end-to-end mechanical and electronics awareness planning.",
+    "source": {
+      "url": "https://github.com/Stella-robot/GaiaHand",
+      "repository": "Stella-robot/GaiaHand",
+      "retrieved_at": "2026-09-02",
+      "upstream_license_url": "https://github.com/Stella-robot/GaiaHand/blob/main/LICENSE"
+    },
+    "license": {
+      "declared": "MIT reported by public repository metadata",
+      "spdx": "MIT",
+      "compatibility": "appears-compatible",
+      "evidence": [
+        "Public repository metadata reports MIT licensing.",
+        "Repository is described as including CAD, PCB, and software assets."
+      ],
+      "cautions": [
+        "Verify that hardware files, PCB files, and documentation do not contain separate license notices before import.",
+        "Check any embedded third-party board or actuator models separately."
+      ],
+      "review_required_before_import": true
+    },
+    "openness": {
+      "design_files_available": true,
+      "commercial_use_known": "yes",
+      "redistribution_known": "yes",
+      "notes": [
+        "Good candidate for a full mechanical plus electronics catalog import after per-file review."
+      ]
+    },
+    "assets": {
+      "cad": [
+        {
+          "kind": "hand CAD",
+          "format": "repository CAD assets",
+          "path_or_url": "https://github.com/Stella-robot/GaiaHand",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Pin the exact revision before importing."
+        }
+      ],
+      "electronics": [
+        {
+          "kind": "PCB and electronics assets",
+          "format": "repository electronics files",
+          "path_or_url": "https://github.com/Stella-robot/GaiaHand",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Map PCB and connectors through the KiCad and WireViz adapters after license review."
+        }
+      ],
+      "bom": [],
+      "documentation": [
+        {
+          "kind": "repository documentation",
+          "format": "Markdown",
+          "path_or_url": "https://github.com/Stella-robot/GaiaHand",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Use to seed assembly explanations and part purpose text."
+        }
+      ]
+    },
+    "assembly": {
+      "structure_confidence": "low",
+      "known_subassemblies": [
+        "palm",
+        "fingers",
+        "thumb",
+        "tendons or linkages",
+        "electronics"
+      ],
+      "exploded_view_seed": {
+        "strategy": "manual",
+        "notes": [
+          "Explode palm, finger modules, and electronics in separate animation lanes."
+        ]
+      }
+    },
+    "engineering_intent": {
+      "example_tasks": [
+        "grasp small objects",
+        "compare finger materials",
+        "check PCB and wire clearances"
+      ],
+      "capability_rating_ids": [
+        "grip-force",
+        "payload-static",
+        "wire-clearance"
+      ],
+      "primary_material_ids": [
+        "pla-generic",
+        "petg-generic",
+        "carbon-fiber-nylon-generic"
+      ],
+      "manufacturing_method_ids": [
+        "fdm-3d-printing",
+        "pcb-fabrication",
+        "wire-harness"
+      ],
+      "electronics_awareness": "pcb"
+    },
+    "integration_notes": {
+      "freecad": [
+        "Import palm and finger parts as independently selectable modules."
+      ],
+      "fea": [
+        "Run finger link and palm mounting load cases before claiming capability changes."
+      ],
+      "kicad_wireviz": [
+        "Use PCB files and connector lists to generate board keep-outs and harness endpoints."
+      ],
+      "ros_urdf": [
+        "Map finger links to URDF joints when kinematic definitions exist."
+      ],
+      "manufacturing": [
+        "Bundle printed parts, PCB fabrication, and harness fabrication into separate quote packet sections."
+      ]
+    },
+    "review": {
+      "status": "needs-license-review",
+      "reviewed_by": "firstmate-catalog-seed",
+      "reviewed_at": "2026-09-02",
+      "next_actions": [
+        "Pin a commit and inspect all hardware, PCB, and documentation license files.",
+        "Create a minimal import plan covering one finger module and one PCB or connector."
+      ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "hand or gripper demo",
+        "electronics awareness",
+        "material substitution",
+        "wire harness pass"
+      ],
+      "sample_project_id": "project-gaiahand-metadata-demo",
+      "backend_reference_design_id": "ref-gaiahand",
+      "frontend_panel_tags": [
+        "robot-hand",
+        "pcb",
+        "wiring",
+        "appears-compatible"
+      ],
+      "required_adapter_ids": [
+        "freecad",
+        "kicad-stepup",
+        "wireviz",
+        "calculix-gmsh",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "generate_exploded_view",
+        "extract_part_list",
+        "rerate_payload_capability",
+        "check_wire_routing",
+        "generate_bom",
+        "generate_manufacturing_report"
+      ],
+      "license_gate": "appears-compatible metadata only; per-file hardware, PCB, and docs review required before mirroring assets"
+    }
+  }
+]

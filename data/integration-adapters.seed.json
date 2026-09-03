@@ -1,0 +1,149 @@
+[
+  {
+    "id": "freecad",
+    "display_name": "FreeCAD adapter",
+    "documentation_path": "docs/integrations/freecad.md",
+    "stub_class": "mechaflow_cad.integrations.stub_adapters.FreeCADAdapter",
+    "dependency_policy": "optional-local-open-source-tool",
+    "local_compute_preferred": true,
+    "required_tools": ["FreeCAD"],
+    "capabilities": [
+      {
+        "id": "import-assembly-and-explode",
+        "backend_job_types": ["import_design", "extract_part_list", "generate_exploded_view", "estimate_mass_properties"],
+        "input_formats": ["FCStd", "STEP", "STL", "OBJ"],
+        "output_formats": ["glTF", "JSON part tree", "STEP", "mass properties JSON"],
+        "expected_artifacts": ["cad_metadata", "exploded_view", "part_list", "mass_properties"]
+      }
+    ],
+    "frontend_handoff": ["3D assembly viewer", "selectable parts", "animated exploded view", "part inspector"],
+    "license_review_required": true,
+    "cost_guardrail": "Run locally or in an on-demand worker only after the user opts in. Do not add hosted FreeCAD as an always-on dependency."
+  },
+  {
+    "id": "calculix-gmsh",
+    "display_name": "CalculiX and Gmsh FEA adapter",
+    "documentation_path": "docs/integrations/calculix-gmsh.md",
+    "stub_class": "mechaflow_cad.integrations.stub_adapters.CalculixGmshAdapter",
+    "dependency_policy": "optional-local-open-source-tool",
+    "local_compute_preferred": true,
+    "required_tools": ["CalculiX", "Gmsh"],
+    "capabilities": [
+      {
+        "id": "static-structural-fea",
+        "backend_job_types": ["quick_load_heuristic", "run_fea", "rerate_payload_capability"],
+        "input_formats": ["STEP", "BREP", "FreeCAD FEM case JSON"],
+        "output_formats": ["FRD", "VTK", "JSON rating report"],
+        "expected_artifacts": ["load_heuristic", "fea_summary", "payload_rerating"]
+      }
+    ],
+    "frontend_handoff": ["capability rating cards", "pass or watch or fail status", "advisory analysis report"],
+    "license_review_required": true,
+    "cost_guardrail": "Default to quick local heuristics, then queue FEA only for selected parts or user-approved jobs."
+  },
+  {
+    "id": "kicad-stepup",
+    "display_name": "KiCad and KiCadStepUp adapter",
+    "documentation_path": "docs/integrations/kicad-stepup.md",
+    "stub_class": "mechaflow_cad.integrations.stub_adapters.KiCadStepUpAdapter",
+    "dependency_policy": "optional-local-open-source-tool",
+    "local_compute_preferred": true,
+    "required_tools": ["KiCad", "KiCadStepUp", "FreeCAD"],
+    "capabilities": [
+      {
+        "id": "ecad-mcad-exchange",
+        "backend_job_types": ["import_design", "generate_bom", "check_wire_routing"],
+        "input_formats": ["kicad_pcb", "STEP", "WRL"],
+        "output_formats": ["STEP", "board keepout JSON", "connector table"],
+        "expected_artifacts": ["cad_metadata", "bom", "wiring_check"]
+      }
+    ],
+    "frontend_handoff": ["electronics awareness", "board keepout warnings", "connector metadata"],
+    "license_review_required": true,
+    "cost_guardrail": "Keep ECAD import local-first and never require a paid PCB service for core workflows."
+  },
+  {
+    "id": "wireviz",
+    "display_name": "WireViz harness adapter",
+    "documentation_path": "docs/integrations/wireviz.md",
+    "stub_class": "mechaflow_cad.integrations.stub_adapters.WireVizAdapter",
+    "dependency_policy": "optional-local-open-source-tool",
+    "local_compute_preferred": true,
+    "required_tools": ["WireViz"],
+    "capabilities": [
+      {
+        "id": "harness-documentation",
+        "backend_job_types": ["check_wire_routing", "generate_bom"],
+        "input_formats": ["WireViz YAML"],
+        "output_formats": ["SVG", "HTML", "BOM CSV", "harness JSON"],
+        "expected_artifacts": ["wiring_check", "bom"]
+      }
+    ],
+    "frontend_handoff": ["wiring route panel", "bend radius warning", "harness BOM"],
+    "license_review_required": true,
+    "cost_guardrail": "Render harness documentation on demand in local or short-lived workers."
+  },
+  {
+    "id": "ros-urdf",
+    "display_name": "ROS and URDF adapter",
+    "documentation_path": "docs/integrations/ros-urdf.md",
+    "stub_class": "mechaflow_cad.integrations.stub_adapters.RosUrdfAdapter",
+    "dependency_policy": "optional-local-open-source-tool",
+    "local_compute_preferred": true,
+    "required_tools": ["ROS 2", "urdfdom"],
+    "capabilities": [
+      {
+        "id": "robot-description-import-export",
+        "backend_job_types": ["import_design", "generate_exploded_view"],
+        "input_formats": ["URDF", "Xacro", "STL", "DAE"],
+        "output_formats": ["URDF", "link joint JSON", "reach check report"],
+        "expected_artifacts": ["cad_metadata", "exploded_view"]
+      }
+    ],
+    "frontend_handoff": ["link and joint tree", "reach envelope", "robot task panel"],
+    "license_review_required": true,
+    "cost_guardrail": "Use URDF parsing without requiring a hosted ROS graph for catalog browsing."
+  },
+  {
+    "id": "manufacturing-quote-packets",
+    "display_name": "Manufacturing quote packet adapter",
+    "documentation_path": "docs/integrations/manufacturing-quote-packets.md",
+    "stub_class": "mechaflow_cad.integrations.stub_adapters.ManufacturingPacketAdapter",
+    "dependency_policy": "built-in-supplier-neutral-export",
+    "local_compute_preferred": true,
+    "required_tools": [],
+    "capabilities": [
+      {
+        "id": "quote-packet-generation",
+        "backend_job_types": ["generate_manufacturing_report", "generate_bom"],
+        "input_formats": ["STEP", "STL", "DXF", "Gerber", "WireViz YAML", "BOM CSV"],
+        "output_formats": ["RFQ packet directory", "supplier-neutral JSON"],
+        "expected_artifacts": ["manufacturing_report", "bom"]
+      }
+    ],
+    "frontend_handoff": ["manufacturing options", "quote packet export", "cost and lead time advisory"],
+    "license_review_required": false,
+    "cost_guardrail": "Core RFQ packet export must not require a paid quoting API. Paid supplier submission can be optional later."
+  },
+  {
+    "id": "materials-standards-data",
+    "display_name": "Materials and standards data adapter",
+    "documentation_path": "docs/integrations/materials-standards-data.md",
+    "stub_class": "mechaflow_cad.integrations.stub_adapters.MaterialsStandardsAdapter",
+    "dependency_policy": "built-in-open-advisory-data-plus-optional-user-packs",
+    "local_compute_preferred": true,
+    "required_tools": [],
+    "capabilities": [
+      {
+        "id": "material-and-rule-pack-loading",
+        "backend_job_types": ["quick_load_heuristic", "rerate_payload_capability", "generate_manufacturing_report"],
+        "input_formats": ["JSON", "CSV"],
+        "output_formats": ["normalized material JSON", "advisory rule JSON"],
+        "expected_artifacts": ["load_heuristic", "payload_rerating", "manufacturing_report"]
+      }
+    ],
+    "frontend_handoff": ["material option cards", "confidence labels", "standards boundary warnings"],
+    "license_review_required": true,
+    "cost_guardrail": "Store open advisory seed values only. Do not redistribute protected standards text or paid databases."
+  }
+]

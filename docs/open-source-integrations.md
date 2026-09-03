@@ -4,7 +4,7 @@
 
 The platform should prefer open-source systems and public file formats.
 
-Before implementation, each dependency must be reviewed for:
+Before implementation, each dependency must pass the checklist in [Dependency license verification](dependency-license-verification.md) and be reviewed for:
 
 - License compatibility.
 - Maintenance status.
@@ -14,7 +14,9 @@ Before implementation, each dependency must be reviewed for:
 - Commercial-use permission.
 - Cost to host or operate.
 
-This file lists candidates, not final legal approval.
+This file lists candidates, not final legal approval. Required runtime dependencies must not be closed-source or paid-only. Paid services can be optional integrations only when an open or local path remains available.
+
+Adapter implementation notes live in [docs/integrations](integrations/README.md).
 
 ## Mechanical CAD
 
@@ -207,12 +209,13 @@ Use:
 
 For every dependency:
 
-1. Verify the exact license.
+1. Verify the exact license using [Dependency license verification](dependency-license-verification.md).
 2. Confirm commercial use is allowed.
 3. Confirm the dependency is actively maintained or acceptable to vendor/fork.
 4. Confirm it can run locally or cheaply in a worker.
 5. Confirm the install process is automatable.
 6. Document any non-open-source or paid dependency.
+7. Keep the dependency optional if license or runtime cost is unclear.
 
 ## Standards caution
 

@@ -9,11 +9,12 @@
   <body>
     <main class="shell">
       <section class="hero">
-        <p class="eyebrow">Local integration shell</p>
-        <h1>MechaFlow CAD</h1>
+        <p class="eyebrow">Local integrated MVP shell</p>
+        <h1>MechaFlow CAD reference designs</h1>
         <p>
-          This simple frontend shell proves that the backend API exposes the product concepts a future design
-          system and CAD viewer can consume. Visual defaults are intentionally plain and replaceable.
+          This frontend shell proves that the backend API and catalog API expose the product concepts a
+          future design system and CAD viewer can consume. License uncertainty is visible by design, and no
+          upstream CAD assets are copied here.
         </p>
       </section>
       <section class="card">
@@ -26,12 +27,36 @@
           <ul id="concepts"></ul>
         </article>
         <article class="card">
-          <h2>Reference designs</h2>
+          <h2>Backend reference designs</h2>
           <ul id="reference-designs"></ul>
         </article>
+      </section>
+      <section class="card">
+        <h2>Catalog API</h2>
+        <p id="catalog-status">Loading catalog from <code>/api/catalog/reference-designs</code>...</p>
+        <ul id="catalog-reference-designs"></ul>
       </section>
     </main>
     <script src="/runtime-config.js"></script>
     <script src="./app.js"></script>
+    <script>
+      async function loadCatalog() {
+        const status = document.getElementById('catalog-status');
+        const list = document.getElementById('catalog-reference-designs');
+        try {
+          const response = await fetch('/api/catalog/reference-designs');
+          if (!response.ok) throw new Error(`API returned ${response.status}`);
+          const payload = await response.json();
+          status.textContent = `Loaded ${payload.items.length} reference designs from the catalog API.`;
+          list.innerHTML = payload.items.map((item) => {
+            const gate = item.handoff ? `; gate: ${item.handoff.license_gate}` : '';
+            return `<li>${item.name} - ${item.license.compatibility}${gate}</li>`;
+          }).join('');
+        } catch (error) {
+          status.textContent = `Catalog API not available from this server: ${error.message}`;
+        }
+      }
+      loadCatalog();
+    </script>
   </body>
 </html>

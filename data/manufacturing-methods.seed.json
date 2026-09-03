@@ -1,0 +1,72 @@
+[
+  {
+    "id": "fdm-3d-printing",
+    "name": "FDM 3D printing",
+    "category": "additive",
+    "typical_material_ids": ["pla-generic", "petg-generic", "carbon-fiber-nylon-generic"],
+    "quantity_fit": "prototype-to-low-volume",
+    "cost_model_seed": "material volume plus print time plus setup",
+    "quote_packet_fields": ["stl_or_3mf", "material", "layer_height", "infill", "orientation_notes", "quantity"],
+    "risk_notes": ["Anisotropic strength", "Heat sensitivity", "Dimensional tolerance depends on machine and operator"]
+  },
+  {
+    "id": "cnc-milling",
+    "name": "CNC milling",
+    "category": "subtractive",
+    "typical_material_ids": ["aluminum-6061-t6", "steel-aisi-1018"],
+    "quantity_fit": "prototype-to-production",
+    "cost_model_seed": "stock plus machine time plus setup plus finishing",
+    "quote_packet_fields": ["step_file", "drawing_pdf", "material", "finish", "critical_tolerances", "quantity"],
+    "risk_notes": ["Deep pockets and tight tolerances increase cost", "Tool access must be checked"]
+  },
+  {
+    "id": "sheet-metal",
+    "name": "Sheet metal fabrication",
+    "category": "forming",
+    "typical_material_ids": ["aluminum-6061-t6", "steel-aisi-1018"],
+    "quantity_fit": "low-to-production-volume",
+    "cost_model_seed": "blank size plus cutting plus bends plus finishing",
+    "quote_packet_fields": ["flat_pattern", "formed_step", "drawing_pdf", "material", "thickness", "finish", "quantity"],
+    "risk_notes": ["Bend radius and relief features must match shop capabilities", "Grain direction can matter"]
+  },
+  {
+    "id": "waterjet-cutting",
+    "name": "Waterjet or laser profile cutting",
+    "category": "subtractive",
+    "typical_material_ids": ["aluminum-6061-t6", "steel-aisi-1018"],
+    "quantity_fit": "prototype-to-production",
+    "cost_model_seed": "cut length plus pierces plus material plus setup",
+    "quote_packet_fields": ["dxf", "material", "thickness", "edge_quality", "quantity"],
+    "risk_notes": ["Kerf and taper affect precision", "Secondary operations may be needed"]
+  },
+  {
+    "id": "pcb-fabrication",
+    "name": "PCB fabrication and assembly",
+    "category": "electronics",
+    "typical_material_ids": ["fr4-generic"],
+    "quantity_fit": "prototype-to-production",
+    "cost_model_seed": "board area plus layer count plus assembly line items",
+    "quote_packet_fields": ["gerbers", "drill_files", "bom", "pick_and_place", "stackup", "quantity"],
+    "risk_notes": ["Board house design rules control manufacturability", "Component availability can dominate lead time"]
+  },
+  {
+    "id": "wire-harness",
+    "name": "Wire harness fabrication",
+    "category": "electronics",
+    "typical_material_ids": [],
+    "quantity_fit": "prototype-to-production",
+    "cost_model_seed": "connector count plus wire length plus terminations plus test requirements",
+    "quote_packet_fields": ["wireviz_yaml", "connector_table", "lengths", "labels", "test_requirements", "quantity"],
+    "risk_notes": ["Connector substitutions must be approved", "Bend radius, strain relief, and service loops need mechanical review"]
+  },
+  {
+    "id": "off-the-shelf-parts",
+    "name": "Off-the-shelf part sourcing",
+    "category": "buy",
+    "typical_material_ids": [],
+    "quantity_fit": "all-volumes",
+    "cost_model_seed": "supplier price breaks plus shipping plus lead time risk",
+    "quote_packet_fields": ["manufacturer_part_number", "approved_alternates", "quantity", "required_date"],
+    "risk_notes": ["Datasheet and supplier terms are separate from catalog metadata", "Substitutions can change capability ratings"]
+  }
+]
