@@ -5,14 +5,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .adapters import choose_adapter, list_adapter_statuses
 from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
 from .models import (
+    AnalysisArtifact,
     AnalysisJob,
+    AnalysisJobPlan,
     AnalysisJobRequest,
     AnalysisJobStatus,
     AnalysisReport,
@@ -66,6 +68,8 @@ SCHEMA_MODELS = [
     Material,
     TaskRequirement,
     AnalysisJob,
+    AnalysisJobPlan,
+    AnalysisArtifact,
     ManufacturingOption,
     WiringRoute,
     AnalysisReport,
@@ -88,6 +92,7 @@ CONCEPTS = {
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    job_store: dict[str, AnalysisJob] = {}
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -192,11 +197,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # validates the public schema and echoes a normalized project.
         return project
 
+    @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
+    def analysis_jobs(project_id: str | None = None) -> list[AnalysisJob]:
+        jobs = list(job_store.values())
+        if project_id is not None:
+            jobs = [job for job in jobs if job.project_id == project_id]
+        return jobs
+
     @app.post(f"{settings.api_prefix}/analysis-jobs", response_model=AnalysisJob, status_code=202, tags=["jobs"])
     def create_analysis_job(request: AnalysisJobRequest) -> AnalysisJob:
         adapter = choose_adapter(request)
         now = datetime.now(timezone.utc)
-        return AnalysisJob(
+        plan = adapter.plan(request) if adapter else None
+        job = AnalysisJob(
             id=f"job-{uuid4()}",
             job_type=request.job_type,
             status=AnalysisJobStatus.queued if adapter else AnalysisJobStatus.blocked_missing_adapter,
@@ -206,11 +219,83 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             local_compute_preferred=request.local_compute_preferred,
             input_summary=request.input_summary,
             result_summary={
-                "message": "Job accepted as orchestration metadata only; no heavy CAD or simulation tool was invoked."
+                "message": "Job accepted as orchestration metadata only; no heavy CAD or simulation tool was invoked.",
+                "queue_name": plan.queue_name if plan else None,
+                "expected_artifacts": [artifact.value for artifact in plan.expected_artifacts] if plan else [],
             },
             created_at=now,
             updated_at=now,
         )
+        job_store[job.id] = job
+        return job
+
+    @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}", response_model=AnalysisJob, tags=["jobs"])
+    def analysis_job(job_id: str) -> AnalysisJob:
+        job = job_store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        return job
+
+    @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/plan", response_model=AnalysisJobPlan, tags=["jobs"])
+    def analysis_job_plan(job_id: str) -> AnalysisJobPlan:
+        job = job_store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        adapter = choose_adapter(
+            AnalysisJobRequest(
+                job_type=job.job_type,
+                target_id=job.target_id,
+                project_id=job.project_id,
+                local_compute_preferred=job.local_compute_preferred,
+                input_summary=job.input_summary,
+            )
+        )
+        if adapter is None:
+            raise HTTPException(status_code=409, detail="analysis job has no matching adapter")
+        return adapter.plan(
+            AnalysisJobRequest(
+                job_type=job.job_type,
+                target_id=job.target_id,
+                project_id=job.project_id,
+                local_compute_preferred=job.local_compute_preferred,
+                input_summary=job.input_summary,
+            )
+        )
+
+    @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])
+    def run_analysis_job_stub(job_id: str) -> AnalysisJob:
+        job = job_store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        request = AnalysisJobRequest(
+            job_type=job.job_type,
+            target_id=job.target_id,
+            project_id=job.project_id,
+            local_compute_preferred=job.local_compute_preferred,
+            input_summary=job.input_summary,
+        )
+        adapter = choose_adapter(request)
+        now = datetime.now(timezone.utc)
+        if adapter is None:
+            job = job.model_copy(update={"status": AnalysisJobStatus.blocked_missing_adapter, "updated_at": now})
+            job_store[job.id] = job
+            return job
+        artifact = adapter.run_stub(job)
+        job = job.model_copy(
+            update={
+                "status": AnalysisJobStatus.completed,
+                "artifacts": [*job.artifacts, artifact],
+                "result_summary": {
+                    **job.result_summary,
+                    "message": "Local stub completed without invoking heavy tools.",
+                    "artifact_id": artifact.id,
+                    "artifact_kind": artifact.kind.value,
+                },
+                "updated_at": now,
+            }
+        )
+        job_store[job.id] = job
+        return job
 
     return app
 

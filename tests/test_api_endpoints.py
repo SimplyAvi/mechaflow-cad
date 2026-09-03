@@ -90,3 +90,38 @@ def test_create_analysis_job_selects_matching_stub_adapter() -> None:
     assert payload["status"] == "queued"
     assert payload["adapter_name"] == "calculix-fea-worker"
     assert payload["result_summary"]["message"].startswith("Job accepted")
+    assert payload["result_summary"]["queue_name"] == "fea-local"
+
+
+def test_analysis_job_contract_supports_planning_and_local_stub_execution() -> None:
+    created = client.post(
+        "/api/analysis-jobs",
+        json={
+            "job_type": AnalysisJobType.generate_manufacturing_report.value,
+            "target_id": "project-open-gripper-demo",
+            "project_id": "project-open-gripper-demo",
+            "input_summary": {"selected_part_ids": ["part-finger-link"]},
+        },
+    ).json()
+
+    listed = client.get("/api/analysis-jobs", params={"project_id": "project-open-gripper-demo"})
+    assert listed.status_code == 200
+    assert any(job["id"] == created["id"] for job in listed.json())
+
+    fetched = client.get(f"/api/analysis-jobs/{created['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["input_summary"]["selected_part_ids"] == ["part-finger-link"]
+
+    plan = client.get(f"/api/analysis-jobs/{created['id']}/plan")
+    assert plan.status_code == 200
+    plan_payload = plan.json()
+    assert plan_payload["adapter_name"] == "supplier-options-worker"
+    assert plan_payload["queue_name"] == "supplier-local"
+    assert "manufacturing_report" in plan_payload["expected_artifacts"]
+
+    completed = client.post(f"/api/analysis-jobs/{created['id']}/run-stub")
+    assert completed.status_code == 200
+    completed_payload = completed.json()
+    assert completed_payload["status"] == "completed"
+    assert completed_payload["artifacts"][0]["generated_by"] == "supplier-options-worker"
+    assert completed_payload["result_summary"]["artifact_kind"] == "manufacturing_report"

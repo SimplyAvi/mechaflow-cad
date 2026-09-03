@@ -77,6 +77,19 @@ class AnalysisJobStatus(str, Enum):
     failed = "failed"
 
 
+class AnalysisArtifactKind(str, Enum):
+    cad_metadata = "cad_metadata"
+    exploded_view = "exploded_view"
+    part_list = "part_list"
+    mass_properties = "mass_properties"
+    load_heuristic = "load_heuristic"
+    fea_summary = "fea_summary"
+    payload_rerating = "payload_rerating"
+    wiring_check = "wiring_check"
+    bom = "bom"
+    manufacturing_report = "manufacturing_report"
+
+
 class ReportStatus(str, Enum):
     draft = "draft"
     advisory = "advisory"
@@ -262,6 +275,18 @@ class AnalysisJobRequest(BaseModel):
     input_summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class AnalysisArtifact(BaseModel):
+    id: str
+    job_id: str
+    kind: AnalysisArtifactKind
+    title: str
+    summary: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    confidence: RecommendationConfidence = RecommendationConfidence.heuristic
+    generated_by: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class AnalysisJob(BaseModel):
     id: str
     job_type: AnalysisJobType
@@ -272,8 +297,21 @@ class AnalysisJob(BaseModel):
     local_compute_preferred: bool = True
     input_summary: dict[str, Any] = Field(default_factory=dict)
     result_summary: dict[str, Any] = Field(default_factory=dict)
+    artifacts: list[AnalysisArtifact] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AnalysisJobPlan(BaseModel):
+    adapter_name: str
+    job_type: AnalysisJobType
+    queue_name: str
+    target_id: str
+    local_execution: bool = True
+    required_capabilities: list[str] = Field(default_factory=list)
+    expected_artifacts: list[AnalysisArtifactKind] = Field(default_factory=list)
+    command_hint: str | None = None
+    notes: list[str] = Field(default_factory=list)
 
 
 class AnalysisReport(BaseModel):

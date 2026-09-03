@@ -3,6 +3,9 @@ import pytest
 
 from mechaflow_api.catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
 from mechaflow_api.models import (
+    AnalysisArtifact,
+    AnalysisArtifactKind,
+    AnalysisJobPlan,
     AnalysisJobRequest,
     AnalysisJobType,
     ManufacturingOption,
@@ -76,6 +79,28 @@ def test_analysis_job_request_defaults_to_local_compute() -> None:
     request = AnalysisJobRequest(job_type=AnalysisJobType.extract_part_list, target_id="asm-test")
 
     assert request.local_compute_preferred is True
+
+
+def test_worker_plan_and_artifact_models_define_adapter_contract() -> None:
+    plan = AnalysisJobPlan(
+        adapter_name="freecad-worker",
+        job_type=AnalysisJobType.import_design,
+        queue_name="cad-local",
+        target_id="ref-open-gripper-demo",
+        expected_artifacts=[AnalysisArtifactKind.cad_metadata],
+        command_hint="Worker claims jobs from this queue.",
+    )
+    artifact = AnalysisArtifact(
+        id="artifact-test",
+        job_id="job-test",
+        kind=AnalysisArtifactKind.cad_metadata,
+        title="CAD metadata stub",
+        summary="Normalized metadata placeholder.",
+        generated_by="freecad-worker",
+    )
+
+    assert plan.queue_name == "cad-local"
+    assert artifact.kind is AnalysisArtifactKind.cad_metadata
 
 
 def test_settings_read_port_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
