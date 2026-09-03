@@ -333,6 +333,48 @@ class SeedDataValidationTest(unittest.TestCase):
             errors,
         )
 
+    def test_committed_schema_rejects_missing_handoff(self) -> None:
+        sys.path.insert(0, str(ROOT))
+        from scripts.validate_catalog import validate_reference_design_schema
+
+        design = copy.deepcopy(self.load_json("catalog/reference-designs/reference-designs.seed.json")[0])
+        design.pop("handoff")
+        errors: list[str] = []
+
+        validate_reference_design_schema([design], errors)
+
+        self.assertTrue(errors)
+
+    def test_handoff_aliases_match_backend_runtime_contract(self) -> None:
+        sys.path.insert(0, str(ROOT / "backend"))
+        from mechaflow_api.adapters import ADAPTERS
+        from mechaflow_api.catalog import DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS
+        from mechaflow_api.storage import build_sample_project
+
+        handoff = self.load_json("data/backend-frontend-handoff.seed.json")
+        aliases = handoff["id_aliases"]
+        sample_project = build_sample_project()
+        sample_part_ids = {part.id for assembly in sample_project.assemblies for part in assembly.parts}
+        sample_route_ids = {route.id for assembly in sample_project.assemblies for route in assembly.wiring_routes}
+        backend_task_ids = {task.id for design in DEFAULT_REFERENCE_DESIGNS for task in design.example_tasks}
+
+        self.assertEqual(handoff["mvp_seed_project"]["id"], sample_project.id)
+        reference_alias = next(item for item in aliases["reference_designs"] if item["catalog_id"] == "gaiahand")
+        self.assertEqual(reference_alias["backend_id"], sample_project.reference_design_id)
+        self.assertTrue(
+            {item["backend_id"] for item in aliases["materials"]}.issubset({item.id for item in DEFAULT_MATERIALS})
+        )
+        self.assertTrue(
+            {item["backend_name"] for item in aliases["adapters"]}.issubset({item.status.name for item in ADAPTERS})
+        )
+        self.assertTrue({item["sample_task_id"] for item in aliases["tasks"]}.issubset(backend_task_ids))
+        self.assertTrue(
+            {item["id"] for item in handoff["mvp_seed_project"]["sample_parts"]}.issubset(sample_part_ids)
+        )
+        self.assertTrue(
+            {item["id"] for item in handoff["mvp_seed_project"]["sample_wiring_routes"]}.issubset(sample_route_ids)
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
