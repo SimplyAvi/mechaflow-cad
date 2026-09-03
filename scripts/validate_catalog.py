@@ -11,6 +11,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_DESIGNS = ROOT / "catalog" / "reference-designs" / "reference-designs.seed.json"
+INTEGRATION_ADAPTERS = ROOT / "data" / "integration-adapters.seed.json"
+BACKEND_FRONTEND_HANDOFF = ROOT / "data" / "backend-frontend-handoff.seed.json"
 DATA_FILES = {
     "materials": ROOT / "data" / "materials.seed.json",
     "tasks": ROOT / "data" / "tasks.seed.json",
@@ -34,6 +36,30 @@ REFERENCE_REQUIRED = {
 }
 LICENSE_COMPATIBILITY = {"appears-compatible", "conditional", "not-compatible", "uncertain"}
 REVIEW_STATUSES = {"seed", "needs-license-review", "ready-for-import", "blocked"}
+BACKEND_JOB_TYPES = {
+    "import_design",
+    "generate_exploded_view",
+    "extract_part_list",
+    "estimate_mass_properties",
+    "quick_load_heuristic",
+    "run_fea",
+    "rerate_payload_capability",
+    "check_wire_routing",
+    "generate_bom",
+    "generate_manufacturing_report",
+}
+BACKEND_ARTIFACT_KINDS = {
+    "cad_metadata",
+    "exploded_view",
+    "part_list",
+    "mass_properties",
+    "load_heuristic",
+    "fea_summary",
+    "payload_rerating",
+    "wiring_check",
+    "bom",
+    "manufacturing_report",
+}
 
 
 def load_json(path: Path) -> Any:
@@ -60,12 +86,12 @@ def validate_unique_ids(name: str, items: list[dict[str, Any]], errors: list[str
     return seen
 
 
-def validate_reference_designs(errors: list[str]) -> None:
+def validate_reference_designs(errors: list[str], adapter_ids: set[str]) -> set[str]:
     designs = load_json(REFERENCE_DESIGNS)
     ensure(isinstance(designs, list), "reference designs root must be a list", errors)
     if not isinstance(designs, list):
-        return
-    validate_unique_ids("reference-designs", designs, errors)
+        return set()
+    design_ids = validate_unique_ids("reference-designs", designs, errors)
 
     material_ids = validate_unique_ids("materials", load_json(DATA_FILES["materials"]), errors)
     manufacturing_ids = validate_unique_ids("manufacturing-methods", load_json(DATA_FILES["manufacturing-methods"]), errors)
@@ -82,6 +108,7 @@ def validate_reference_designs(errors: list[str]) -> None:
         ensure(compatibility in LICENSE_COMPATIBILITY, f"{design_id} has invalid license compatibility", errors)
         ensure(bool(license_data.get("declared")), f"{design_id} must record declared license text", errors)
         ensure(bool(license_data.get("evidence")), f"{design_id} must record license evidence", errors)
+        ensure(license_data.get("review_required_before_import") is True, f"{design_id} must require review before import", errors)
         if compatibility in {"uncertain", "conditional", "not-compatible"}:
             ensure(
                 bool(license_data.get("cautions")),
@@ -105,8 +132,19 @@ def validate_reference_designs(errors: list[str]) -> None:
         for rating_id in intent.get("capability_rating_ids", []):
             ensure(rating_id in rating_ids, f"{design_id} references unknown capability rating {rating_id}", errors)
 
+        handoff = design.get("handoff")
+        if handoff is not None:
+            ensure(bool(handoff.get("license_gate")), f"{design_id} handoff must include license_gate", errors)
+            for adapter_id in handoff.get("required_adapter_ids", []):
+                ensure(adapter_id in adapter_ids, f"{design_id} handoff references unknown adapter {adapter_id}", errors)
+            for job_type in handoff.get("recommended_job_types", []):
+                ensure(job_type in BACKEND_JOB_TYPES, f"{design_id} handoff references unknown backend job type {job_type}", errors)
 
-def validate_datasets(errors: list[str]) -> None:
+    return design_ids
+
+
+def validate_datasets(errors: list[str]) -> dict[str, set[str]]:
+    ids_by_name: dict[str, set[str]] = {}
     for name, path in DATA_FILES.items():
         items = load_json(path)
         ensure(isinstance(items, list), f"{name} root must be a list", errors)
@@ -114,13 +152,90 @@ def validate_datasets(errors: list[str]) -> None:
             continue
         ids = validate_unique_ids(name, items, errors)
         ensure(bool(ids), f"{name} must not be empty", errors)
+        ids_by_name[name] = ids
+    return ids_by_name
+
+
+def validate_integration_adapters(errors: list[str]) -> set[str]:
+    adapters = load_json(INTEGRATION_ADAPTERS)
+    ensure(isinstance(adapters, list), "integration adapters root must be a list", errors)
+    if not isinstance(adapters, list):
+        return set()
+    adapter_ids = validate_unique_ids("integration-adapters", adapters, errors)
+    for adapter in adapters:
+        adapter_id = adapter.get("id", "<unknown>")
+        doc_path = adapter.get("documentation_path")
+        ensure(isinstance(doc_path, str) and (ROOT / doc_path).exists(), f"{adapter_id} documentation_path is missing", errors)
+        ensure(bool(adapter.get("stub_class")), f"{adapter_id} must record stub_class", errors)
+        ensure(isinstance(adapter.get("required_tools"), list), f"{adapter_id} required_tools must be a list", errors)
+        ensure(adapter.get("dependency_policy") is not None, f"{adapter_id} must record dependency_policy", errors)
+        for capability in adapter.get("capabilities", []):
+            capability_id = capability.get("id", "<unknown>")
+            for job_type in capability.get("backend_job_types", []):
+                ensure(job_type in BACKEND_JOB_TYPES, f"{adapter_id}:{capability_id} has unknown job type {job_type}", errors)
+            for artifact_kind in capability.get("expected_artifacts", []):
+                ensure(
+                    artifact_kind in BACKEND_ARTIFACT_KINDS,
+                    f"{adapter_id}:{capability_id} has unknown artifact kind {artifact_kind}",
+                    errors,
+                )
+    return adapter_ids
+
+
+def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design_ids: set[str], adapter_ids: set[str]) -> None:
+    handoff = load_json(BACKEND_FRONTEND_HANDOFF)
+    ensure(isinstance(handoff, dict), "backend frontend handoff root must be an object", errors)
+    if not isinstance(handoff, dict):
+        return
+    ensure(handoff.get("schema_version") == "backend-frontend-handoff.v1", "handoff has wrong schema_version", errors)
+
+    aliases = handoff.get("id_aliases", {})
+    for item in aliases.get("materials", []):
+        catalog_id = item.get("catalog_id")
+        ensure(catalog_id in ids_by_name.get("materials", set()), f"handoff aliases unknown material {catalog_id}", errors)
+    for item in aliases.get("manufacturing_methods", []):
+        catalog_id = item.get("catalog_id")
+        ensure(catalog_id in ids_by_name.get("manufacturing-methods", set()), f"handoff aliases unknown manufacturing method {catalog_id}", errors)
+    for item in aliases.get("tasks", []):
+        catalog_id = item.get("catalog_id")
+        ensure(catalog_id in ids_by_name.get("tasks", set()), f"handoff aliases unknown task {catalog_id}", errors)
+    for item in aliases.get("capability_ratings", []):
+        catalog_id = item.get("catalog_id")
+        artifact_kind = item.get("backend_artifact_kind")
+        ensure(catalog_id in ids_by_name.get("capability-ratings", set()), f"handoff aliases unknown rating {catalog_id}", errors)
+        ensure(artifact_kind in BACKEND_ARTIFACT_KINDS, f"handoff aliases unknown artifact kind {artifact_kind}", errors)
+
+    project = handoff.get("mvp_seed_project", {})
+    reference_design_id = project.get("reference_design_id")
+    ensure(reference_design_id in design_ids, f"handoff mvp_seed_project references unknown design {reference_design_id}", errors)
+    ensure(bool(project.get("license_gate")), "handoff mvp_seed_project must keep license_gate visible", errors)
+    for part in project.get("sample_parts", []):
+        part_id = part.get("id", "<unknown>")
+        ensure(part.get("material_id") in ids_by_name.get("materials", set()), f"{part_id} references unknown material", errors)
+        ensure(
+            part.get("manufacturing_method_id") in ids_by_name.get("manufacturing-methods", set()),
+            f"{part_id} references unknown manufacturing method",
+            errors,
+        )
+        for rating_id in part.get("capability_rating_ids", []):
+            ensure(rating_id in ids_by_name.get("capability-ratings", set()), f"{part_id} references unknown rating {rating_id}", errors)
+    for route in project.get("sample_wiring_routes", []):
+        route_id = route.get("id", "<unknown>")
+        for adapter_id in route.get("adapter_ids", []):
+            ensure(adapter_id in adapter_ids, f"{route_id} references unknown adapter {adapter_id}", errors)
+    for job in project.get("analysis_job_sequence", []):
+        ensure(job.get("job_type") in BACKEND_JOB_TYPES, f"handoff job has unknown job_type {job.get('job_type')}", errors)
+        ensure(job.get("adapter_id") in adapter_ids, f"handoff job references unknown adapter {job.get('adapter_id')}", errors)
+        ensure(job.get("artifact_kind") in BACKEND_ARTIFACT_KINDS, f"handoff job has unknown artifact {job.get('artifact_kind')}", errors)
 
 
 def main() -> int:
     errors: list[str] = []
     try:
-        validate_datasets(errors)
-        validate_reference_designs(errors)
+        ids_by_name = validate_datasets(errors)
+        adapter_ids = validate_integration_adapters(errors)
+        design_ids = validate_reference_designs(errors, adapter_ids)
+        validate_handoff(errors, ids_by_name, design_ids, adapter_ids)
     except ValueError as exc:
         errors.append(str(exc))
 

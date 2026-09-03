@@ -1,6 +1,6 @@
 # Integration Adapter Plan
 
-MechaFlow CAD should orchestrate mature open-source engineering tools instead of rebuilding them. Adapter contracts are seeded in `src/mechaflow_cad/integrations/` and the implementation plan is split by integration below.
+MechaFlow CAD should orchestrate mature open-source engineering tools instead of rebuilding them. Adapter contracts are seeded in `src/mechaflow_cad/integrations/`, machine-readable adapter metadata lives in `data/integration-adapters.seed.json`, and the implementation plan is split by integration below.
 
 - [FreeCAD](freecad.md)
 - [CalculiX and Gmsh](calculix-gmsh.md)
@@ -38,4 +38,4 @@ Each adapter should accept a small JSON request stored in a project workspace. C
 }
 ```
 
-The stubs intentionally return `confidence: "stub"` until real adapters are implemented.
+The stubs intentionally return `confidence: "stub"` until real adapters are implemented. Keep adapter IDs stable across the docs, `data/integration-adapters.seed.json`, `data/backend-frontend-handoff.seed.json`, and `src/mechaflow_cad/integrations/registry.py`.

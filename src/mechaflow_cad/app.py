@@ -22,6 +22,8 @@ DATASETS = {
     "manufacturing-methods": REPO_ROOT / "data" / "manufacturing-methods.seed.json",
     "capability-ratings": REPO_ROOT / "data" / "capability-ratings.seed.json",
     "standards-advisory-rules": REPO_ROOT / "data" / "standards-advisory-rules.seed.json",
+    "integration-adapters": REPO_ROOT / "data" / "integration-adapters.seed.json",
+    "backend-frontend-handoff": REPO_ROOT / "data" / "backend-frontend-handoff.seed.json",
 }
 FRONTEND_ROOT = REPO_ROOT / "frontend"
 

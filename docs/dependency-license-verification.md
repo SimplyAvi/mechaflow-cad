@@ -52,4 +52,4 @@ A dependency or design may become a required runtime dependency only when:
 5. Hosting and worker costs fit the cheap-hosting plan.
 6. Security review confirms it does not require secrets in code or committed config.
 
-If any answer is unclear, keep the candidate optional or mark it `uncertain` in the catalog.
+If any answer is unclear, keep the candidate optional or mark it `uncertain` in the catalog. Handoff data, demos, and adapter stubs must carry that uncertainty forward instead of translating it into `ready-for-import` language.

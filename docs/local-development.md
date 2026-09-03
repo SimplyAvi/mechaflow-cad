@@ -44,7 +44,7 @@ Run the end-to-end smoke test:
 python3 tests/smoke_test.py
 ```
 
-The test starts the app on an OS-selected port, verifies `/api/health`, verifies `/api/catalog/reference-designs`, and verifies the frontend HTML references the backend API.
+The test starts the app on an OS-selected port, verifies `/api/health`, verifies `/api/catalog/reference-designs`, verifies adapter and handoff datasets under `/api/data/{dataset}`, and verifies the frontend HTML references the backend API.
 
 ## Catalog validation
 
@@ -52,4 +52,4 @@ The test starts the app on an OS-selected port, verifies `/api/health`, verifies
 python3 scripts/validate_catalog.py
 ```
 
-Run this after changing files under `catalog/` or `data/`.
+Run this after changing files under `catalog/` or `data/`. For regression coverage, also run `python3 -m unittest discover tests`.

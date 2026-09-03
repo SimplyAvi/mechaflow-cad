@@ -13,6 +13,7 @@ The machine-readable seed catalog lives in:
 2. Record license evidence and uncertainty directly in each entry.
 3. Keep mechanical, electronics, BOM, manufacturing, ROS, and analysis notes together so import work can proceed without rewriting the catalog.
 4. Link every task, material, manufacturing method, and capability rating to seed data IDs where possible.
+5. Use `handoff` metadata to connect a design to backend job types, frontend panels, and adapter IDs without importing upstream assets.
 
 ## License compatibility values
 
@@ -31,16 +32,17 @@ Run:
 python3 scripts/validate_catalog.py
 ```
 
-The validator checks JSON syntax, IDs, required fields, license caution visibility, and references from designs to seed materials, manufacturing methods, and capability ratings.
+The validator checks JSON syntax, IDs, required fields, license caution visibility, integration adapter references, backend job type names, and references from designs to seed materials, manufacturing methods, and capability ratings.
 
 ## Adding a new reference design
 
 1. Find the upstream repository or project page.
 2. Run the dependency license checklist in `docs/dependency-license-verification.md`.
 3. Pin the exact commit, release, or page snapshot reviewed.
-4. Add one catalog entry with source URLs, declared license, evidence, cautions, asset format hints, and import notes.
+4. Add one catalog entry with source URLs, declared license, evidence, cautions, asset format hints, import notes, and optional `handoff` metadata.
 5. Leave `review.status` as `needs-license-review` unless the exact assets to import have been checked.
-6. Run `python3 scripts/validate_catalog.py`.
+6. Add adapter IDs only if they exist in `data/integration-adapters.seed.json`.
+7. Run `python3 scripts/validate_catalog.py`.
 
 ## Seed catalog scope
 

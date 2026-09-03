@@ -53,6 +53,13 @@ def main() -> int:
         catalog = json.loads(fetch(f"{base_url}/api/catalog/reference-designs"))
         assert len(catalog["items"]) >= 3
         assert any(item["license"]["compatibility"] == "uncertain" for item in catalog["items"])
+        assert all("handoff" in item and "license_gate" in item["handoff"] for item in catalog["items"])
+
+        adapters = json.loads(fetch(f"{base_url}/api/data/integration-adapters"))
+        assert any(item["id"] == "freecad" for item in adapters["items"])
+
+        handoff = json.loads(fetch(f"{base_url}/api/data/backend-frontend-handoff"))
+        assert handoff["items"]["mvp_seed_project"]["reference_design_id"] == "gaiahand"
 
         frontend = fetch(f"{base_url}/").decode("utf-8")
         assert "MechaFlow CAD reference designs" in frontend

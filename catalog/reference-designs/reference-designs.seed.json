@@ -29,7 +29,9 @@
       "design_files_available": true,
       "commercial_use_known": "yes",
       "redistribution_known": "yes",
-      "notes": ["Treat as a preferred mechanical reference after per-file license review."]
+      "notes": [
+        "Treat as a preferred mechanical reference after per-file license review."
+      ]
     },
     "assets": {
       "cad": [
@@ -66,25 +68,57 @@
     },
     "assembly": {
       "structure_confidence": "medium",
-      "known_subassemblies": ["motor", "gear train", "output linkage", "housing", "sensors"],
+      "known_subassemblies": [
+        "motor",
+        "gear train",
+        "output linkage",
+        "housing",
+        "sensors"
+      ],
       "exploded_view_seed": {
         "strategy": "assembly-tree",
-        "notes": ["Start with actuator axis separation, then explode fastener and housing groups."]
+        "notes": [
+          "Start with actuator axis separation, then explode fastener and housing groups."
+        ]
       }
     },
     "engineering_intent": {
-      "example_tasks": ["deliver target joint torque", "hold a static leg load", "survive repeated robot gait cycles"],
-      "capability_rating_ids": ["payload-static", "joint-torque", "fatigue-life-advisory"],
-      "primary_material_ids": ["aluminum-6061-t6", "pla-generic"],
-      "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing"],
+      "example_tasks": [
+        "deliver target joint torque",
+        "hold a static leg load",
+        "survive repeated robot gait cycles"
+      ],
+      "capability_rating_ids": [
+        "payload-static",
+        "joint-torque",
+        "fatigue-life-advisory"
+      ],
+      "primary_material_ids": [
+        "aluminum-6061-t6",
+        "pla-generic"
+      ],
+      "manufacturing_method_ids": [
+        "cnc-milling",
+        "fdm-3d-printing"
+      ],
       "electronics_awareness": "bom-only"
     },
     "integration_notes": {
-      "freecad": ["Import STEP or native interchange files into a pinned project workspace."],
-      "fea": ["Begin with static load cases on housings, brackets, and output links."],
-      "kicad_wireviz": ["Capture motor, encoder, and controller connectors as harness endpoints when data exists."],
-      "ros_urdf": ["Map actuator geometry and joint limits into URDF links and joints."],
-      "manufacturing": ["Generate quote packets for machined housings and printed fixtures separately."]
+      "freecad": [
+        "Import STEP or native interchange files into a pinned project workspace."
+      ],
+      "fea": [
+        "Begin with static load cases on housings, brackets, and output links."
+      ],
+      "kicad_wireviz": [
+        "Capture motor, encoder, and controller connectors as harness endpoints when data exists."
+      ],
+      "ros_urdf": [
+        "Map actuator geometry and joint limits into URDF links and joints."
+      ],
+      "manufacturing": [
+        "Generate quote packets for machined housings and printed fixtures separately."
+      ]
     },
     "review": {
       "status": "needs-license-review",
@@ -94,6 +128,34 @@
         "Pin a commit and run the dependency license checklist.",
         "Extract one actuator assembly into a local import fixture after legal review."
       ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "joint torque re-rating",
+        "actuator selectable subassembly",
+        "fatigue advisory"
+      ],
+      "sample_project_id": "project-actuator-metadata-demo",
+      "backend_reference_design_id": "ref-open-robot-actuator-hardware",
+      "frontend_panel_tags": [
+        "actuator",
+        "torque",
+        "assembly-tree"
+      ],
+      "required_adapter_ids": [
+        "freecad",
+        "calculix-gmsh",
+        "ros-urdf",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "extract_part_list",
+        "generate_exploded_view",
+        "rerate_payload_capability",
+        "generate_manufacturing_report"
+      ],
+      "license_gate": "appears-compatible metadata only; pin and review exact CAD and BOM files before import"
     }
   },
   {
@@ -125,7 +187,9 @@
       "design_files_available": true,
       "commercial_use_known": "yes",
       "redistribution_known": "yes",
-      "notes": ["Likely useful as a reciprocal open hardware test case, not a permissive baseline."]
+      "notes": [
+        "Likely useful as a reciprocal open hardware test case, not a permissive baseline."
+      ]
     },
     "assets": {
       "cad": [
@@ -153,25 +217,57 @@
     },
     "assembly": {
       "structure_confidence": "low",
-      "known_subassemblies": ["finger", "base", "actuation", "fasteners"],
+      "known_subassemblies": [
+        "finger",
+        "base",
+        "actuation",
+        "fasteners"
+      ],
       "exploded_view_seed": {
         "strategy": "manual",
-        "notes": ["Manual transform seeds should group paired fingers symmetrically."]
+        "notes": [
+          "Manual transform seeds should group paired fingers symmetrically."
+        ]
       }
     },
     "engineering_intent": {
-      "example_tasks": ["grasp a small payload", "compare printed and machined finger materials", "check fingertip deflection"],
-      "capability_rating_ids": ["payload-static", "grip-force", "deflection-limit"],
-      "primary_material_ids": ["aluminum-6061-t6", "petg-generic", "carbon-fiber-nylon-generic"],
-      "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing"],
+      "example_tasks": [
+        "grasp a small payload",
+        "compare printed and machined finger materials",
+        "check fingertip deflection"
+      ],
+      "capability_rating_ids": [
+        "payload-static",
+        "grip-force",
+        "deflection-limit"
+      ],
+      "primary_material_ids": [
+        "aluminum-6061-t6",
+        "petg-generic",
+        "carbon-fiber-nylon-generic"
+      ],
+      "manufacturing_method_ids": [
+        "cnc-milling",
+        "fdm-3d-printing"
+      ],
       "electronics_awareness": "unknown"
     },
     "integration_notes": {
-      "freecad": ["Import gripper assembly and tag mirrored fingers as selectable part groups."],
-      "fea": ["Use initial cantilever load cases on fingers and base mounts."],
-      "kicad_wireviz": ["Represent actuator leads as harness endpoints if wiring data is added."],
-      "ros_urdf": ["Represent finger motion as mimic joints when kinematics are known."],
-      "manufacturing": ["Compare printed finger, machined finger, and bought actuator options."]
+      "freecad": [
+        "Import gripper assembly and tag mirrored fingers as selectable part groups."
+      ],
+      "fea": [
+        "Use initial cantilever load cases on fingers and base mounts."
+      ],
+      "kicad_wireviz": [
+        "Represent actuator leads as harness endpoints if wiring data is added."
+      ],
+      "ros_urdf": [
+        "Represent finger motion as mimic joints when kinematics are known."
+      ],
+      "manufacturing": [
+        "Compare printed finger, machined finger, and bought actuator options."
+      ]
     },
     "review": {
       "status": "needs-license-review",
@@ -181,6 +277,33 @@
         "Confirm every CAD file is covered by CERN-OHL-S-2.0.",
         "Document reciprocal obligations in the imported design report."
       ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "gripper payload flow",
+        "selectable fingers",
+        "manufacturing substitution"
+      ],
+      "sample_project_id": "project-anvil-gripper-metadata-demo",
+      "backend_reference_design_id": "ref-anvil-gripper-hw",
+      "frontend_panel_tags": [
+        "gripper",
+        "conditional-license",
+        "parts"
+      ],
+      "required_adapter_ids": [
+        "freecad",
+        "calculix-gmsh",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "generate_exploded_view",
+        "quick_load_heuristic",
+        "rerate_payload_capability",
+        "generate_manufacturing_report"
+      ],
+      "license_gate": "conditional CERN-OHL-S-2.0 metadata only; reciprocal obligations must be surfaced before import"
     }
   },
   {
@@ -213,7 +336,9 @@
       "design_files_available": true,
       "commercial_use_known": "unknown",
       "redistribution_known": "unknown",
-      "notes": ["Treat as a ROS and URDF integration candidate until CAD asset licensing is verified."]
+      "notes": [
+        "Treat as a ROS and URDF integration candidate until CAD asset licensing is verified."
+      ]
     },
     "assets": {
       "cad": [
@@ -241,25 +366,58 @@
     },
     "assembly": {
       "structure_confidence": "medium",
-      "known_subassemblies": ["base", "links", "joints", "gripper", "actuators"],
+      "known_subassemblies": [
+        "base",
+        "links",
+        "joints",
+        "gripper",
+        "actuators"
+      ],
       "exploded_view_seed": {
         "strategy": "assembly-tree",
-        "notes": ["Use URDF links to seed selectable assembly nodes when CAD import is unavailable."]
+        "notes": [
+          "Use URDF links to seed selectable assembly nodes when CAD import is unavailable."
+        ]
       }
     },
     "engineering_intent": {
-      "example_tasks": ["reach a target envelope", "lift a small payload", "avoid cable interference across joints"],
-      "capability_rating_ids": ["reach-envelope", "payload-static", "joint-torque"],
-      "primary_material_ids": ["aluminum-6061-t6", "pla-generic"],
-      "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing", "off-the-shelf-parts"],
+      "example_tasks": [
+        "reach a target envelope",
+        "lift a small payload",
+        "avoid cable interference across joints"
+      ],
+      "capability_rating_ids": [
+        "reach-envelope",
+        "payload-static",
+        "joint-torque"
+      ],
+      "primary_material_ids": [
+        "aluminum-6061-t6",
+        "pla-generic"
+      ],
+      "manufacturing_method_ids": [
+        "cnc-milling",
+        "fdm-3d-printing",
+        "off-the-shelf-parts"
+      ],
       "electronics_awareness": "bom-only"
     },
     "integration_notes": {
-      "freecad": ["Use only license-cleared CAD exports for geometry import."],
-      "fea": ["Start with link bending checks after materials and load paths are known."],
-      "kicad_wireviz": ["Model actuator power and data harnesses as WireViz connectors and cables."],
-      "ros_urdf": ["Use ROS package data as the first URDF import and kinematics smoke test."],
-      "manufacturing": ["Split vendor actuators from custom brackets in quote packets."]
+      "freecad": [
+        "Use only license-cleared CAD exports for geometry import."
+      ],
+      "fea": [
+        "Start with link bending checks after materials and load paths are known."
+      ],
+      "kicad_wireviz": [
+        "Model actuator power and data harnesses as WireViz connectors and cables."
+      ],
+      "ros_urdf": [
+        "Use ROS package data as the first URDF import and kinematics smoke test."
+      ],
+      "manufacturing": [
+        "Split vendor actuators from custom brackets in quote packets."
+      ]
     },
     "review": {
       "status": "needs-license-review",
@@ -269,6 +427,33 @@
         "Verify CAD source license and export permissions.",
         "Confirm Apache-2.0 coverage for the exact files imported."
       ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "URDF kinematics",
+        "reach envelope",
+        "actuator and harness awareness"
+      ],
+      "sample_project_id": "project-open-manipulator-urdf-demo",
+      "backend_reference_design_id": "ref-robotis-open-manipulator",
+      "frontend_panel_tags": [
+        "robot-arm",
+        "urdf",
+        "uncertain-cad-license"
+      ],
+      "required_adapter_ids": [
+        "ros-urdf",
+        "freecad",
+        "wireviz",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "generate_exploded_view",
+        "extract_part_list",
+        "check_wire_routing"
+      ],
+      "license_gate": "uncertain CAD coverage; use URDF metadata for planning only until CAD asset terms are verified"
     }
   },
   {
@@ -300,7 +485,9 @@
       "design_files_available": true,
       "commercial_use_known": "yes",
       "redistribution_known": "yes",
-      "notes": ["Good candidate for a full mechanical plus electronics catalog import after per-file review."]
+      "notes": [
+        "Good candidate for a full mechanical plus electronics catalog import after per-file review."
+      ]
     },
     "assets": {
       "cad": [
@@ -337,25 +524,59 @@
     },
     "assembly": {
       "structure_confidence": "low",
-      "known_subassemblies": ["palm", "fingers", "thumb", "tendons or linkages", "electronics"],
+      "known_subassemblies": [
+        "palm",
+        "fingers",
+        "thumb",
+        "tendons or linkages",
+        "electronics"
+      ],
       "exploded_view_seed": {
         "strategy": "manual",
-        "notes": ["Explode palm, finger modules, and electronics in separate animation lanes."]
+        "notes": [
+          "Explode palm, finger modules, and electronics in separate animation lanes."
+        ]
       }
     },
     "engineering_intent": {
-      "example_tasks": ["grasp small objects", "compare finger materials", "check PCB and wire clearances"],
-      "capability_rating_ids": ["grip-force", "payload-static", "wire-clearance"],
-      "primary_material_ids": ["pla-generic", "petg-generic", "carbon-fiber-nylon-generic"],
-      "manufacturing_method_ids": ["fdm-3d-printing", "pcb-fabrication", "wire-harness"],
+      "example_tasks": [
+        "grasp small objects",
+        "compare finger materials",
+        "check PCB and wire clearances"
+      ],
+      "capability_rating_ids": [
+        "grip-force",
+        "payload-static",
+        "wire-clearance"
+      ],
+      "primary_material_ids": [
+        "pla-generic",
+        "petg-generic",
+        "carbon-fiber-nylon-generic"
+      ],
+      "manufacturing_method_ids": [
+        "fdm-3d-printing",
+        "pcb-fabrication",
+        "wire-harness"
+      ],
       "electronics_awareness": "pcb"
     },
     "integration_notes": {
-      "freecad": ["Import palm and finger parts as independently selectable modules."],
-      "fea": ["Run finger link and palm mounting load cases before claiming capability changes."],
-      "kicad_wireviz": ["Use PCB files and connector lists to generate board keep-outs and harness endpoints."],
-      "ros_urdf": ["Map finger links to URDF joints when kinematic definitions exist."],
-      "manufacturing": ["Bundle printed parts, PCB fabrication, and harness fabrication into separate quote packet sections."]
+      "freecad": [
+        "Import palm and finger parts as independently selectable modules."
+      ],
+      "fea": [
+        "Run finger link and palm mounting load cases before claiming capability changes."
+      ],
+      "kicad_wireviz": [
+        "Use PCB files and connector lists to generate board keep-outs and harness endpoints."
+      ],
+      "ros_urdf": [
+        "Map finger links to URDF joints when kinematic definitions exist."
+      ],
+      "manufacturing": [
+        "Bundle printed parts, PCB fabrication, and harness fabrication into separate quote packet sections."
+      ]
     },
     "review": {
       "status": "needs-license-review",
@@ -365,6 +586,39 @@
         "Pin a commit and inspect all hardware, PCB, and documentation license files.",
         "Create a minimal import plan covering one finger module and one PCB or connector."
       ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "hand or gripper demo",
+        "electronics awareness",
+        "material substitution",
+        "wire harness pass"
+      ],
+      "sample_project_id": "project-gaiahand-metadata-demo",
+      "backend_reference_design_id": "ref-gaiahand",
+      "frontend_panel_tags": [
+        "robot-hand",
+        "pcb",
+        "wiring",
+        "appears-compatible"
+      ],
+      "required_adapter_ids": [
+        "freecad",
+        "kicad-stepup",
+        "wireviz",
+        "calculix-gmsh",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "generate_exploded_view",
+        "extract_part_list",
+        "rerate_payload_capability",
+        "check_wire_routing",
+        "generate_bom",
+        "generate_manufacturing_report"
+      ],
+      "license_gate": "appears-compatible metadata only; per-file hardware, PCB, and docs review required before mirroring assets"
     }
   }
 ]

@@ -91,12 +91,18 @@
             const caution = item.license.compatibility === 'appears-compatible'
               ? ''
               : '<p class="warning">License review required before import or redistribution.</p>';
+            const handoff = item.handoff
+              ? `<p><strong>MVP handoff:</strong> ${item.handoff.frontend_panel_tags.join(', ')}</p>
+                 <p><strong>Adapters:</strong> ${item.handoff.required_adapter_ids.join(', ')}</p>
+                 <p class="warning"><strong>Gate:</strong> ${item.handoff.license_gate}</p>`
+              : '';
             return `<article>
               <p class="badge">${item.license.compatibility}</p>
               <h2>${item.name}</h2>
               <p>${item.summary}</p>
               <p><strong>License:</strong> ${item.license.declared}</p>
               <p><strong>Example tasks:</strong> ${item.engineering_intent.example_tasks.join(', ')}</p>
+              ${handoff}
               ${caution}
               <p><a href="${item.source.url}">Upstream source</a></p>
             </article>`;

@@ -1,0 +1,229 @@
+{
+  "schema_version": "backend-frontend-handoff.v1",
+  "purpose": "Stable seed projection for backend and frontend workers to mirror while real CAD imports are still blocked on license review.",
+  "advisory_notice": "This handoff data is metadata and heuristic demo data only. It does not import or redistribute upstream CAD, PCB, BOM, image, or documentation assets.",
+  "catalog_source": "catalog/reference-designs/reference-designs.seed.json",
+  "seed_api_endpoints": {
+    "this_branch_reference_designs": "/api/catalog/reference-designs",
+    "this_branch_dataset_prefix": "/api/data/{dataset}",
+    "backend_metadata": "/api/metadata",
+    "backend_project_panel": "/api/projects/{project_id}/panel-data",
+    "backend_project_modification": "/api/projects/{project_id}/modifications"
+  },
+  "concepts": [
+    "projects",
+    "reference_designs",
+    "assemblies",
+    "selectable_parts",
+    "materials",
+    "task_requirements",
+    "analysis_jobs",
+    "manufacturing_options",
+    "wiring_routes",
+    "reports"
+  ],
+  "id_aliases": {
+    "materials": [
+      {
+        "catalog_id": "aluminum-6061-t6",
+        "backend_id": "mat-aluminum-6061-t6",
+        "frontend_label": "Aluminum 6061-T6",
+        "backend_family": "aluminum",
+        "backend_processes": ["cnc_machining", "sheet_metal"]
+      },
+      {
+        "catalog_id": "steel-aisi-1018",
+        "backend_id": "mat-low-carbon-steel",
+        "frontend_label": "Low-carbon steel",
+        "backend_family": "steel",
+        "backend_processes": ["cnc_machining", "sheet_metal"]
+      },
+      {
+        "catalog_id": "carbon-fiber-nylon-generic",
+        "backend_id": "mat-carbon-fiber-nylon",
+        "frontend_label": "Carbon-fiber reinforced nylon",
+        "backend_family": "polymer_composite",
+        "backend_processes": ["additive_fdm", "additive_sls"]
+      },
+      {
+        "catalog_id": "pla-generic",
+        "backend_id": "mat-pla-generic",
+        "frontend_label": "Generic PLA printed polymer",
+        "backend_family": "polymer",
+        "backend_processes": ["additive_fdm"]
+      },
+      {
+        "catalog_id": "petg-generic",
+        "backend_id": "mat-petg-generic",
+        "frontend_label": "Generic PETG printed polymer",
+        "backend_family": "polymer",
+        "backend_processes": ["additive_fdm"]
+      }
+    ],
+    "manufacturing_methods": [
+      {
+        "catalog_id": "cnc-milling",
+        "backend_process": "cnc_machining",
+        "frontend_label": "CNC machining"
+      },
+      {
+        "catalog_id": "fdm-3d-printing",
+        "backend_process": "additive_fdm",
+        "frontend_label": "FDM 3D printing"
+      },
+      {
+        "catalog_id": "sheet-metal",
+        "backend_process": "sheet_metal",
+        "frontend_label": "Sheet metal"
+      },
+      {
+        "catalog_id": "pcb-fabrication",
+        "backend_process": "pcb_fabrication",
+        "frontend_label": "PCB fabrication"
+      },
+      {
+        "catalog_id": "wire-harness",
+        "backend_process": "wire_harness",
+        "frontend_label": "Wire harness fabrication"
+      },
+      {
+        "catalog_id": "off-the-shelf-parts",
+        "backend_process": "off_the_shelf",
+        "frontend_label": "Off-the-shelf part sourcing"
+      }
+    ],
+    "tasks": [
+      {
+        "catalog_id": "lift-static-payload",
+        "backend_kind": "lift_payload",
+        "sample_task_id": "task-lift-50lb",
+        "frontend_label": "Pick and place a 50 lb object"
+      },
+      {
+        "catalog_id": "reach-envelope",
+        "backend_kind": "reach",
+        "sample_task_id": "task-reach-envelope",
+        "frontend_label": "Reach target envelope"
+      },
+      {
+        "catalog_id": "wire-clearance-check",
+        "backend_kind": "wiring_clearance",
+        "sample_task_id": "task-wire-clearance",
+        "frontend_label": "Check wiring clearance and bend radius"
+      },
+      {
+        "catalog_id": "manufacturing-substitution",
+        "backend_kind": "serviceability",
+        "sample_task_id": "task-manufacturing-substitution",
+        "frontend_label": "Compare manufacturing substitution"
+      }
+    ],
+    "capability_ratings": [
+      {
+        "catalog_id": "payload-static",
+        "backend_artifact_kind": "payload_rerating",
+        "frontend_panel": "capability rating"
+      },
+      {
+        "catalog_id": "deflection-limit",
+        "backend_artifact_kind": "fea_summary",
+        "frontend_panel": "stress and deflection"
+      },
+      {
+        "catalog_id": "wire-clearance",
+        "backend_artifact_kind": "wiring_check",
+        "frontend_panel": "wiring routes"
+      },
+      {
+        "catalog_id": "manufacturability",
+        "backend_artifact_kind": "manufacturing_report",
+        "frontend_panel": "manufacturing options"
+      }
+    ]
+  },
+  "mvp_seed_project": {
+    "id": "project-gaiahand-metadata-demo",
+    "reference_design_id": "gaiahand",
+    "license_gate": "appears-compatible metadata only; per-file import review is still required before mirroring assets",
+    "active_task_id": "lift-static-payload",
+    "sample_parts": [
+      {
+        "id": "part-finger-link",
+        "name": "Finger link",
+        "purpose": "Selectable load-bearing part for material substitution and payload re-rating UI flows.",
+        "material_id": "aluminum-6061-t6",
+        "manufacturing_method_id": "cnc-milling",
+        "capability_rating_ids": ["payload-static", "deflection-limit"],
+        "wiring_route_ids": ["route-finger-sensor"]
+      },
+      {
+        "id": "part-palm-plate",
+        "name": "Palm plate",
+        "purpose": "Base structure for exploded-view grouping, PCB clearance, and harness pass-through checks.",
+        "material_id": "aluminum-6061-t6",
+        "manufacturing_method_id": "cnc-milling",
+        "capability_rating_ids": ["payload-static", "manufacturability"],
+        "wiring_route_ids": ["route-main-harness"]
+      },
+      {
+        "id": "part-controller-pcb",
+        "name": "Controller PCB placeholder",
+        "purpose": "Electronics-aware selectable item for KiCad, KiCadStepUp, WireViz, and manufacturing packet handoff.",
+        "material_id": "fr4-generic",
+        "manufacturing_method_id": "pcb-fabrication",
+        "capability_rating_ids": ["wire-clearance", "manufacturability"],
+        "wiring_route_ids": ["route-main-harness"]
+      }
+    ],
+    "sample_wiring_routes": [
+      {
+        "id": "route-finger-sensor",
+        "name": "Finger sensor lead",
+        "from_part_id": "part-controller-pcb",
+        "to_part_id": "part-finger-link",
+        "capability_rating_ids": ["wire-clearance"],
+        "adapter_ids": ["wireviz", "freecad"]
+      },
+      {
+        "id": "route-main-harness",
+        "name": "Main palm harness",
+        "from_part_id": "part-controller-pcb",
+        "to_part_id": "part-palm-plate",
+        "capability_rating_ids": ["wire-clearance"],
+        "adapter_ids": ["wireviz", "kicad-stepup", "freecad"]
+      }
+    ],
+    "analysis_job_sequence": [
+      {
+        "job_type": "import_design",
+        "adapter_id": "freecad",
+        "artifact_kind": "cad_metadata",
+        "local_compute_preferred": true
+      },
+      {
+        "job_type": "generate_exploded_view",
+        "adapter_id": "freecad",
+        "artifact_kind": "exploded_view",
+        "local_compute_preferred": true
+      },
+      {
+        "job_type": "rerate_payload_capability",
+        "adapter_id": "calculix-gmsh",
+        "artifact_kind": "payload_rerating",
+        "local_compute_preferred": true
+      },
+      {
+        "job_type": "check_wire_routing",
+        "adapter_id": "wireviz",
+        "artifact_kind": "wiring_check",
+        "local_compute_preferred": true
+      },
+      {
+        "job_type": "generate_manufacturing_report",
+        "adapter_id": "manufacturing-quote-packets",
+        "artifact_kind": "manufacturing_report",
+        "local_compute_preferred": true
+      }
+    ]
+  }
+}

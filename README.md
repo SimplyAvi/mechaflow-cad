@@ -27,7 +27,7 @@ Machine-readable seeds:
 
 - `catalog/reference-designs/reference-designs.seed.json`
 - `catalog/schemas/reference-design.schema.json`
-- `data/*.seed.json`
+- `data/*.seed.json`, including adapter and backend/frontend handoff projections
 
 ## Core product idea
 
@@ -90,10 +90,13 @@ PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
 
 The process prints the selected URL. Use `python3 scripts/find_unused_port.py` when you need an explicit unused port.
 
+The local API exposes reference designs at `/api/catalog/reference-designs` and each dataset at `/api/data/{dataset}`, including `integration-adapters` and `backend-frontend-handoff`.
+
 Validate seed data and the working app path:
 
 ```bash
 python3 scripts/validate_catalog.py
+python3 -m unittest discover tests
 python3 tests/smoke_test.py
 ```
 

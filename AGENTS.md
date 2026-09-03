@@ -2,8 +2,8 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
-- Seed catalog and integration contracts are documented in `docs/reference-design-catalog.md`, `docs/integrations/README.md`, and `docs/dependency-license-verification.md`.
-- Validate catalog changes with `python3 scripts/validate_catalog.py`; run the local frontend plus backend smoke path with `python3 tests/smoke_test.py`.
+- Seed catalog, integration contracts, and handoff projections are documented in `docs/reference-design-catalog.md`, `docs/integrations/README.md`, `docs/dependency-license-verification.md`, `data/integration-adapters.seed.json`, and `data/backend-frontend-handoff.seed.json`.
+- Validate catalog changes with `python3 scripts/validate_catalog.py`; run `python3 -m unittest discover tests` and the local frontend plus backend smoke path with `python3 tests/smoke_test.py`.
 
 ## Maintaining this file
 
