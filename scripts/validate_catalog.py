@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate MechaFlow CAD seed catalog files with the Python standard library."""
+"""Validate MechaFlow CAD seed catalog files."""
 
 from __future__ import annotations
 
@@ -9,8 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from jsonschema import Draft202012Validator, FormatChecker
+
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_DESIGNS = ROOT / "catalog" / "reference-designs" / "reference-designs.seed.json"
+REFERENCE_DESIGN_SCHEMA = ROOT / "catalog" / "schemas" / "reference-design.schema.json"
 INTEGRATION_ADAPTERS = ROOT / "data" / "integration-adapters.seed.json"
 BACKEND_FRONTEND_HANDOFF = ROOT / "data" / "backend-frontend-handoff.seed.json"
 DATA_FILES = {
@@ -21,21 +24,6 @@ DATA_FILES = {
     "standards-advisory-rules": ROOT / "data" / "standards-advisory-rules.seed.json",
 }
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
-REFERENCE_REQUIRED = {
-    "schema_version",
-    "id",
-    "name",
-    "summary",
-    "source",
-    "license",
-    "openness",
-    "assets",
-    "engineering_intent",
-    "integration_notes",
-    "review",
-}
-LICENSE_COMPATIBILITY = {"appears-compatible", "conditional", "not-compatible", "uncertain"}
-REVIEW_STATUSES = {"seed", "needs-license-review", "ready-for-import", "blocked"}
 BACKEND_JOB_TYPES = {
     "import_design",
     "generate_exploded_view",
@@ -78,6 +66,9 @@ def ensure(condition: bool, message: str, errors: list[str]) -> None:
 def validate_unique_ids(name: str, items: list[dict[str, Any]], errors: list[str]) -> set[str]:
     seen: set[str] = set()
     for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            ensure(False, f"{name}[{index}] must be an object", errors)
+            continue
         item_id = item.get("id")
         ensure(isinstance(item_id, str) and bool(ID_RE.match(item_id)), f"{name}[{index}] has invalid id {item_id!r}", errors)
         if isinstance(item_id, str):
@@ -86,11 +77,23 @@ def validate_unique_ids(name: str, items: list[dict[str, Any]], errors: list[str
     return seen
 
 
+def validate_reference_design_schema(designs: list[Any], errors: list[str]) -> None:
+    schema = load_json(REFERENCE_DESIGN_SCHEMA)
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    for index, design in enumerate(designs):
+        for error in sorted(validator.iter_errors(design), key=lambda item: tuple(map(str, item.absolute_path))):
+            location = ".".join(str(part) for part in error.absolute_path)
+            suffix = f".{location}" if location else ""
+            errors.append(f"reference-designs[{index}]{suffix}: {error.message}")
+
+
 def validate_reference_designs(errors: list[str], adapter_ids: set[str]) -> set[str]:
     designs = load_json(REFERENCE_DESIGNS)
     ensure(isinstance(designs, list), "reference designs root must be a list", errors)
     if not isinstance(designs, list):
         return set()
+    validate_reference_design_schema(designs, errors)
     design_ids = validate_unique_ids("reference-designs", designs, errors)
 
     material_ids = validate_unique_ids("materials", load_json(DATA_FILES["materials"]), errors)
@@ -98,14 +101,12 @@ def validate_reference_designs(errors: list[str], adapter_ids: set[str]) -> set[
     rating_ids = validate_unique_ids("capability-ratings", load_json(DATA_FILES["capability-ratings"]), errors)
 
     for design in designs:
+        if not isinstance(design, dict):
+            continue
         design_id = design.get("id", "<unknown>")
-        missing = REFERENCE_REQUIRED - set(design)
-        ensure(not missing, f"{design_id} missing required fields: {sorted(missing)}", errors)
-        ensure(design.get("schema_version") == "reference-design.v1", f"{design_id} has wrong schema_version", errors)
 
         license_data = design.get("license", {})
         compatibility = license_data.get("compatibility")
-        ensure(compatibility in LICENSE_COMPATIBILITY, f"{design_id} has invalid license compatibility", errors)
         ensure(bool(license_data.get("declared")), f"{design_id} must record declared license text", errors)
         ensure(bool(license_data.get("evidence")), f"{design_id} must record license evidence", errors)
         ensure(license_data.get("review_required_before_import") is True, f"{design_id} must require review before import", errors)
@@ -120,10 +121,6 @@ def validate_reference_designs(errors: list[str], adapter_ids: set[str]) -> set[
                 f"{design_id} must not be marked ready while compatibility is {compatibility}",
                 errors,
             )
-
-        review_status = design.get("review", {}).get("status")
-        ensure(review_status in REVIEW_STATUSES, f"{design_id} has invalid review status", errors)
-
         intent = design.get("engineering_intent", {})
         for material_id in intent.get("primary_material_ids", []):
             ensure(material_id in material_ids, f"{design_id} references unknown material {material_id}", errors)
@@ -190,6 +187,9 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
     ensure(handoff.get("schema_version") == "backend-frontend-handoff.v1", "handoff has wrong schema_version", errors)
 
     aliases = handoff.get("id_aliases", {})
+    for item in aliases.get("reference_designs", []):
+        catalog_id = item.get("catalog_id")
+        ensure(catalog_id in design_ids, f"handoff aliases unknown reference design {catalog_id}", errors)
     for item in aliases.get("materials", []):
         catalog_id = item.get("catalog_id")
         ensure(catalog_id in ids_by_name.get("materials", set()), f"handoff aliases unknown material {catalog_id}", errors)
@@ -204,6 +204,9 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
         artifact_kind = item.get("backend_artifact_kind")
         ensure(catalog_id in ids_by_name.get("capability-ratings", set()), f"handoff aliases unknown rating {catalog_id}", errors)
         ensure(artifact_kind in BACKEND_ARTIFACT_KINDS, f"handoff aliases unknown artifact kind {artifact_kind}", errors)
+    for item in aliases.get("adapters", []):
+        catalog_id = item.get("catalog_id")
+        ensure(catalog_id in adapter_ids, f"handoff aliases unknown adapter {catalog_id}", errors)
 
     project = handoff.get("mvp_seed_project", {})
     reference_design_id = project.get("reference_design_id")
@@ -227,6 +230,11 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
         ensure(job.get("job_type") in BACKEND_JOB_TYPES, f"handoff job has unknown job_type {job.get('job_type')}", errors)
         ensure(job.get("adapter_id") in adapter_ids, f"handoff job references unknown adapter {job.get('adapter_id')}", errors)
         ensure(job.get("artifact_kind") in BACKEND_ARTIFACT_KINDS, f"handoff job has unknown artifact {job.get('artifact_kind')}", errors)
+        ensure(
+            any(alias.get("catalog_id") == job.get("adapter_id") for alias in aliases.get("adapters", [])),
+            f"handoff job adapter {job.get('adapter_id')} has no backend alias",
+            errors,
+        )
 
 
 def main() -> int:

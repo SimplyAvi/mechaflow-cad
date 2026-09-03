@@ -85,8 +85,8 @@ const jobStatus = (status: string): JobStatus => {
 };
 
 const riskFromPart = (part: BackendPart): RiskLevel => {
+  if ((part.mass_kg ?? 0) > 0.2) return 'high';
   if (part.wiring_route_ids.length > 0) return 'medium';
-  if ((part.mass_kg ?? 0) > 0.2) return 'low';
   return 'low';
 };
 

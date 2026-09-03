@@ -67,6 +67,48 @@ DEFAULT_MATERIALS = [
         confidence=RecommendationConfidence.heuristic,
         notes=["Adds weight but can improve stiffness and wear resistance."],
     ),
+    Material(
+        id="mat-pla-generic",
+        name="Generic PLA printed polymer",
+        family="polymer",
+        properties=MaterialProperties(
+            density_kg_m3=1240,
+            elastic_modulus_gpa=2.0,
+            yield_strength_mpa=45,
+            ultimate_strength_mpa=60,
+            poisson_ratio=0.36,
+        ),
+        compatible_processes=[ManufacturingProcess.additive_fdm],
+        cost=MoneyRange(min=1, max=3, confidence=RecommendationConfidence.heuristic),
+        confidence=RecommendationConfidence.heuristic,
+        notes=["Print settings, orientation, moisture, and temperature control real properties."],
+    ),
+    Material(
+        id="mat-petg-generic",
+        name="Generic PETG printed polymer",
+        family="polymer",
+        properties=MaterialProperties(
+            density_kg_m3=1270,
+            elastic_modulus_gpa=2.1,
+            yield_strength_mpa=40,
+            ultimate_strength_mpa=50,
+            poisson_ratio=0.38,
+        ),
+        compatible_processes=[ManufacturingProcess.additive_fdm],
+        cost=MoneyRange(min=2, max=5, confidence=RecommendationConfidence.heuristic),
+        confidence=RecommendationConfidence.heuristic,
+        notes=["Use supplier data or coupon tests before load-bearing analysis."],
+    ),
+    Material(
+        id="mat-fr4-generic",
+        name="Generic FR-4 PCB laminate",
+        family="electronics_substrate",
+        properties=MaterialProperties(density_kg_m3=1850, elastic_modulus_gpa=22, poisson_ratio=0.13),
+        compatible_processes=[ManufacturingProcess.pcb_fabrication],
+        cost=MoneyRange(min=2, max=8, confidence=RecommendationConfidence.heuristic),
+        confidence=RecommendationConfidence.heuristic,
+        notes=["Board stack-up and laminate vendor data are required for structural or thermal analysis."],
+    ),
 ]
 
 
@@ -80,6 +122,29 @@ GRIPPER_TASK = TaskRequirement(
     validation_method="heuristic",
     assumptions=["Static payload approximation until FEA and actuator models are wired."],
 )
+REACH_TASK = TaskRequirement(
+    id="task-reach-envelope",
+    kind=TaskKind.reach,
+    description="Reach the target work envelope without changing the wrist interface.",
+    target_value=0.6,
+    unit="m",
+    validation_method="heuristic",
+)
+WIRE_CLEARANCE_TASK = TaskRequirement(
+    id="task-wire-clearance",
+    kind=TaskKind.wiring_clearance,
+    description="Maintain wiring clearance and bend radius through the gripper assembly.",
+    target_value=2,
+    unit="mm",
+    validation_method="review",
+)
+MANUFACTURING_SUBSTITUTION_TASK = TaskRequirement(
+    id="task-manufacturing-substitution",
+    kind=TaskKind.serviceability,
+    description="Compare manufacturing substitutions without losing service access.",
+    validation_method="review",
+)
+DEFAULT_TASKS = [GRIPPER_TASK, REACH_TASK, WIRE_CLEARANCE_TASK, MANUFACTURING_SUBSTITUTION_TASK]
 
 
 DEFAULT_ASSEMBLY = Assembly(
@@ -90,7 +155,7 @@ DEFAULT_ASSEMBLY = Assembly(
         AssemblyNode(
             id="node-root",
             name="Gripper root",
-            part_ids=["part-finger-link", "part-palm-plate", "part-actuator-bracket"],
+            part_ids=["part-finger-link", "part-palm-plate", "part-actuator-bracket", "part-controller-pcb"],
         ),
         AssemblyNode(
             id="node-finger",
@@ -136,6 +201,7 @@ DEFAULT_ASSEMBLY = Assembly(
             material_id="mat-aluminum-6061-t6",
             dimensions=PartDimensions(length_mm=120, width_mm=90, thickness_mm=8),
             mass_kg=0.24,
+            wiring_route_ids=["route-main-harness"],
         ),
         Part(
             id="part-actuator-bracket",
@@ -146,19 +212,60 @@ DEFAULT_ASSEMBLY = Assembly(
             dimensions=PartDimensions(length_mm=70, width_mm=45, thickness_mm=4),
             mass_kg=0.18,
         ),
+        Part(
+            id="part-controller-pcb",
+            name="Controller PCB placeholder",
+            category="electronics",
+            purpose="Provides connector metadata for PCB clearance and harness routing handoff.",
+            material_id="mat-fr4-generic",
+            dimensions=PartDimensions(length_mm=65, width_mm=45, thickness_mm=1.6),
+            mass_kg=0.04,
+            manufacturing_options=[
+                ManufacturingOption(
+                    id="mfg-controller-pcb",
+                    process=ManufacturingProcess.pcb_fabrication,
+                    description="Prototype PCB fabrication for fit and connector placement review.",
+                    cost=MoneyRange(min=10, max=40, confidence=RecommendationConfidence.heuristic),
+                    lead_time_days_min=5,
+                    lead_time_days_max=12,
+                )
+            ],
+            wiring_route_ids=["route-finger-sensor", "route-main-harness"],
+        ),
     ],
     wiring_routes=[
         WiringRoute(
             id="route-finger-sensor",
             name="Finger force sensor lead",
-            from_connector=Connector(id="conn-palm", name="Palm harness connector", pin_count=4, part_id="part-palm-plate"),
+            from_connector=Connector(
+                id="conn-controller-finger",
+                name="Controller finger-sensor connector",
+                pin_count=4,
+                part_id="part-controller-pcb",
+            ),
             to_connector=Connector(id="conn-finger", name="Finger sensor connector", pin_count=4, part_id="part-finger-link"),
             path_points_mm=[Vector3(x=0, y=0, z=0), Vector3(x=40, y=8, z=5), Vector3(x=95, y=10, z=4)],
             bend_radius_min_mm=12,
             clearance_min_mm=2,
             risk_notes=["Clearance needs a geometry check after exploded-view extraction is real."],
             confidence=RecommendationConfidence.heuristic,
-        )
+        ),
+        WiringRoute(
+            id="route-main-harness",
+            name="Main palm harness",
+            from_connector=Connector(
+                id="conn-controller",
+                name="Controller PCB harness connector",
+                pin_count=8,
+                part_id="part-controller-pcb",
+            ),
+            to_connector=Connector(id="conn-palm-main", name="Palm pass-through", pin_count=8, part_id="part-palm-plate"),
+            path_points_mm=[Vector3(x=0, y=0, z=0), Vector3(x=25, y=20, z=4), Vector3(x=60, y=25, z=6)],
+            bend_radius_min_mm=20,
+            clearance_min_mm=3,
+            risk_notes=["Board keep-outs and service-loop clearance need a geometry worker check."],
+            confidence=RecommendationConfidence.heuristic,
+        ),
     ],
     assembly_structure_confidence=RecommendationConfidence.heuristic,
 )
@@ -181,7 +288,7 @@ DEFAULT_REFERENCE_DESIGNS = [
         electronics_files=["finger-sensor.kicad_pcb"],
         manufacturing_notes=["Use as an API shape example until a real permissively licensed design is imported."],
         known_limitations=["No geometry file is bundled in this repository yet.", "Analysis results are advisory stub data."],
-        example_tasks=[GRIPPER_TASK],
+        example_tasks=DEFAULT_TASKS,
         source=SourceAttribution(label="MechaFlow CAD seed data", license="MIT"),
     )
 ]

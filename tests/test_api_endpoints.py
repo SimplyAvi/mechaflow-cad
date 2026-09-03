@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+import mechaflow_api.main as main_module
 from mechaflow_api.main import app
 from mechaflow_api.models import AnalysisJobType, ManufacturingProcess
 
@@ -17,6 +18,14 @@ def test_health_and_status_endpoints() -> None:
     payload = status.json()
     assert payload["status"] == "degraded"
     assert {adapter["name"] for adapter in payload["adapters"]} >= {"freecad-worker", "calculix-fea-worker"}
+
+
+def test_status_is_ok_when_adapters_are_no_longer_stubs(monkeypatch) -> None:
+    ready_adapters = [adapter.model_copy(update={"status": "ready"}) for adapter in main_module.list_adapter_statuses()]
+    monkeypatch.setattr(main_module, "list_adapter_statuses", lambda: ready_adapters)
+    ready_client = TestClient(main_module.create_app())
+
+    assert ready_client.get("/status").json()["status"] == "ok"
 
 
 def test_metadata_exposes_frontend_concepts_and_schema_names() -> None:
@@ -48,6 +57,10 @@ def test_catalog_and_sample_project_are_structured() -> None:
     designs = client.get("/api/reference-designs")
     assert designs.status_code == 200
     assert designs.json()[0]["example_tasks"][0]["kind"] == "lift_payload"
+
+    catalog_designs = client.get("/api/catalog/reference-designs")
+    assert catalog_designs.status_code == 200
+    assert any(design["id"] == "gaiahand" for design in catalog_designs.json()["items"])
 
     materials = client.get("/api/materials")
     assert materials.status_code == 200
@@ -199,6 +212,29 @@ def test_create_analysis_job_selects_matching_stub_adapter() -> None:
     assert payload["adapter_name"] == "calculix-fea-worker"
     assert payload["result_summary"]["message"].startswith("Job accepted")
     assert payload["result_summary"]["queue_name"] == "fea-local"
+
+    panel_jobs = client.get("/api/projects/project-open-gripper-demo/panel-data").json()["project"]["analysis_jobs"]
+    assert any(job["id"] == payload["id"] for job in panel_jobs)
+
+
+def test_overlapping_job_types_have_explicit_adapter_owners() -> None:
+    expected_adapters = {
+        AnalysisJobType.quick_load_heuristic: "calculix-fea-worker",
+        AnalysisJobType.check_wire_routing: "wireviz-harness-worker",
+        AnalysisJobType.generate_bom: "supplier-options-worker",
+    }
+
+    for job_type, adapter_name in expected_adapters.items():
+        response = client.post(
+            "/api/analysis-jobs",
+            json={
+                "job_type": job_type.value,
+                "target_id": "project-open-gripper-demo",
+                "project_id": "project-open-gripper-demo",
+            },
+        )
+        assert response.status_code == 202
+        assert response.json()["adapter_name"] == adapter_name
 
 
 def test_analysis_job_contract_supports_planning_and_local_stub_execution() -> None:

@@ -20,7 +20,7 @@ export interface ReferenceDesign {
 }
 
 export interface BackendConnectionSummary {
-  source: 'backend-panel-data' | 'legacy-reference-design' | 'bundled-mock' | 'bundled-mock-after-error';
+  source: 'backend-panel-data' | 'bundled-mock' | 'bundled-mock-after-error';
   apiBaseUrl?: string;
   projectId: string;
   endpoint: string;

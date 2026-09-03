@@ -130,8 +130,16 @@ ADAPTERS: tuple[StubAdapter, ...] = (
             capability="Structural simulation, meshing handoff, stress and displacement extraction",
             open_source_candidate="CalculiX and Gmsh",
             queue_name="fea-local",
-            supported_job_types=[AnalysisJobType.run_fea, AnalysisJobType.rerate_payload_capability],
-            expected_artifacts=[AnalysisArtifactKind.fea_summary, AnalysisArtifactKind.payload_rerating],
+            supported_job_types=[
+                AnalysisJobType.quick_load_heuristic,
+                AnalysisJobType.run_fea,
+                AnalysisJobType.rerate_payload_capability,
+            ],
+            expected_artifacts=[
+                AnalysisArtifactKind.load_heuristic,
+                AnalysisArtifactKind.fea_summary,
+                AnalysisArtifactKind.payload_rerating,
+            ],
             notes=["Jobs remain queued until a real local or cloud worker claims them."],
         ),
         command_hint="Claim fea-local jobs after CAD metadata exists, then attach mesh, boundary condition, and result artifacts.",
@@ -174,10 +182,25 @@ ADAPTERS: tuple[StubAdapter, ...] = (
     ),
 )
 
+ADAPTERS_BY_NAME = {adapter.status.name: adapter for adapter in ADAPTERS}
+DEFAULT_ADAPTER_BY_JOB_TYPE = {
+    AnalysisJobType.import_design: "freecad-worker",
+    AnalysisJobType.generate_exploded_view: "freecad-worker",
+    AnalysisJobType.extract_part_list: "freecad-worker",
+    AnalysisJobType.estimate_mass_properties: "freecad-worker",
+    AnalysisJobType.quick_load_heuristic: "calculix-fea-worker",
+    AnalysisJobType.run_fea: "calculix-fea-worker",
+    AnalysisJobType.rerate_payload_capability: "calculix-fea-worker",
+    AnalysisJobType.check_wire_routing: "wireviz-harness-worker",
+    AnalysisJobType.generate_bom: "supplier-options-worker",
+    AnalysisJobType.generate_manufacturing_report: "supplier-options-worker",
+}
+
 
 def list_adapter_statuses() -> list[AdapterStatus]:
     return [adapter.status for adapter in ADAPTERS]
 
 
 def choose_adapter(request: AnalysisJobRequest) -> StubAdapter | None:
-    return next((adapter for adapter in ADAPTERS if adapter.supports(request)), None)
+    adapter = ADAPTERS_BY_NAME.get(DEFAULT_ADAPTER_BY_JOB_TYPE.get(request.job_type, ""))
+    return adapter if adapter and adapter.supports(request) else None

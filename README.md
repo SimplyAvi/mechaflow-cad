@@ -90,16 +90,21 @@ Run the frontend and backend catalog API together with no required third-party r
 PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
 ```
 
-The process prints the selected URL. Use `python3 scripts/find_unused_port.py` when you need an explicit unused port.
+The process prints the selected URL. Use `python3 scripts/find-free-port.py` when you need an explicit unused port.
 
 The local API exposes reference designs at `/api/catalog/reference-designs` and each dataset at `/api/data/{dataset}`, including `integration-adapters` and `backend-frontend-handoff`.
 
-Validate seed data and the working app path:
+Exercise the standard-library app path:
+
+```bash
+PYTHONPATH=src python3 tests/smoke_test.py
+```
+
+After installing the development dependencies, validate catalog data and its focused regression coverage:
 
 ```bash
 python3 scripts/validate_catalog.py
-python3 -m unittest discover tests
-python3 tests/smoke_test.py
+python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'
 ```
 
 ## Hosting philosophy
@@ -121,7 +126,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
-npm install
+npm ci
 ```
 
 Run backend checks:
@@ -165,7 +170,7 @@ npm run dev:full
 PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
 ```
 
-Use `python scripts/find-free-port.py`, `python3 scripts/find_unused_port.py`, or `node scripts/find-ports.mjs` to identify unused ports before setting `MECHAFLOW_API_PORT`, `MECHAFLOW_FRONTEND_PORT`, `MECHAFLOW_PORT`, or the Vite dev server port. See [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Local development](docs/local-development.md) for details.
+Use `python scripts/find-free-port.py` for one unused port or `node scripts/find-ports.mjs` for one or more before setting `MECHAFLOW_API_PORT`, `MECHAFLOW_FRONTEND_PORT`, `MECHAFLOW_PORT`, or the Vite dev server port. See [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Local development](docs/local-development.md) for details.
 
 ## Repository status
 

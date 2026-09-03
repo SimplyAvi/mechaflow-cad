@@ -163,7 +163,7 @@ Initial background jobs:
 
 ### Local-first mode
 
-The user's computer runs FreeCAD and simple analysis workers locally. Local services must use environment-configurable host and port settings. Use an OS-selected port for demos and tests, or choose an explicit unused port with `python3 scripts/find_unused_port.py`.
+The user's computer runs FreeCAD and simple analysis workers locally. Local services must use environment-configurable host and port settings. Use an OS-selected port for demos and tests, or choose an explicit unused port with `python3 scripts/find-free-port.py`.
 
 Benefits:
 

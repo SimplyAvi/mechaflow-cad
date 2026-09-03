@@ -39,24 +39,5 @@
     </main>
     <script src="/runtime-config.js"></script>
     <script src="./app.js"></script>
-    <script>
-      async function loadCatalog() {
-        const status = document.getElementById('catalog-status');
-        const list = document.getElementById('catalog-reference-designs');
-        try {
-          const response = await fetch('/api/catalog/reference-designs');
-          if (!response.ok) throw new Error(`API returned ${response.status}`);
-          const payload = await response.json();
-          status.textContent = `Loaded ${payload.items.length} reference designs from the catalog API.`;
-          list.innerHTML = payload.items.map((item) => {
-            const gate = item.handoff ? `; gate: ${item.handoff.license_gate}` : '';
-            return `<li>${item.name} - ${item.license.compatibility}${gate}</li>`;
-          }).join('');
-        } catch (error) {
-          status.textContent = `Catalog API not available from this server: ${error.message}`;
-        }
-      }
-      loadCatalog();
-    </script>
   </body>
 </html>

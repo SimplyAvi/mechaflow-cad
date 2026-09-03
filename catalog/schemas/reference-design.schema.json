@@ -15,7 +15,8 @@
     "assets",
     "engineering_intent",
     "integration_notes",
-    "review"
+    "review",
+    "handoff"
   ],
   "properties": {
     "schema_version": {
@@ -68,7 +69,8 @@
         "declared",
         "compatibility",
         "evidence",
-        "cautions"
+        "cautions",
+        "review_required_before_import"
       ],
       "properties": {
         "declared": {
@@ -328,6 +330,15 @@
     "handoff": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "preferred_mvp_roles",
+        "sample_project_id",
+        "backend_reference_design_id",
+        "frontend_panel_tags",
+        "required_adapter_ids",
+        "recommended_job_types",
+        "license_gate"
+      ],
       "properties": {
         "preferred_mvp_roles": {
           "type": "array",

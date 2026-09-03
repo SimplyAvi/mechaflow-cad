@@ -19,12 +19,12 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 ## Install
 
 ```sh
-npm install
+npm ci
 ```
 
 ## Configurable ports
 
-The captain runs multiple local projects, so choose ports explicitly when possible. The frontend accepts both short local names and the backend handoff names.
+Developers often run multiple local projects, so choose ports explicitly when possible. The frontend accepts both short local names and the backend handoff names.
 
 Frontend variables:
 
@@ -111,7 +111,7 @@ End-to-end local smoke test:
 npm run smoke
 ```
 
-The smoke test chooses unused ports unless `MECHAFLOW_API_PORT` and `MECHAFLOW_FRONTEND_PORT` are set. It starts the mock backend, verifies `/health`, verifies `/api/metadata`, verifies `/api/projects/sample/panel-data`, builds the frontend with `VITE_API_BASE_URL`, starts Vite preview on the selected frontend port, and verifies the built app contains the configured API URL.
+The smoke test chooses unused ports unless `MECHAFLOW_API_PORT` and `MECHAFLOW_FRONTEND_PORT` are set. It starts the mock backend, verifies `/health`, `/api/metadata`, and `/api/projects/sample/panel-data`, builds the frontend with `VITE_API_BASE_URL`, starts Vite preview, executes the built app in a browser-like DOM, and verifies the rendered cockpit loaded project panel data from the configured backend.
 
 ## Backend contract mirrored by the frontend
 

@@ -39,7 +39,10 @@ class RuntimeConfigHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - inherited API name
         if self.path == "/runtime-config.js":
-            payload = {"apiBaseUrl": self.api_base_url}
+            payload = {
+                "apiBaseUrl": self.api_base_url,
+                "catalogApiUrl": f"{self.api_base_url}/api/catalog/reference-designs",
+            }
             body = f"window.MECHA_FLOW_CONFIG = {json.dumps(payload)};\n".encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")

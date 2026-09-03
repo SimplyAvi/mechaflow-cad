@@ -35,7 +35,7 @@ If the configured port is busy, the app fails clearly and tells you to select an
 ## Find an unused port
 
 ```bash
-python3 scripts/find_unused_port.py
+python3 scripts/find-free-port.py
 ```
 
 Then pass the printed value as `MECHAFLOW_PORT`. For fully automatic local runs and tests, prefer `MECHAFLOW_PORT=0`.
@@ -48,7 +48,7 @@ Run the catalog end-to-end smoke test:
 PYTHONPATH=src python3 tests/smoke_test.py
 ```
 
-The test starts the app on an OS-selected port, verifies `/api/health`, verifies `/api/catalog/reference-designs`, verifies adapter and handoff datasets under `/api/data/{dataset}`, and verifies the frontend HTML references the backend API.
+The test starts the app on an OS-selected port, verifies the health, metadata, reference-design, adapter, and handoff API contracts, checks the generated runtime configuration, and confirms unknown and path-traversal requests return `404`.
 
 ## Catalog validation
 
@@ -56,4 +56,4 @@ The test starts the app on an OS-selected port, verifies `/api/health`, verifies
 python3 scripts/validate_catalog.py
 ```
 
-Run this after changing files under `catalog/` or `data/`. For regression coverage, also run `python3 -m unittest discover tests`.
+Run this after changing files under `catalog/` or `data/`. For focused regression coverage, also run `python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'` after installing development dependencies.

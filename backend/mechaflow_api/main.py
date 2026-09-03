@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
@@ -112,6 +114,7 @@ CONCEPTS = {
     "wiring_routes": "Connector-to-connector harness paths with bend-radius, clearance, and harness BOM metadata.",
     "reports": "Advisory summaries of task status, payload re-rating, cost, manufacturing, wiring, risks, and unknowns.",
 }
+CATALOG_SEED_PATH = Path(__file__).resolve().parents[2] / "catalog" / "reference-designs" / "reference-designs.seed.json"
 
 
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
@@ -158,14 +161,15 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.get("/status", response_model=StatusResponse, tags=["platform"])
     def status() -> StatusResponse:
+        adapters = list_adapter_statuses()
         warnings = [
             "Analysis outputs are advisory stubs until FreeCAD, CalculiX, KiCad, WireViz, and supplier workers are wired.",
             "Use MECHAFLOW_API_PORT to choose a local port; port 0 lets the OS pick an available port.",
         ]
         return StatusResponse(
-            status="degraded" if list_adapter_statuses() else "ok",
+            status="degraded" if any(adapter.status == "stub" for adapter in adapters) else "ok",
             service=settings.app_name,
-            adapters=[adapter.model_dump(mode="json") for adapter in list_adapter_statuses()],
+            adapters=[adapter.model_dump(mode="json") for adapter in adapters],
             warnings=warnings,
         )
 
@@ -214,6 +218,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def reference_designs() -> list[ReferenceDesign]:
         return DEFAULT_REFERENCE_DESIGNS
 
+    @app.get(f"{settings.api_prefix}/catalog/reference-designs", tags=["catalog"])
+    def catalog_reference_designs() -> dict[str, list[dict]]:
+        with CATALOG_SEED_PATH.open("r", encoding="utf-8") as handle:
+            return {"items": json.load(handle)}
+
     @app.get(f"{settings.api_prefix}/materials", response_model=list[Material], tags=["catalog"])
     def materials() -> list[Material]:
         return DEFAULT_MATERIALS
@@ -254,7 +263,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}/panel-data", response_model=ProjectPanelData, tags=["projects"])
     def project_panel_data(project_id: str) -> ProjectPanelData:
-        return build_project_panel_data(get_project_or_404(project_id))
+        project = get_project_or_404(project_id)
+        runtime_jobs = [job for job in job_store.values() if job.project_id == project_id]
+        if runtime_jobs:
+            project = project.model_copy(update={"analysis_jobs": [*project.analysis_jobs, *runtime_jobs]})
+        return build_project_panel_data(project)
 
     @app.get(
         f"{settings.api_prefix}/projects/{{project_id}}/task-requirements",

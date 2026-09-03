@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { JSDOM } from 'jsdom';
 import { getFreePort } from './port-utils.mjs';
 
 const host = process.env.FRONTEND_HOST || process.env.BACKEND_HOST || process.env.MECHAFLOW_API_HOST || '127.0.0.1';
@@ -50,6 +51,17 @@ const waitForText = async (url, attempts = 50) => {
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
   throw lastError;
+};
+
+const waitForDom = async (document, attempts = 50) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const source = [...document.querySelectorAll('.task-card small')].find((node) =>
+      node.textContent?.includes('Data source:'),
+    );
+    if (source?.textContent?.includes('backend panel data')) return source.textContent;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error('Built frontend did not render data from the configured backend.');
 };
 
 const shutdown = () => {
@@ -101,10 +113,15 @@ try {
     throw new Error('Frontend preview did not expose a built JavaScript asset.');
   }
 
-  const assetText = await readFile(path.join('dist', assetMatch[1]), 'utf8');
-  if (!assetText.includes(apiBaseUrl)) {
-    throw new Error('Built frontend asset does not include the configured backend URL.');
+  const assetText = await readFile(path.join('dist', assetMatch[1].replace(/^\//, '')), 'utf8');
+  const dom = new JSDOM(html, { url: frontendUrl, runScripts: 'outside-only', pretendToBeVisual: true });
+  dom.window.fetch = globalThis.fetch;
+  dom.window.eval(assetText);
+  const renderedSource = await waitForDom(dom.window.document);
+  if (!renderedSource.includes('/api/projects/project-open-gripper-demo/panel-data')) {
+    throw new Error('Built frontend did not render the expected project panel endpoint.');
   }
+  dom.window.close();
 
   console.log('Smoke test passed: backend health, metadata, project panel API, frontend preview, and configured API URL are wired.');
 } finally {

@@ -13,6 +13,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = REPO_ROOT / "catalog" / "reference-designs" / "reference-designs.seed.json"
@@ -26,6 +27,18 @@ DATASETS = {
     "backend-frontend-handoff": REPO_ROOT / "data" / "backend-frontend-handoff.seed.json",
 }
 FRONTEND_ROOT = REPO_ROOT / "frontend"
+CONCEPTS = [
+    "projects",
+    "reference_designs",
+    "assemblies",
+    "selectable_parts",
+    "materials",
+    "task_requirements",
+    "analysis_jobs",
+    "manufacturing_options",
+    "wiring_routes",
+    "reports",
+]
 
 
 def load_json(path: Path) -> Any:
@@ -38,23 +51,54 @@ class MechaFlowHandler(SimpleHTTPRequestHandler):
 
     server_version = "MechaFlowCADSeed/0.1"
 
-    def translate_path(self, path: str) -> str:
-        if path == "/":
-            return str(FRONTEND_ROOT / "index.html")
-        frontend_path = FRONTEND_ROOT / path.lstrip("/")
-        if frontend_path.exists():
-            return str(frontend_path)
-        return str(FRONTEND_ROOT / "index.html")
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault("directory", str(FRONTEND_ROOT))
+        super().__init__(*args, **kwargs)
 
     def do_GET(self) -> None:  # noqa: N802, required by BaseHTTPRequestHandler
-        if self.path == "/api/health":
-            self._send_json({"ok": True, "service": "mechaflow-cad-seed"})
+        request_path = urlsplit(self.path).path
+        if request_path == "/runtime-config.js":
+            self._send_javascript(
+                "window.MECHA_FLOW_CONFIG = "
+                + json.dumps({"apiBaseUrl": "", "catalogApiUrl": "/api/catalog/reference-designs"})
+                + ";\n"
+            )
             return
-        if self.path == "/api/catalog/reference-designs":
+        if request_path in {"/health", "/api/health"}:
+            self._send_json(
+                {
+                    "ok": True,
+                    "status": "ok",
+                    "service": "mechaflow-cad-seed",
+                    "version": "0.1.0",
+                }
+            )
+            return
+        if request_path == "/api/metadata":
+            self._send_json(
+                {
+                    "product": "MechaFlow CAD",
+                    "version": "0.1.0",
+                    "api_prefix": "/api",
+                    "concepts": CONCEPTS,
+                    "advisory_notice": "Catalog seed data is metadata and heuristic demo data only.",
+                    "local_development": {
+                        "api_host_env": "MECHAFLOW_HOST",
+                        "api_port_env": "MECHAFLOW_PORT",
+                        "find_free_port_command": "python scripts/find-free-port.py",
+                    },
+                    "integration_stubs": [],
+                }
+            )
+            return
+        if request_path == "/api/reference-designs":
+            self._send_json(load_json(CATALOG_PATH))
+            return
+        if request_path == "/api/catalog/reference-designs":
             self._send_json({"items": load_json(CATALOG_PATH)})
             return
-        if self.path.startswith("/api/data/"):
-            dataset = self.path.removeprefix("/api/data/").split("?", 1)[0]
+        if request_path.startswith("/api/data/"):
+            dataset = request_path.removeprefix("/api/data/")
             path = DATASETS.get(dataset)
             if path is None:
                 self._send_json({"error": f"unknown dataset: {dataset}"}, HTTPStatus.NOT_FOUND)
@@ -67,6 +111,14 @@ class MechaFlowHandler(SimpleHTTPRequestHandler):
         body = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_javascript(self, payload: str) -> None:
+        body = payload.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/javascript; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

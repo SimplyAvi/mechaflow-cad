@@ -594,8 +594,8 @@
         "material substitution",
         "wire harness pass"
       ],
-      "sample_project_id": "project-gaiahand-metadata-demo",
-      "backend_reference_design_id": "ref-gaiahand",
+      "sample_project_id": "project-open-gripper-demo",
+      "backend_reference_design_id": "ref-open-gripper-demo",
       "frontend_panel_tags": [
         "robot-hand",
         "pcb",

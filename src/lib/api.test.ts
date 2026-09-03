@@ -35,4 +35,15 @@ describe('loadCockpitDesign', () => {
     expect(design.name).toBe('Open gripper task-preserving edit demo');
     expect(design.backend.source).toBe('backend-panel-data');
   });
+
+  it('falls back directly to bundled data when panel data is unavailable', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test/');
+    const fetchMock = vi.fn(async () => new Response('Not found', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const design = await loadCockpitDesign();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(design.backend.source).toBe('bundled-mock-after-error');
+  });
 });

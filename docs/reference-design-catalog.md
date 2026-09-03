@@ -32,7 +32,7 @@ Run:
 python3 scripts/validate_catalog.py
 ```
 
-The validator checks JSON syntax, IDs, required fields, license caution visibility, integration adapter references, backend job type names, and references from designs to seed materials, manufacturing methods, and capability ratings.
+The validator enforces `catalog/schemas/reference-design.schema.json`, then checks cross-file IDs, license caution visibility, integration adapter references, backend job type names, and references from designs to seed materials, manufacturing methods, and capability ratings.
 
 ## Adding a new reference design
 

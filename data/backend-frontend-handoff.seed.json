@@ -23,6 +23,12 @@
     "reports"
   ],
   "id_aliases": {
+    "reference_designs": [
+      {
+        "catalog_id": "gaiahand",
+        "backend_id": "ref-open-gripper-demo"
+      }
+    ],
     "materials": [
       {
         "catalog_id": "aluminum-6061-t6",
@@ -58,6 +64,13 @@
         "frontend_label": "Generic PETG printed polymer",
         "backend_family": "polymer",
         "backend_processes": ["additive_fdm"]
+      },
+      {
+        "catalog_id": "fr4-generic",
+        "backend_id": "mat-fr4-generic",
+        "frontend_label": "Generic FR-4 PCB laminate",
+        "backend_family": "electronics_substrate",
+        "backend_processes": ["pcb_fabrication"]
       }
     ],
     "manufacturing_methods": [
@@ -139,10 +152,32 @@
         "backend_artifact_kind": "manufacturing_report",
         "frontend_panel": "manufacturing options"
       }
+    ],
+    "adapters": [
+      {
+        "catalog_id": "freecad",
+        "backend_name": "freecad-worker"
+      },
+      {
+        "catalog_id": "calculix-gmsh",
+        "backend_name": "calculix-fea-worker"
+      },
+      {
+        "catalog_id": "kicad-stepup",
+        "backend_name": "kicad-electronics-worker"
+      },
+      {
+        "catalog_id": "wireviz",
+        "backend_name": "wireviz-harness-worker"
+      },
+      {
+        "catalog_id": "manufacturing-quote-packets",
+        "backend_name": "supplier-options-worker"
+      }
     ]
   },
   "mvp_seed_project": {
-    "id": "project-gaiahand-metadata-demo",
+    "id": "project-open-gripper-demo",
     "reference_design_id": "gaiahand",
     "license_gate": "appears-compatible metadata only; per-file import review is still required before mirroring assets",
     "active_task_id": "lift-static-payload",

@@ -35,19 +35,6 @@ async function loadProjectPanelData(apiBaseUrl: string, projectId: string): Prom
   return mapProjectPanelDataToReferenceDesign(panelData, metadata, apiBaseUrl);
 }
 
-async function loadLegacyReferenceDesign(apiBaseUrl: string, designId: string): Promise<ReferenceDesign> {
-  const design = await fetchJson<ReferenceDesign>(`${apiBaseUrl}/api/reference-designs/${designId}`);
-  return {
-    ...design,
-    backend: {
-      ...design.backend,
-      source: 'legacy-reference-design',
-      apiBaseUrl,
-      endpoint: `/api/reference-designs/${designId}`,
-    },
-  };
-}
-
 export async function loadCockpitDesign(projectId = DEFAULT_PROJECT_ID): Promise<ReferenceDesign> {
   const apiBaseUrl = getApiBaseUrl();
 
@@ -59,18 +46,13 @@ export async function loadCockpitDesign(projectId = DEFAULT_PROJECT_ID): Promise
     return await loadProjectPanelData(apiBaseUrl, projectId);
   } catch (panelError) {
     console.warn('Falling back from MechaFlow project panel data endpoint.', panelError);
-    try {
-      return await loadLegacyReferenceDesign(apiBaseUrl, mockReferenceDesign.id);
-    } catch (legacyError) {
-      console.warn('Falling back to bundled MechaFlow CAD mock design data.', legacyError);
-      return {
-        ...mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata),
-        backend: {
-          ...mockReferenceDesign.backend,
-          source: 'bundled-mock-after-error',
-          apiBaseUrl,
-        },
-      };
-    }
+    return {
+      ...mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata),
+      backend: {
+        ...mockReferenceDesign.backend,
+        source: 'bundled-mock-after-error',
+        apiBaseUrl,
+      },
+    };
   }
 }
