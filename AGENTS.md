@@ -4,6 +4,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 
 - Backend setup, configurable local ports, integration stubs, and test commands are documented in `docs/backend.md`.
 - Run backend validation with `pytest` after installing `.[dev]` dependencies in a virtual environment.
+- Frontend setup, configurable ports, local mock backend, and smoke test commands are documented in `docs/frontend.md`.
 
 ## Maintaining this file
 

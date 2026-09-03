@@ -8,8 +8,9 @@ Example: open a robot hand or gripper design, set the task to "pick and place a 
 
 ## What this repository contains
 
-This repository starts with product and technical documentation plus a first backend scaffold.
+This repository contains product and technical documentation plus an integrated local MVP foundation: a FastAPI backend, a Vite React TypeScript frontend cockpit, and catalog/integration fixtures and validation.
 
+- [Frontend development](docs/frontend.md)
 - [Product requirements](docs/product-requirements.md)
 - [Technical architecture](docs/technical-architecture.md)
 - [User experience](docs/user-experience.md)
@@ -81,16 +82,30 @@ Keep hosting cheap by making the platform cloud-assisted rather than cloud-depen
 - Use cloud compute only for heavy simulation jobs or collaboration.
 - Support bring-your-own AI keys during early prototypes to control cost.
 
-## Backend quick start
+## Integrated local MVP quick start
 
-The first implementation is a Python FastAPI backend under `backend/mechaflow_api` with a tiny frontend integration shell under `frontend/`.
+Backend dependencies are managed by Python packaging, while frontend dependencies are managed by npm.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e '.[dev]'
+npm install
+```
+
+Run backend checks:
+
+```bash
 pytest
+```
+
+Run frontend checks:
+
+```bash
+npm test
+npm run build
+npm run smoke
 ```
 
 Run the backend on an explicit local port:
@@ -100,17 +115,25 @@ export MECHAFLOW_API_PORT=8123
 mechaflow-api
 ```
 
-Or run the backend and frontend shell together on available ports:
+Run the frontend on an explicit local port and point it at the backend:
+
+```bash
+export VITE_MECHAFLOW_API_BASE_URL=http://127.0.0.1:8123
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Or run local helpers that choose available ports:
 
 ```bash
 python scripts/run-dev.py
+npm run dev:full
 ```
 
-Use `python scripts/find-free-port.py` to identify an unused port before setting `MECHAFLOW_API_PORT` or `MECHAFLOW_FRONTEND_PORT`. See [Backend development](docs/backend.md) for details.
+Use `python scripts/find-free-port.py` or `node scripts/find-ports.mjs` to identify unused ports before setting `MECHAFLOW_API_PORT`, `MECHAFLOW_FRONTEND_PORT`, or the Vite dev server port. See [Backend development](docs/backend.md) and [Frontend development](docs/frontend.md) for details.
 
 ## Repository status
 
-This repository now contains planning documents and a first backend foundation. Heavy CAD, FEA, electronics, wiring, and supplier integrations are exposed as clean stubs and are not wired to FreeCAD, CalculiX, KiCad, WireViz, or external supplier APIs yet.
+This repository now contains planning documents and an integrated local MVP foundation. The backend exposes CAD orchestration, report, worker, and catalog-shaped stubs. The frontend cockpit can use backend-shaped mock data or a running API. Catalog data is validated locally where present. Heavy CAD, FEA, electronics, wiring, and supplier integrations are not wired to FreeCAD, CalculiX, KiCad, WireViz, or external supplier APIs yet.
 
 ## License
 

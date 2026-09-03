@@ -1,0 +1,38 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mockBackendMetadata, mockProjectPanelData } from '../data/mockDesign';
+import { loadCockpitDesign } from './api';
+
+describe('loadCockpitDesign', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('uses bundled mock data when no backend URL is configured', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+
+    const design = await loadCockpitDesign();
+
+    expect(design.name).toContain('Open gripper task-preserving edit demo');
+    expect(design.backend.source).toBe('bundled-mock');
+    expect(design.analysisJobs.some((job) => job.worker === 'freecad-worker')).toBe(true);
+  });
+
+  it('loads project panel data from the configured backend URL', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test/');
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const design = await loadCockpitDesign();
+
+    expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
+    expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
+    expect(design.name).toBe('Open gripper task-preserving edit demo');
+    expect(design.backend.source).toBe('backend-panel-data');
+  });
+});
