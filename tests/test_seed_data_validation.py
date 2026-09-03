@@ -7,8 +7,10 @@ import copy
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -57,6 +59,21 @@ class SeedDataValidationTest(unittest.TestCase):
         errors: list[str] = []
 
         validate_reference_design_schema([design], errors)
+
+        self.assertTrue(errors)
+
+    def test_structurally_invalid_design_reports_errors_without_crashing(self) -> None:
+        sys.path.insert(0, str(ROOT))
+        from scripts import validate_catalog
+
+        design = copy.deepcopy(self.load_json("catalog/reference-designs/reference-designs.seed.json")[0])
+        design["license"] = "MIT"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            invalid_catalog = Path(temporary_directory) / "reference-designs.json"
+            invalid_catalog.write_text(json.dumps([design]), encoding="utf-8")
+            errors: list[str] = []
+            with patch.object(validate_catalog, "REFERENCE_DESIGNS", invalid_catalog):
+                validate_catalog.validate_reference_designs(errors, set(), {})
 
         self.assertTrue(errors)
 

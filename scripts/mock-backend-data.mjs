@@ -35,6 +35,40 @@ export const mockBackendMetadata = {
   ],
 };
 
+export const mockTaskRequirements = [
+  mockBackendPanelData.project.active_task,
+  {
+    id: 'task-reach-envelope',
+    kind: 'reach',
+    description: 'Reach the target work envelope without changing the wrist interface.',
+    target_value: 0.6,
+    unit: 'm',
+    safety_factor_min: null,
+    validation_method: 'heuristic',
+    assumptions: [],
+  },
+  {
+    id: 'task-wire-clearance',
+    kind: 'wiring_clearance',
+    description: 'Maintain wiring clearance and bend radius through the gripper assembly.',
+    target_value: 2,
+    unit: 'mm',
+    safety_factor_min: null,
+    validation_method: 'review',
+    assumptions: [],
+  },
+  {
+    id: 'task-manufacturing-substitution',
+    kind: 'serviceability',
+    description: 'Compare manufacturing substitutions without losing service access.',
+    target_value: null,
+    unit: null,
+    safety_factor_min: null,
+    validation_method: 'review',
+    assumptions: [],
+  },
+];
+
 export const mockReferenceDesigns = [
   {
     id: 'ref-open-gripper-demo',
@@ -49,13 +83,13 @@ export const mockReferenceDesigns = [
     electronics_files: ['finger-sensor.kicad_pcb'],
     manufacturing_notes: ['Use as an API shape example until a real permissively licensed design is imported.'],
     known_limitations: ['No geometry file is bundled in this repository yet.', 'Analysis results are advisory stub data.'],
-    example_tasks: mockBackendPanelData.task_requirements,
+    example_tasks: mockTaskRequirements,
   },
 ];
 
 export const mockCatalogSeed = {
   reference_designs: mockReferenceDesigns,
   materials: mockBackendPanelData.project.materials,
-  task_requirements: mockBackendPanelData.task_requirements,
+  task_requirements: mockTaskRequirements,
   sample_project: mockBackendPanelData.project,
 };

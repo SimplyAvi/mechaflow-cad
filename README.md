@@ -107,6 +107,9 @@ python3 scripts/validate_catalog.py
 python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'
 ```
 
+The smoke test additionally needs Node.js, an open-source test-only dependency: it runs the frontend
+module's page bootstrap against the live backend API and asserts what the page renders.
+
 ## Hosting philosophy
 
 Keep hosting cheap by making the platform cloud-assisted rather than cloud-dependent.

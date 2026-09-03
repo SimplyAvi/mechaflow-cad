@@ -68,36 +68,43 @@ def main() -> int:
     pythonpath = str(ROOT / "backend")
     env["PYTHONPATH"] = f"{pythonpath}{os.pathsep}{env['PYTHONPATH']}" if env.get("PYTHONPATH") else pythonpath
 
-    backend = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "mechaflow_api.main:app", "--host", api_host, "--port", str(api_port)],
-        cwd=ROOT,
-        env=env,
-    )
-
     RuntimeConfigHandler.api_base_url = api_base_url
     handler = functools.partial(RuntimeConfigHandler, directory=str(FRONTEND_DIR))
     frontend = http.server.ThreadingHTTPServer((frontend_host, frontend_port), handler)
     frontend_thread = threading.Thread(target=frontend.serve_forever, daemon=True)
-    frontend_thread.start()
-
-    print(f"MechaFlow API:      {api_base_url}/api/docs")
-    print(f"MechaFlow frontend: {frontend_origin}")
-    print("Set MECHAFLOW_API_PORT and MECHAFLOW_FRONTEND_PORT to choose explicit ports.")
-
-    def shutdown(signum: int, _frame: object) -> None:
-        print(f"\nStopping dev servers after signal {signum}...")
-        frontend.shutdown()
-        backend.terminate()
-
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
+    backend: subprocess.Popen[bytes] | None = None
 
     try:
+        backend = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "mechaflow_api.main:app", "--host", api_host, "--port", str(api_port)],
+            cwd=ROOT,
+            env=env,
+        )
+        frontend_thread.start()
+
+        print(f"MechaFlow API:      {api_base_url}/api/docs")
+        print(f"MechaFlow frontend: {frontend_origin}")
+        print("Set MECHAFLOW_API_PORT and MECHAFLOW_FRONTEND_PORT to choose explicit ports.")
+
+        def shutdown(signum: int, _frame: object) -> None:
+            print(f"\nStopping dev servers after signal {signum}...")
+            frontend.shutdown()
+            backend.terminate()
+
+        signal.signal(signal.SIGINT, shutdown)
+        signal.signal(signal.SIGTERM, shutdown)
         return backend.wait()
     finally:
-        frontend.shutdown()
-        if backend.poll() is None:
+        if frontend_thread.is_alive():
+            frontend.shutdown()
+        frontend.server_close()
+        if backend is not None and backend.poll() is None:
             backend.terminate()
+            try:
+                backend.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                backend.kill()
+                backend.wait(timeout=5)
 
 
 if __name__ == "__main__":

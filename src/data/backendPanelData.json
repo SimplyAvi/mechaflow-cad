@@ -23,7 +23,7 @@
           {
             "id": "node-root",
             "name": "Gripper root",
-            "part_ids": ["part-finger-link", "part-palm-plate", "part-actuator-bracket"],
+            "part_ids": ["part-finger-link", "part-palm-plate", "part-actuator-bracket", "part-controller-pcb"],
             "child_assembly_ids": ["node-finger"],
             "exploded_transform": {
               "translation_mm": { "x": 0, "y": 0, "z": 0 },
@@ -36,8 +36,8 @@
             "part_ids": ["part-finger-link"],
             "child_assembly_ids": [],
             "exploded_transform": {
-              "translation_mm": { "x": 80, "y": -30, "z": 0 },
-              "rotation_deg": { "x": 0, "y": 0, "z": 8 }
+              "translation_mm": { "x": 80, "y": 0, "z": 0 },
+              "rotation_deg": { "x": 0, "y": 0, "z": 0 }
             }
           }
         ],
@@ -46,7 +46,7 @@
             "id": "part-finger-link",
             "name": "Finger link",
             "category": "load-bearing link",
-            "purpose": "Transfers gripping load from actuator linkage to contact pad while carrying a fingertip force-sensor lead.",
+            "purpose": "Transfers gripping load from actuator linkage to contact pad.",
             "material_id": "mat-aluminum-6061-t6",
             "dimensions": {
               "length_mm": 140,
@@ -113,7 +113,7 @@
               }
             ],
             "related_fasteners": ["M6 ISO 9409 screw", "dowel pin"],
-            "wiring_route_ids": ["route-finger-sensor", "route-main-harness"],
+            "wiring_route_ids": ["route-main-harness"],
             "source_file": "gripper.step#palm-plate",
             "metadata": { "preferred_manufacturing_process": "cnc_machining" }
           },
@@ -145,8 +145,40 @@
               }
             ],
             "related_fasteners": ["M5 rail screw", "M3 motor mount screw"],
-            "wiring_route_ids": ["route-main-harness"],
+            "wiring_route_ids": [],
             "source_file": "gripper.step#actuator-bracket",
+            "metadata": {}
+          },
+          {
+            "id": "part-controller-pcb",
+            "name": "Controller PCB placeholder",
+            "category": "electronics",
+            "purpose": "Provides connector metadata for PCB clearance and harness routing handoff.",
+            "material_id": "mat-fr4-generic",
+            "dimensions": {
+              "length_mm": 65,
+              "width_mm": 45,
+              "height_mm": null,
+              "thickness_mm": 1.6,
+              "metadata": {}
+            },
+            "mass_kg": 0.04,
+            "manufacturing_options": [
+              {
+                "id": "mfg-controller-pcb",
+                "process": "pcb_fabrication",
+                "description": "Prototype PCB fabrication for fit and connector placement review.",
+                "cost": { "currency": "USD", "min": 10, "max": 40, "confidence": "estimated_from_heuristic" },
+                "lead_time_days_min": 5,
+                "lead_time_days_max": 12,
+                "supplier_url": null,
+                "risk_notes": [],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [],
+            "wiring_route_ids": ["route-finger-sensor", "route-main-harness"],
+            "source_file": null,
             "metadata": {}
           }
         ],
@@ -154,25 +186,25 @@
           {
             "id": "route-finger-sensor",
             "name": "Finger force sensor lead",
-            "from_connector": { "id": "conn-palm", "name": "Palm harness connector", "pin_count": 4, "part_id": "part-palm-plate" },
+            "from_connector": { "id": "conn-controller-finger", "name": "Controller finger-sensor connector", "pin_count": 4, "part_id": "part-controller-pcb" },
             "to_connector": { "id": "conn-finger", "name": "Finger sensor connector", "pin_count": 4, "part_id": "part-finger-link" },
             "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 40, "y": 8, "z": 5 }, { "x": 95, "y": 10, "z": 4 }],
             "bend_radius_min_mm": 12,
             "clearance_min_mm": 2,
-            "harness_bom": ["4-wire silicone cable", "micro locking connector"],
-            "risk_notes": ["Clearance needs a geometry check after material substitution changes rib height."],
+            "harness_bom": [],
+            "risk_notes": ["Clearance needs a geometry check after exploded-view extraction is real."],
             "confidence": "estimated_from_heuristic"
           },
           {
             "id": "route-main-harness",
-            "name": "Main wrist harness",
-            "from_connector": { "id": "conn-wrist", "name": "Robot wrist connector", "pin_count": 8, "part_id": "part-palm-plate" },
-            "to_connector": { "id": "conn-actuator", "name": "Actuator motor connector", "pin_count": 8, "part_id": "part-actuator-bracket" },
-            "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 20, "y": 25, "z": 6 }, { "x": 62, "y": 30, "z": 8 }],
-            "bend_radius_min_mm": 35,
-            "clearance_min_mm": 5,
-            "harness_bom": ["8-wire shielded cable", "strain relief clamp"],
-            "risk_notes": ["Service loop is preserved when the palm plate stays removable."],
+            "name": "Main palm harness",
+            "from_connector": { "id": "conn-controller", "name": "Controller PCB harness connector", "pin_count": 8, "part_id": "part-controller-pcb" },
+            "to_connector": { "id": "conn-palm-main", "name": "Palm pass-through", "pin_count": 8, "part_id": "part-palm-plate" },
+            "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 25, "y": 20, "z": 4 }, { "x": 60, "y": 25, "z": 6 }],
+            "bend_radius_min_mm": 20,
+            "clearance_min_mm": 3,
+            "harness_bom": [],
+            "risk_notes": ["Board keep-outs and service-loop clearance need a geometry worker check."],
             "confidence": "estimated_from_heuristic"
           }
         ],
@@ -233,6 +265,60 @@
         "source": null,
         "confidence": "estimated_from_heuristic",
         "notes": ["Adds weight but can improve stiffness and wear resistance."]
+      },
+      {
+        "id": "mat-pla-generic",
+        "name": "Generic PLA printed polymer",
+        "family": "polymer",
+        "properties": {
+          "density_kg_m3": 1240,
+          "elastic_modulus_gpa": 2,
+          "yield_strength_mpa": 45,
+          "ultimate_strength_mpa": 60,
+          "poisson_ratio": 0.36,
+          "thermal_conductivity_w_mk": null
+        },
+        "compatible_processes": ["additive_fdm"],
+        "cost": { "currency": "USD", "min": 1, "max": 3, "confidence": "estimated_from_heuristic" },
+        "source": null,
+        "confidence": "estimated_from_heuristic",
+        "notes": ["Print settings, orientation, moisture, and temperature control real properties."]
+      },
+      {
+        "id": "mat-petg-generic",
+        "name": "Generic PETG printed polymer",
+        "family": "polymer",
+        "properties": {
+          "density_kg_m3": 1270,
+          "elastic_modulus_gpa": 2.1,
+          "yield_strength_mpa": 40,
+          "ultimate_strength_mpa": 50,
+          "poisson_ratio": 0.38,
+          "thermal_conductivity_w_mk": null
+        },
+        "compatible_processes": ["additive_fdm"],
+        "cost": { "currency": "USD", "min": 2, "max": 5, "confidence": "estimated_from_heuristic" },
+        "source": null,
+        "confidence": "estimated_from_heuristic",
+        "notes": ["Use supplier data or coupon tests before load-bearing analysis."]
+      },
+      {
+        "id": "mat-fr4-generic",
+        "name": "Generic FR-4 PCB laminate",
+        "family": "electronics_substrate",
+        "properties": {
+          "density_kg_m3": 1850,
+          "elastic_modulus_gpa": 22,
+          "yield_strength_mpa": null,
+          "ultimate_strength_mpa": null,
+          "poisson_ratio": 0.13,
+          "thermal_conductivity_w_mk": null
+        },
+        "compatible_processes": ["pcb_fabrication"],
+        "cost": { "currency": "USD", "min": 2, "max": 8, "confidence": "estimated_from_heuristic" },
+        "source": null,
+        "confidence": "estimated_from_heuristic",
+        "notes": ["Board stack-up and laminate vendor data are required for structural or thermal analysis."]
       }
     ],
     "modifications": [],
@@ -423,25 +509,25 @@
     {
       "id": "route-finger-sensor",
       "name": "Finger force sensor lead",
-      "from_connector": { "id": "conn-palm", "name": "Palm harness connector", "pin_count": 4, "part_id": "part-palm-plate" },
+      "from_connector": { "id": "conn-controller-finger", "name": "Controller finger-sensor connector", "pin_count": 4, "part_id": "part-controller-pcb" },
       "to_connector": { "id": "conn-finger", "name": "Finger sensor connector", "pin_count": 4, "part_id": "part-finger-link" },
       "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 40, "y": 8, "z": 5 }, { "x": 95, "y": 10, "z": 4 }],
       "bend_radius_min_mm": 12,
       "clearance_min_mm": 2,
-      "harness_bom": ["4-wire silicone cable", "micro locking connector"],
-      "risk_notes": ["Clearance needs a geometry check after material substitution changes rib height."],
+      "harness_bom": [],
+      "risk_notes": ["Clearance needs a geometry check after exploded-view extraction is real."],
       "confidence": "estimated_from_heuristic"
     },
     {
       "id": "route-main-harness",
-      "name": "Main wrist harness",
-      "from_connector": { "id": "conn-wrist", "name": "Robot wrist connector", "pin_count": 8, "part_id": "part-palm-plate" },
-      "to_connector": { "id": "conn-actuator", "name": "Actuator motor connector", "pin_count": 8, "part_id": "part-actuator-bracket" },
-      "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 20, "y": 25, "z": 6 }, { "x": 62, "y": 30, "z": 8 }],
-      "bend_radius_min_mm": 35,
-      "clearance_min_mm": 5,
-      "harness_bom": ["8-wire shielded cable", "strain relief clamp"],
-      "risk_notes": ["Service loop is preserved when the palm plate stays removable."],
+      "name": "Main palm harness",
+      "from_connector": { "id": "conn-controller", "name": "Controller PCB harness connector", "pin_count": 8, "part_id": "part-controller-pcb" },
+      "to_connector": { "id": "conn-palm-main", "name": "Palm pass-through", "pin_count": 8, "part_id": "part-palm-plate" },
+      "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 25, "y": 20, "z": 4 }, { "x": 60, "y": 25, "z": 6 }],
+      "bend_radius_min_mm": 20,
+      "clearance_min_mm": 3,
+      "harness_bom": [],
+      "risk_notes": ["Board keep-outs and service-loop clearance need a geometry worker check."],
       "confidence": "estimated_from_heuristic"
     }
   ],

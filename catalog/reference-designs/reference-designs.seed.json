@@ -83,24 +83,10 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": [
-        "deliver target joint torque",
-        "hold a static leg load",
-        "survive repeated robot gait cycles"
-      ],
-      "capability_rating_ids": [
-        "payload-static",
-        "joint-torque",
-        "fatigue-life-advisory"
-      ],
-      "primary_material_ids": [
-        "aluminum-6061-t6",
-        "pla-generic"
-      ],
-      "manufacturing_method_ids": [
-        "cnc-milling",
-        "fdm-3d-printing"
-      ],
+      "example_task_ids": ["lift-static-payload", "manufacturing-substitution"],
+      "capability_rating_ids": ["payload-static", "joint-torque", "fatigue-life-advisory"],
+      "primary_material_ids": ["aluminum-6061-t6", "pla-generic"],
+      "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing"],
       "electronics_awareness": "bom-only"
     },
     "integration_notes": {
@@ -167,7 +153,7 @@
       "url": "https://github.com/anvil-robotics/anvil-gripper-hw",
       "repository": "anvil-robotics/anvil-gripper-hw",
       "retrieved_at": "2026-09-02",
-      "upstream_license_url": "https://github.com/anvil-robotics/anvil-gripper-hw/blob/main/LICENSE"
+      "upstream_license_url": "https://github.com/anvil-robotics/anvil-gripper-hw/blob/main/LICENSE.txt"
     },
     "license": {
       "declared": "CERN Open Hardware Licence Version 2 Strongly Reciprocal reported by repository license metadata",
@@ -231,25 +217,10 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": [
-        "grasp a small payload",
-        "compare printed and machined finger materials",
-        "check fingertip deflection"
-      ],
-      "capability_rating_ids": [
-        "payload-static",
-        "grip-force",
-        "deflection-limit"
-      ],
-      "primary_material_ids": [
-        "aluminum-6061-t6",
-        "petg-generic",
-        "carbon-fiber-nylon-generic"
-      ],
-      "manufacturing_method_ids": [
-        "cnc-milling",
-        "fdm-3d-printing"
-      ],
+      "example_task_ids": ["grasp-object", "lift-static-payload", "manufacturing-substitution"],
+      "capability_rating_ids": ["payload-static", "grip-force", "deflection-limit"],
+      "primary_material_ids": ["aluminum-6061-t6", "petg-generic", "carbon-fiber-nylon-generic"],
+      "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing"],
       "electronics_awareness": "unknown"
     },
     "integration_notes": {
@@ -381,25 +352,10 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": [
-        "reach a target envelope",
-        "lift a small payload",
-        "avoid cable interference across joints"
-      ],
-      "capability_rating_ids": [
-        "reach-envelope",
-        "payload-static",
-        "joint-torque"
-      ],
-      "primary_material_ids": [
-        "aluminum-6061-t6",
-        "pla-generic"
-      ],
-      "manufacturing_method_ids": [
-        "cnc-milling",
-        "fdm-3d-printing",
-        "off-the-shelf-parts"
-      ],
+      "example_task_ids": ["reach-envelope", "lift-static-payload", "wire-clearance-check"],
+      "capability_rating_ids": ["reach-envelope", "payload-static", "joint-torque"],
+      "primary_material_ids": ["aluminum-6061-t6", "pla-generic"],
+      "manufacturing_method_ids": ["cnc-milling", "fdm-3d-printing", "off-the-shelf-parts"],
       "electronics_awareness": "bom-only"
     },
     "integration_notes": {
@@ -539,26 +495,10 @@
       }
     },
     "engineering_intent": {
-      "example_tasks": [
-        "grasp small objects",
-        "compare finger materials",
-        "check PCB and wire clearances"
-      ],
-      "capability_rating_ids": [
-        "grip-force",
-        "payload-static",
-        "wire-clearance"
-      ],
-      "primary_material_ids": [
-        "pla-generic",
-        "petg-generic",
-        "carbon-fiber-nylon-generic"
-      ],
-      "manufacturing_method_ids": [
-        "fdm-3d-printing",
-        "pcb-fabrication",
-        "wire-harness"
-      ],
+      "example_task_ids": ["grasp-object", "manufacturing-substitution", "wire-clearance-check"],
+      "capability_rating_ids": ["grip-force", "payload-static", "wire-clearance"],
+      "primary_material_ids": ["pla-generic", "petg-generic", "carbon-fiber-nylon-generic"],
+      "manufacturing_method_ids": ["fdm-3d-printing", "pcb-fabrication", "wire-harness"],
       "electronics_awareness": "pcb"
     },
     "integration_notes": {

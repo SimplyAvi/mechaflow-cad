@@ -6,7 +6,7 @@ This file is the project's committed home for project-intrinsic agent knowledge:
 - Run backend validation with `pytest` after installing `.[dev]` dependencies in a virtual environment.
 - Frontend setup, configurable ports, local mock backend, and smoke test commands are documented in `docs/frontend.md`.
 - Seed catalog, integration contracts, and handoff projections are documented in `docs/reference-design-catalog.md`, `docs/integrations/README.md`, `docs/dependency-license-verification.md`, `data/integration-adapters.seed.json`, and `data/backend-frontend-handoff.seed.json`.
-- Validate catalog changes with `python3 scripts/validate_catalog.py`; run `python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'` and the local catalog smoke path with `PYTHONPATH=src python3 tests/smoke_test.py`.
+- Validate catalog changes with `python3 scripts/validate_catalog.py`; run `python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'` and the local frontend plus backend smoke path with `PYTHONPATH=src python3 tests/smoke_test.py` (Node.js is needed for the browser-like frontend proof).
 
 ## Maintaining this file
 

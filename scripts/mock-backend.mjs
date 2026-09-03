@@ -5,6 +5,7 @@ import {
   mockBackendPanelData,
   mockCatalogSeed,
   mockReferenceDesigns,
+  mockTaskRequirements,
 } from './mock-backend-data.mjs';
 import { getFreePort, parsePort } from './port-utils.mjs';
 
@@ -90,7 +91,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/task-requirements/sample') {
-      sendJson(response, 200, mockBackendPanelData.task_requirements);
+      sendJson(response, 200, mockTaskRequirements);
       return;
     }
 

@@ -12,7 +12,7 @@ The machine-readable seed catalog lives in:
 1. Reference upstream designs by URL first. Do not copy CAD, PCB, BOM, or documentation assets until license review is complete.
 2. Record license evidence and uncertainty directly in each entry.
 3. Keep mechanical, electronics, BOM, manufacturing, ROS, and analysis notes together so import work can proceed without rewriting the catalog.
-4. Link every task, material, manufacturing method, and capability rating to seed data IDs where possible.
+4. Link tasks, materials, manufacturing methods, and capability ratings to seed data IDs. `engineering_intent.example_task_ids` references `data/tasks.seed.json`, so example tasks stay machine-readable instead of free text.
 5. Use `handoff` metadata to connect a design to backend job types, frontend panels, and adapter IDs without importing upstream assets.
 
 ## License compatibility values
@@ -32,14 +32,18 @@ Run:
 python3 scripts/validate_catalog.py
 ```
 
-The validator enforces `catalog/schemas/reference-design.schema.json`, then checks cross-file IDs, license caution visibility, integration adapter references, backend job type names, and references from designs to seed materials, manufacturing methods, and capability ratings.
+The validator checks each entry against `catalog/schemas/reference-design.schema.json` itself, so required
+fields, field types, enums, patterns, and unknown fields all come from the schema rather than a second copy of
+it. On top of the schema it checks unique IDs, license caution visibility, integration adapter references,
+backend job type names, and references from designs to seed tasks, materials, manufacturing methods, and
+capability ratings.
 
 ## Adding a new reference design
 
 1. Find the upstream repository or project page.
 2. Run the dependency license checklist in `docs/dependency-license-verification.md`.
 3. Pin the exact commit, release, or page snapshot reviewed.
-4. Add one catalog entry with source URLs, declared license, evidence, cautions, asset format hints, import notes, and optional `handoff` metadata.
+4. Add one catalog entry with source URLs, declared license, evidence, cautions, asset format hints, import notes, and required `handoff` metadata.
 5. Leave `review.status` as `needs-license-review` unless the exact assets to import have been checked.
 6. Add adapter IDs only if they exist in `data/integration-adapters.seed.json`.
 7. Run `python3 scripts/validate_catalog.py`.

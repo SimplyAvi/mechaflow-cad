@@ -11,6 +11,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
 def find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -77,3 +79,34 @@ def test_local_frontend_backend_smoke_path() -> None:
         except subprocess.TimeoutExpired:
             dev_runner.kill()
             dev_runner.wait(timeout=5)
+
+
+def test_dev_runner_does_not_start_backend_when_frontend_port_is_busy() -> None:
+    api_port = find_free_port()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as occupied_frontend:
+        occupied_frontend.bind(("127.0.0.1", 0))
+        occupied_frontend.listen()
+        frontend_port = int(occupied_frontend.getsockname()[1])
+        env = os.environ.copy()
+        env["MECHAFLOW_API_PORT"] = str(api_port)
+        env["MECHAFLOW_FRONTEND_PORT"] = str(frontend_port)
+
+        dev_runner = subprocess.Popen(
+            [sys.executable, "scripts/run-dev.py"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            _, stderr = dev_runner.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            dev_runner.kill()
+            dev_runner.wait(timeout=5)
+            raise AssertionError("dev runner did not exit after the frontend bind failed") from None
+
+    assert dev_runner.returncode != 0
+    assert "Address already in use" in stderr
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as backend_probe:
+        backend_probe.bind(("127.0.0.1", api_port))

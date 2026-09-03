@@ -215,17 +215,15 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "example_tasks",
+        "example_task_ids",
         "capability_rating_ids",
         "primary_material_ids",
         "manufacturing_method_ids"
       ],
       "properties": {
-        "example_tasks": {
+        "example_task_ids": {
           "type": "array",
-          "items": {
-            "type": "string"
-          }
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
         },
         "capability_rating_ids": {
           "type": "array",

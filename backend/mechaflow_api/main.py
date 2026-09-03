@@ -266,7 +266,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         project = get_project_or_404(project_id)
         runtime_jobs = [job for job in job_store.values() if job.project_id == project_id]
         if runtime_jobs:
-            project = project.model_copy(update={"analysis_jobs": [*project.analysis_jobs, *runtime_jobs]})
+            jobs_by_id = {job.id: job for job in project.analysis_jobs}
+            jobs_by_id.update({job.id: job for job in runtime_jobs})
+            project = project.model_copy(update={"analysis_jobs": list(jobs_by_id.values())})
         return build_project_panel_data(project)
 
     @app.get(

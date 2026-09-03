@@ -48,6 +48,12 @@ BACKEND_ARTIFACT_KINDS = {
     "bom",
     "manufacturing_report",
 }
+CROSS_REFERENCES = (
+    ("example_task_ids", "tasks", "task"),
+    ("primary_material_ids", "materials", "material"),
+    ("manufacturing_method_ids", "manufacturing-methods", "manufacturing method"),
+    ("capability_rating_ids", "capability-ratings", "capability rating"),
+)
 
 
 def load_json(path: Path) -> Any:
@@ -63,7 +69,7 @@ def ensure(condition: bool, message: str, errors: list[str]) -> None:
         errors.append(message)
 
 
-def validate_unique_ids(name: str, items: list[dict[str, Any]], errors: list[str]) -> set[str]:
+def validate_unique_ids(name: str, items: list[Any], errors: list[str]) -> set[str]:
     seen: set[str] = set()
     for index, item in enumerate(items):
         if not isinstance(item, dict):
@@ -77,35 +83,43 @@ def validate_unique_ids(name: str, items: list[dict[str, Any]], errors: list[str
     return seen
 
 
-def validate_reference_design_schema(designs: list[Any], errors: list[str]) -> None:
+def validate_reference_design_schema(designs: list[Any], errors: list[str]) -> set[int]:
     schema = load_json(REFERENCE_DESIGN_SCHEMA)
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    invalid_indexes: set[int] = set()
     for index, design in enumerate(designs):
-        for error in sorted(validator.iter_errors(design), key=lambda item: tuple(map(str, item.absolute_path))):
+        validation_errors = sorted(
+            validator.iter_errors(design),
+            key=lambda item: tuple(map(str, item.absolute_path)),
+        )
+        if validation_errors:
+            invalid_indexes.add(index)
+        for error in validation_errors:
             location = ".".join(str(part) for part in error.absolute_path)
             suffix = f".{location}" if location else ""
             errors.append(f"reference-designs[{index}]{suffix}: {error.message}")
+    return invalid_indexes
 
 
-def validate_reference_designs(errors: list[str], adapter_ids: set[str]) -> set[str]:
+def validate_reference_designs(
+    errors: list[str],
+    adapter_ids: set[str],
+    ids_by_name: dict[str, set[str]],
+) -> set[str]:
     designs = load_json(REFERENCE_DESIGNS)
     ensure(isinstance(designs, list), "reference designs root must be a list", errors)
     if not isinstance(designs, list):
         return set()
-    validate_reference_design_schema(designs, errors)
+    invalid_indexes = validate_reference_design_schema(designs, errors)
     design_ids = validate_unique_ids("reference-designs", designs, errors)
 
-    material_ids = validate_unique_ids("materials", load_json(DATA_FILES["materials"]), errors)
-    manufacturing_ids = validate_unique_ids("manufacturing-methods", load_json(DATA_FILES["manufacturing-methods"]), errors)
-    rating_ids = validate_unique_ids("capability-ratings", load_json(DATA_FILES["capability-ratings"]), errors)
-
-    for design in designs:
-        if not isinstance(design, dict):
+    for index, design in enumerate(designs):
+        if index in invalid_indexes or not isinstance(design, dict):
             continue
         design_id = design.get("id", "<unknown>")
-
-        license_data = design.get("license", {})
+        license_data = design["license"]
+        review = design["review"]
         compatibility = license_data.get("compatibility")
         ensure(bool(license_data.get("declared")), f"{design_id} must record declared license text", errors)
         ensure(bool(license_data.get("evidence")), f"{design_id} must record license evidence", errors)
@@ -117,25 +131,26 @@ def validate_reference_designs(errors: list[str], adapter_ids: set[str]) -> set[
                 errors,
             )
             ensure(
-                design.get("review", {}).get("status") in {"needs-license-review", "blocked"},
+                review.get("status") in {"needs-license-review", "blocked"},
                 f"{design_id} must not be marked ready while compatibility is {compatibility}",
                 errors,
             )
-        intent = design.get("engineering_intent", {})
-        for material_id in intent.get("primary_material_ids", []):
-            ensure(material_id in material_ids, f"{design_id} references unknown material {material_id}", errors)
-        for method_id in intent.get("manufacturing_method_ids", []):
-            ensure(method_id in manufacturing_ids, f"{design_id} references unknown manufacturing method {method_id}", errors)
-        for rating_id in intent.get("capability_rating_ids", []):
-            ensure(rating_id in rating_ids, f"{design_id} references unknown capability rating {rating_id}", errors)
 
-        handoff = design.get("handoff")
-        if handoff is not None:
-            ensure(bool(handoff.get("license_gate")), f"{design_id} handoff must include license_gate", errors)
-            for adapter_id in handoff.get("required_adapter_ids", []):
-                ensure(adapter_id in adapter_ids, f"{design_id} handoff references unknown adapter {adapter_id}", errors)
-            for job_type in handoff.get("recommended_job_types", []):
-                ensure(job_type in BACKEND_JOB_TYPES, f"{design_id} handoff references unknown backend job type {job_type}", errors)
+        intent = design["engineering_intent"]
+        for field, dataset, label in CROSS_REFERENCES:
+            for value in intent.get(field, []):
+                ensure(
+                    value in ids_by_name.get(dataset, set()),
+                    f"{design_id} references unknown {label} {value}",
+                    errors,
+                )
+
+        handoff = design["handoff"]
+        ensure(bool(handoff.get("license_gate")), f"{design_id} handoff must include license_gate", errors)
+        for adapter_id in handoff.get("required_adapter_ids", []):
+            ensure(adapter_id in adapter_ids, f"{design_id} handoff references unknown adapter {adapter_id}", errors)
+        for job_type in handoff.get("recommended_job_types", []):
+            ensure(job_type in BACKEND_JOB_TYPES, f"{design_id} handoff references unknown backend job type {job_type}", errors)
 
     return design_ids
 
@@ -242,7 +257,7 @@ def main() -> int:
     try:
         ids_by_name = validate_datasets(errors)
         adapter_ids = validate_integration_adapters(errors)
-        design_ids = validate_reference_designs(errors, adapter_ids)
+        design_ids = validate_reference_designs(errors, adapter_ids, ids_by_name)
         validate_handoff(errors, ids_by_name, design_ids, adapter_ids)
     except ValueError as exc:
         errors.append(str(exc))

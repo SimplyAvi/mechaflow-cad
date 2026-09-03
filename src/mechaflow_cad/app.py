@@ -26,7 +26,8 @@ DATASETS = {
     "integration-adapters": REPO_ROOT / "data" / "integration-adapters.seed.json",
     "backend-frontend-handoff": REPO_ROOT / "data" / "backend-frontend-handoff.seed.json",
 }
-FRONTEND_ROOT = REPO_ROOT / "frontend"
+FRONTEND_ROOT = (REPO_ROOT / "frontend").resolve()
+DATA_ROUTE_PREFIX = "/api/data/"
 CONCEPTS = [
     "projects",
     "reference_designs",
@@ -97,8 +98,8 @@ class MechaFlowHandler(SimpleHTTPRequestHandler):
         if request_path == "/api/catalog/reference-designs":
             self._send_json({"items": load_json(CATALOG_PATH)})
             return
-        if request_path.startswith("/api/data/"):
-            dataset = request_path.removeprefix("/api/data/")
+        if request_path.startswith(DATA_ROUTE_PREFIX):
+            dataset = request_path.removeprefix(DATA_ROUTE_PREFIX)
             path = DATASETS.get(dataset)
             if path is None:
                 self._send_json({"error": f"unknown dataset: {dataset}"}, HTTPStatus.NOT_FOUND)

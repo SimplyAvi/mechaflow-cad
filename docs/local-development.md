@@ -48,7 +48,15 @@ Run the catalog end-to-end smoke test:
 PYTHONPATH=src python3 tests/smoke_test.py
 ```
 
-The test starts the app on an OS-selected port, verifies the health, metadata, reference-design, adapter, and handoff API contracts, checks the generated runtime configuration, and confirms unknown and path-traversal requests return `404`.
+The test starts the app on an OS-selected port (override with `MECHAFLOW_PORT`), verifies the health,
+metadata, reference-design, adapter, handoff, and runtime configuration contracts, and confirms unknown
+and path-traversal requests return `404`.
+
+It then runs `tests/frontend_smoke.mjs`, which discovers the module the served page loads, imports it
+under browser-like globals so the page bootstrap in `frontend/app.js` runs on its own, and asserts the
+entries it renders match `/api/catalog/reference-designs` and `/api/data/tasks` on the same configurable
+base URL. Node.js is the only extra requirement, and it is an open-source test-only dependency: the app
+itself still runs on the Python standard library alone.
 
 ## Catalog validation
 

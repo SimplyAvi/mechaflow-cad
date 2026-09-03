@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 import mechaflow_api.main as main_module
@@ -6,6 +9,7 @@ from mechaflow_api.models import AnalysisJobType, ManufacturingProcess
 
 
 client = TestClient(app)
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_health_and_status_endpoints() -> None:
@@ -85,6 +89,30 @@ def test_catalog_and_sample_project_are_structured() -> None:
     payload = project.json()
     assert payload["active_task"]["target_value"] == 50
     assert payload["assemblies"][0]["wiring_routes"][0]["bend_radius_min_mm"] == 12
+
+
+def test_frontend_mock_projection_matches_backend_seed_contract() -> None:
+    backend_project = client.get("/api/projects/sample").json()
+    with (ROOT / "src" / "data" / "backendPanelData.json").open(encoding="utf-8") as handle:
+        frontend_panel = json.load(handle)
+
+    frontend_project = frontend_panel["project"]
+    backend_assembly = backend_project["assemblies"][0]
+    frontend_assembly = frontend_project["assemblies"][0]
+    assert frontend_project["id"] == backend_project["id"]
+    assert frontend_project["reference_design_id"] == backend_project["reference_design_id"]
+    assert {part["id"] for part in frontend_assembly["parts"]} == {part["id"] for part in backend_assembly["parts"]}
+    assert {material["id"] for material in frontend_project["materials"]} == {
+        material["id"] for material in backend_project["materials"]
+    }
+    assert frontend_panel["task_requirements"] == [backend_project["active_task"]]
+    assert {
+        route["id"]: (route["from_connector"]["part_id"], route["to_connector"]["part_id"])
+        for route in frontend_assembly["wiring_routes"]
+    } == {
+        route["id"]: (route["from_connector"]["part_id"], route["to_connector"]["part_id"])
+        for route in backend_assembly["wiring_routes"]
+    }
 
 
 def test_project_panel_endpoints_expose_frontend_handoff_data() -> None:
@@ -215,6 +243,27 @@ def test_create_analysis_job_selects_matching_stub_adapter() -> None:
 
     panel_jobs = client.get("/api/projects/project-open-gripper-demo/panel-data").json()["project"]["analysis_jobs"]
     assert any(job["id"] == payload["id"] for job in panel_jobs)
+
+
+def test_panel_data_deduplicates_a_roundtripped_runtime_job() -> None:
+    local_client = TestClient(main_module.create_app())
+    sample = local_client.get("/api/projects/sample").json()
+    sample["id"] = "project-job-roundtrip"
+    local_client.put("/api/projects/project-job-roundtrip", json=sample)
+    job = local_client.post(
+        "/api/analysis-jobs",
+        json={
+            "job_type": AnalysisJobType.run_fea.value,
+            "target_id": "part-finger-link",
+            "project_id": "project-job-roundtrip",
+        },
+    ).json()
+
+    first_panel = local_client.get("/api/projects/project-job-roundtrip/panel-data").json()
+    local_client.put("/api/projects/project-job-roundtrip", json=first_panel["project"])
+    second_panel = local_client.get("/api/projects/project-job-roundtrip/panel-data").json()
+
+    assert [item["id"] for item in second_panel["project"]["analysis_jobs"]].count(job["id"]) == 1
 
 
 def test_overlapping_job_types_have_explicit_adapter_owners() -> None:

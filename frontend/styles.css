@@ -54,6 +54,16 @@ li {
   margin: 0.4rem 0;
 }
 
+#catalog-reference-designs li {
+  display: grid;
+  gap: 0.35rem;
+  padding-block: 0.5rem;
+}
+
+#catalog-reference-designs a {
+  width: fit-content;
+}
+
 .status-ok {
   color: #147d42;
   font-weight: 700;
