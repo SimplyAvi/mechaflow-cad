@@ -145,10 +145,10 @@ export MECHAFLOW_API_PORT=8123
 mechaflow-api
 ```
 
-Run the frontend on an explicit local port and point it at the backend:
+Run the Vite product cockpit on an explicit local port and point it at the FastAPI backend:
 
 ```bash
-export VITE_MECHAFLOW_API_BASE_URL=http://127.0.0.1:8123
+export VITE_API_BASE_URL=http://127.0.0.1:8123
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
@@ -159,7 +159,13 @@ python scripts/run-dev.py
 npm run dev:full
 ```
 
-Use `python scripts/find-free-port.py` or `node scripts/find-ports.mjs` to identify unused ports before setting `MECHAFLOW_API_PORT`, `MECHAFLOW_FRONTEND_PORT`, or the Vite dev server port. See [Backend development](docs/backend.md) and [Frontend development](docs/frontend.md) for details.
+`python scripts/run-dev.py` serves the static integration shell in `frontend/` against the FastAPI backend. `npm run dev:full` serves the React cockpit in `src/` against the Node mock backend used for frontend work. The catalog seed app can also serve `frontend/` and the catalog API together:
+
+```bash
+PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
+```
+
+Use `python scripts/find-free-port.py`, `python3 scripts/find_unused_port.py`, or `node scripts/find-ports.mjs` to identify unused ports before setting `MECHAFLOW_API_PORT`, `MECHAFLOW_FRONTEND_PORT`, `MECHAFLOW_PORT`, or the Vite dev server port. See [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Local development](docs/local-development.md) for details.
 
 ## Repository status
 

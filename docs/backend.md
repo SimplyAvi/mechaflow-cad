@@ -59,7 +59,7 @@ Use the printed value as `MECHAFLOW_API_PORT` or `MECHAFLOW_FRONTEND_PORT`.
 
 ## Run backend and frontend together
 
-The repository includes a tiny frontend integration shell in `frontend/`. It is not a design system and should be replaced by the product frontend later. It uses plain maintainable defaults so development does not block on design-system work.
+The repository includes a tiny static integration shell in `frontend/` plus the product React cockpit in root `src/`. The static shell is useful for backend smoke coverage and catalog seed serving. Use the React cockpit for frontend product work; it connects to this backend with `VITE_API_BASE_URL` as described in `docs/frontend.md`.
 
 ```bash
 python scripts/run-dev.py
