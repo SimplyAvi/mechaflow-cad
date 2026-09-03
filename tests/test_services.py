@@ -51,6 +51,19 @@ def test_project_panel_collectors_extract_frontend_data() -> None:
     assert panel.bom_items[0].name == "Finger link"
 
 
+def test_project_panel_collectors_extract_frontend_data() -> None:
+    project = build_sample_project()
+
+    assert collect_project_task_requirements(project)[0].id == "task-lift-50lb"
+    assert collect_project_bom_items(project)[0].part_id == "part-finger-link"
+    assert collect_project_manufacturing_options(project)[0].options[0].id == "mfg-finger-cnc"
+    assert collect_project_wiring_routes(project)[0].id == "route-finger-sensor"
+
+    panel = build_project_panel_data(project)
+    assert panel.project.id == project.id
+    assert panel.bom_items[0].name == "Finger link"
+
+
 def test_apply_project_modification_rejects_unknown_part() -> None:
     with pytest.raises(PartNotFoundError):
         apply_project_modification(
