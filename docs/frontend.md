@@ -7,7 +7,7 @@ The first MechaFlow CAD frontend is a Vite, React, and TypeScript application. I
 The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. It includes mocked orchestration data for:
 
 - Opening an open reference robot gripper design.
-- Viewing an animated exploded assembly concept.
+- Viewing an animated exploded assembly concept with desktop-demo rotation controls.
 - Selecting parts from the assembly and part tree.
 - Preserving the active task while previewing material substitution.
 - Keeping payload capability and safety factor under review until a backend worker supplies a task-independent rating.
@@ -63,6 +63,16 @@ If either port is busy, choose another pair:
 PORT_COUNT=4 npm run ports:find
 ```
 
+## Open as a local desktop app
+
+The captain-friendly desktop path starts the mock API, Vite frontend, and Electron shell in one command:
+
+```sh
+npm run desktop:dev
+```
+
+See [Desktop demo](desktop.md) for visual test steps, toolchain rationale, and the smoke check.
+
 ## Run only the frontend
 
 The frontend can run without a backend by using bundled backend-shaped mock panel data:
@@ -110,6 +120,12 @@ Unit and component tests:
 
 ```sh
 npm test
+```
+
+Desktop shell smoke test:
+
+```sh
+npm run desktop:smoke
 ```
 
 End-to-end local smoke test:

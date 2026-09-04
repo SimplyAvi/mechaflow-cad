@@ -20,8 +20,12 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('50 lb');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('cycle unknown');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('reach unknown');
-    expect(screen.getByRole('img', { name: /Mock exploded view/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Interactive exploded view/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Assembly rotation/i)).toHaveValue('18');
     expect(screen.getByText(/Exploded-view progress/i)).toHaveTextContent('100%');
+    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not real FEA results/i);
+    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/58 lb demo limit/i);
+    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/estimated/i);
     expect(screen.getByText(/Background analysis status/i)).toBeInTheDocument();
     expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
     expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
@@ -75,9 +79,25 @@ describe('MechaFlow cockpit', () => {
     await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Palm plate/i }));
 
     expect(screen.getByRole('heading', { name: /Palm plate/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/75 lb demo limit/i);
     expect(screen.getByText(/Main palm harness/i)).toBeInTheDocument();
     expect(screen.queryByText(/Finger force sensor lead/i)).not.toBeInTheDocument();
     expect(screen.getByText(/service loop review required/i)).toBeInTheDocument();
+  });
+
+  it('rotates and collapses the interactive exploded view controls', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole('img', { name: /Interactive exploded view/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Rotate right/i }));
+    expect(screen.getByLabelText(/Assembly rotation/i)).toHaveValue('33');
+    expect(screen.getByText(/Rotation:/i)).toHaveTextContent('33 degrees');
+
+    await user.click(screen.getByRole('button', { name: /Collapse assembly/i }));
+    expect(screen.getByRole('button', { name: /Explode assembly/i })).toBeInTheDocument();
   });
 
   it('requires compatibility review when a part has no explicit substitution', async () => {
@@ -93,6 +113,8 @@ describe('MechaFlow cockpit', () => {
     await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Controller PCB placeholder/i }));
 
     expect(screen.getByRole('heading', { name: /Controller PCB placeholder/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Review required/i);
+    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not a load-bearing part/i);
     expect(screen.getByText(/No compatible substitution options are available/i)).toHaveTextContent(
       /compatibility review is required/i,
     );

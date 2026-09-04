@@ -8,11 +8,13 @@
       "id": "task-lift-50lb",
       "kind": "lift_payload",
       "description": "Pick and place a 50 lb object with advisory safety-factor tracking.",
-      "target_value": 50,
+      "target_value": 50.0,
       "unit": "lb",
-      "safety_factor_min": 2,
+      "safety_factor_min": 2.0,
       "validation_method": "heuristic",
-      "assumptions": ["Static payload approximation until FEA and actuator models are wired."]
+      "assumptions": [
+        "Static payload approximation until FEA and actuator models are wired."
+      ]
     },
     "assemblies": [
       {
@@ -23,21 +25,45 @@
           {
             "id": "node-root",
             "name": "Gripper root",
-            "part_ids": ["part-palm-plate", "part-actuator-bracket", "part-controller-pcb"],
-            "child_assembly_ids": ["node-finger"],
+            "part_ids": [
+              "part-palm-plate",
+              "part-actuator-bracket",
+              "part-controller-pcb"
+            ],
+            "child_assembly_ids": [
+              "node-finger"
+            ],
             "exploded_transform": {
-              "translation_mm": { "x": 0, "y": 0, "z": 0 },
-              "rotation_deg": { "x": 0, "y": 0, "z": 0 }
+              "translation_mm": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "rotation_deg": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              }
             }
           },
           {
             "id": "node-finger",
             "name": "Finger subassembly",
-            "part_ids": ["part-finger-link"],
+            "part_ids": [
+              "part-finger-link"
+            ],
             "child_assembly_ids": [],
             "exploded_transform": {
-              "translation_mm": { "x": 80, "y": 0, "z": 0 },
-              "rotation_deg": { "x": 0, "y": 0, "z": 0 }
+              "translation_mm": {
+                "x": 80.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "rotation_deg": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              }
             }
           }
         ],
@@ -49,11 +75,13 @@
             "purpose": "Transfers gripping load from actuator linkage to contact pad.",
             "material_id": "mat-aluminum-6061-t6",
             "dimensions": {
-              "length_mm": 140,
-              "width_mm": 22,
+              "length_mm": 140.0,
+              "width_mm": 22.0,
               "height_mm": null,
-              "thickness_mm": 6,
-              "metadata": { "pin_hole_diameter_mm": 4 }
+              "thickness_mm": 6.0,
+              "metadata": {
+                "pin_hole_diameter_mm": 4
+              }
             },
             "mass_kg": 0.11,
             "manufacturing_options": [
@@ -61,29 +89,55 @@
                 "id": "mfg-finger-cnc",
                 "process": "cnc_machining",
                 "description": "2.5D CNC machined plate with deburred edges.",
-                "cost": { "currency": "USD", "min": 25, "max": 80, "confidence": "estimated_from_heuristic" },
-                "lead_time_days_min": 3,
-                "lead_time_days_max": 10,
+                "cost": {
+                  "currency": "USD",
+                  "min": 25.0,
+                  "max": 80.0,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3.0,
+                "lead_time_days_max": 10.0,
                 "supplier_url": null,
-                "risk_notes": ["Best current fit for the preserved 50 lb payload task."],
+                "risk_notes": [
+                  "Best current fit for the preserved 50 lb payload task."
+                ],
                 "confidence": "estimated_from_heuristic"
               },
               {
                 "id": "mfg-finger-print",
                 "process": "additive_fdm",
                 "description": "Prototype print for fit checks only unless re-rated.",
-                "cost": { "currency": "USD", "min": 3, "max": 12, "confidence": "estimated_from_heuristic" },
-                "lead_time_days_min": 1,
-                "lead_time_days_max": 3,
+                "cost": {
+                  "currency": "USD",
+                  "min": 3.0,
+                  "max": 12.0,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 1.0,
+                "lead_time_days_max": 3.0,
                 "supplier_url": null,
-                "risk_notes": ["Layer direction can make payload rating much lower."],
+                "risk_notes": [
+                  "Layer direction can make payload rating much lower."
+                ],
                 "confidence": "estimated_from_heuristic"
               }
             ],
-            "related_fasteners": ["M4 shoulder screw", "M4 locknut"],
-            "wiring_route_ids": ["route-finger-sensor"],
+            "related_fasteners": [
+              "M4 shoulder screw",
+              "M4 locknut"
+            ],
+            "wiring_route_ids": [
+              "route-finger-sensor"
+            ],
             "source_file": "gripper.step#finger-link",
-            "metadata": { "service_minutes": 10 }
+            "metadata": {
+              "service_minutes": 10,
+              "demo_design_criteria": {
+                "load_capacity_lb": 58,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Seeded quick-check limit for the demo finger link. This is not FEA and needs review before the 50 lb task is trusted."
+              }
+            }
           },
           {
             "id": "part-palm-plate",
@@ -92,10 +146,10 @@
             "purpose": "Supports finger pivots and mounts to the robot wrist adapter.",
             "material_id": "mat-aluminum-6061-t6",
             "dimensions": {
-              "length_mm": 120,
-              "width_mm": 90,
+              "length_mm": 120.0,
+              "width_mm": 90.0,
               "height_mm": null,
-              "thickness_mm": 8,
+              "thickness_mm": 8.0,
               "metadata": {}
             },
             "mass_kg": 0.24,
@@ -104,18 +158,37 @@
                 "id": "mfg-palm-cnc",
                 "process": "cnc_machining",
                 "description": "CNC plate with wrist adapter holes and dowel locations.",
-                "cost": { "currency": "USD", "min": 45, "max": 120, "confidence": "estimated_from_heuristic" },
-                "lead_time_days_min": 4,
-                "lead_time_days_max": 10,
+                "cost": {
+                  "currency": "USD",
+                  "min": 45.0,
+                  "max": 120.0,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 4.0,
+                "lead_time_days_max": 10.0,
                 "supplier_url": null,
-                "risk_notes": ["Cable pass-through requires a clearance review."],
+                "risk_notes": [
+                  "Cable pass-through requires a clearance review."
+                ],
                 "confidence": "estimated_from_heuristic"
               }
             ],
-            "related_fasteners": ["M6 ISO 9409 screw", "dowel pin"],
-            "wiring_route_ids": ["route-main-harness"],
+            "related_fasteners": [
+              "M6 ISO 9409 screw",
+              "dowel pin"
+            ],
+            "wiring_route_ids": [
+              "route-main-harness"
+            ],
             "source_file": "gripper.step#palm-plate",
-            "metadata": { "preferred_manufacturing_process": "cnc_machining" }
+            "metadata": {
+              "preferred_manufacturing_process": "cnc_machining",
+              "demo_design_criteria": {
+                "load_capacity_lb": 75,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Seeded support capacity for visual triage. Fastener pull-out and wrist adapter loads still need engineering review."
+              }
+            }
           },
           {
             "id": "part-actuator-bracket",
@@ -124,10 +197,10 @@
             "purpose": "Locates the linear actuator and resists reaction loads from the gripper stroke.",
             "material_id": "mat-low-carbon-steel",
             "dimensions": {
-              "length_mm": 70,
-              "width_mm": 45,
+              "length_mm": 70.0,
+              "width_mm": 45.0,
               "height_mm": null,
-              "thickness_mm": 4,
+              "thickness_mm": 4.0,
               "metadata": {}
             },
             "mass_kg": 0.18,
@@ -136,18 +209,34 @@
                 "id": "mfg-bracket-sheet",
                 "process": "sheet_metal",
                 "description": "Laser cut and bent low-carbon steel bracket.",
-                "cost": { "currency": "USD", "min": 18, "max": 48, "confidence": "estimated_from_heuristic" },
-                "lead_time_days_min": 3,
-                "lead_time_days_max": 8,
+                "cost": {
+                  "currency": "USD",
+                  "min": 18.0,
+                  "max": 48.0,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3.0,
+                "lead_time_days_max": 8.0,
                 "supplier_url": null,
-                "risk_notes": ["Bend tolerance can shift actuator alignment."],
+                "risk_notes": [
+                  "Bend tolerance can shift actuator alignment."
+                ],
                 "confidence": "estimated_from_heuristic"
               }
             ],
-            "related_fasteners": ["M5 rail screw", "M3 motor mount screw"],
+            "related_fasteners": [
+              "M5 rail screw",
+              "M3 motor mount screw"
+            ],
             "wiring_route_ids": [],
             "source_file": "gripper.step#actuator-bracket",
-            "metadata": {}
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": 62,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Seeded bracket reaction-load capacity for the local demo only. Bend radius, fatigue, and actuator mounting loads are not solved."
+              }
+            }
           },
           {
             "id": "part-controller-pcb",
@@ -156,8 +245,8 @@
             "purpose": "Provides connector metadata for PCB clearance and harness routing handoff.",
             "material_id": "mat-fr4-generic",
             "dimensions": {
-              "length_mm": 65,
-              "width_mm": 45,
+              "length_mm": 65.0,
+              "width_mm": 45.0,
               "height_mm": null,
               "thickness_mm": 1.6,
               "metadata": {}
@@ -168,43 +257,113 @@
                 "id": "mfg-controller-pcb",
                 "process": "pcb_fabrication",
                 "description": "Prototype PCB fabrication for fit and connector placement review.",
-                "cost": { "currency": "USD", "min": 10, "max": 40, "confidence": "estimated_from_heuristic" },
-                "lead_time_days_min": 5,
-                "lead_time_days_max": 12,
+                "cost": {
+                  "currency": "USD",
+                  "min": 10.0,
+                  "max": 40.0,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 5.0,
+                "lead_time_days_max": 12.0,
                 "supplier_url": null,
                 "risk_notes": [],
                 "confidence": "estimated_from_heuristic"
               }
             ],
             "related_fasteners": [],
-            "wiring_route_ids": ["route-finger-sensor", "route-main-harness"],
+            "wiring_route_ids": [
+              "route-finger-sensor",
+              "route-main-harness"
+            ],
             "source_file": null,
-            "metadata": {}
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": null,
+                "load_capacity_status": "review-required",
+                "load_capacity_note": "The PCB is not a load-bearing part in this seed assembly. Board support and connector loads need review."
+              }
+            }
           }
         ],
         "wiring_routes": [
           {
             "id": "route-finger-sensor",
             "name": "Finger force sensor lead",
-            "from_connector": { "id": "conn-controller-finger", "name": "Controller finger-sensor connector", "pin_count": 4, "part_id": "part-controller-pcb" },
-            "to_connector": { "id": "conn-finger", "name": "Finger sensor connector", "pin_count": 4, "part_id": "part-finger-link" },
-            "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 40, "y": 8, "z": 5 }, { "x": 95, "y": 10, "z": 4 }],
-            "bend_radius_min_mm": 12,
-            "clearance_min_mm": 2,
+            "from_connector": {
+              "id": "conn-controller-finger",
+              "name": "Controller finger-sensor connector",
+              "pin_count": 4,
+              "part_id": "part-controller-pcb"
+            },
+            "to_connector": {
+              "id": "conn-finger",
+              "name": "Finger sensor connector",
+              "pin_count": 4,
+              "part_id": "part-finger-link"
+            },
+            "path_points_mm": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              {
+                "x": 40.0,
+                "y": 8.0,
+                "z": 5.0
+              },
+              {
+                "x": 95.0,
+                "y": 10.0,
+                "z": 4.0
+              }
+            ],
+            "bend_radius_min_mm": 12.0,
+            "clearance_min_mm": 2.0,
             "harness_bom": [],
-            "risk_notes": ["Clearance needs a geometry check after exploded-view extraction is real."],
+            "risk_notes": [
+              "Clearance needs a geometry check after exploded-view extraction is real."
+            ],
             "confidence": "estimated_from_heuristic"
           },
           {
             "id": "route-main-harness",
             "name": "Main palm harness",
-            "from_connector": { "id": "conn-controller", "name": "Controller PCB harness connector", "pin_count": 8, "part_id": "part-controller-pcb" },
-            "to_connector": { "id": "conn-palm-main", "name": "Palm pass-through", "pin_count": 8, "part_id": "part-palm-plate" },
-            "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 25, "y": 20, "z": 4 }, { "x": 60, "y": 25, "z": 6 }],
-            "bend_radius_min_mm": 20,
-            "clearance_min_mm": 3,
+            "from_connector": {
+              "id": "conn-controller",
+              "name": "Controller PCB harness connector",
+              "pin_count": 8,
+              "part_id": "part-controller-pcb"
+            },
+            "to_connector": {
+              "id": "conn-palm-main",
+              "name": "Palm pass-through",
+              "pin_count": 8,
+              "part_id": "part-palm-plate"
+            },
+            "path_points_mm": [
+              {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              {
+                "x": 25.0,
+                "y": 20.0,
+                "z": 4.0
+              },
+              {
+                "x": 60.0,
+                "y": 25.0,
+                "z": 6.0
+              }
+            ],
+            "bend_radius_min_mm": 20.0,
+            "clearance_min_mm": 3.0,
             "harness_bom": [],
-            "risk_notes": ["Board keep-outs and service-loop clearance need a geometry worker check."],
+            "risk_notes": [
+              "Board keep-outs and service-loop clearance need a geometry worker check."
+            ],
             "confidence": "estimated_from_heuristic"
           }
         ],
@@ -217,108 +376,177 @@
         "name": "Aluminum 6061-T6",
         "family": "aluminum",
         "properties": {
-          "density_kg_m3": 2700,
+          "density_kg_m3": 2700.0,
           "elastic_modulus_gpa": 68.9,
-          "yield_strength_mpa": 276,
-          "ultimate_strength_mpa": 310,
+          "yield_strength_mpa": 276.0,
+          "ultimate_strength_mpa": 310.0,
           "poisson_ratio": 0.33,
-          "thermal_conductivity_w_mk": null
+          "thermal_conductivity_w_mk": null,
+          "heat_deflection_temp_c": null,
+          "max_service_temp_c": 150.0
         },
-        "compatible_processes": ["cnc_machining", "sheet_metal"],
-        "cost": { "currency": "USD", "min": 3, "max": 8, "confidence": "estimated_from_heuristic" },
+        "compatible_processes": [
+          "cnc_machining",
+          "sheet_metal"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 3.0,
+          "max": 8.0,
+          "confidence": "estimated_from_heuristic"
+        },
         "source": null,
         "confidence": "estimated_from_heuristic",
-        "notes": ["Representative starter value. Replace with sourced material database before engineering use."]
+        "notes": [
+          "Representative starter value. Replace with sourced material database before engineering use."
+        ]
       },
       {
         "id": "mat-carbon-fiber-nylon",
         "name": "Carbon-fiber reinforced nylon",
         "family": "polymer_composite",
         "properties": {
-          "density_kg_m3": 1150,
+          "density_kg_m3": 1150.0,
           "elastic_modulus_gpa": 7.5,
-          "yield_strength_mpa": 70,
+          "yield_strength_mpa": 70.0,
           "ultimate_strength_mpa": null,
           "poisson_ratio": null,
-          "thermal_conductivity_w_mk": null
+          "thermal_conductivity_w_mk": null,
+          "heat_deflection_temp_c": 120.0,
+          "max_service_temp_c": null
         },
-        "compatible_processes": ["additive_fdm", "additive_sls"],
-        "cost": { "currency": "USD", "min": 8, "max": 20, "confidence": "estimated_from_heuristic" },
+        "compatible_processes": [
+          "additive_fdm",
+          "additive_sls"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 8.0,
+          "max": 20.0,
+          "confidence": "estimated_from_heuristic"
+        },
         "source": null,
         "confidence": "estimated_from_heuristic",
-        "notes": ["Print orientation and moisture conditioning strongly affect strength."]
+        "notes": [
+          "Print orientation and moisture conditioning strongly affect strength."
+        ]
       },
       {
         "id": "mat-low-carbon-steel",
         "name": "Low-carbon steel",
         "family": "steel",
         "properties": {
-          "density_kg_m3": 7850,
-          "elastic_modulus_gpa": 200,
-          "yield_strength_mpa": 250,
+          "density_kg_m3": 7850.0,
+          "elastic_modulus_gpa": 200.0,
+          "yield_strength_mpa": 250.0,
           "ultimate_strength_mpa": null,
           "poisson_ratio": null,
-          "thermal_conductivity_w_mk": null
+          "thermal_conductivity_w_mk": null,
+          "heat_deflection_temp_c": null,
+          "max_service_temp_c": 250.0
         },
-        "compatible_processes": ["cnc_machining", "sheet_metal"],
-        "cost": { "currency": "USD", "min": 1, "max": 4, "confidence": "estimated_from_heuristic" },
+        "compatible_processes": [
+          "cnc_machining",
+          "sheet_metal"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 1.0,
+          "max": 4.0,
+          "confidence": "estimated_from_heuristic"
+        },
         "source": null,
         "confidence": "estimated_from_heuristic",
-        "notes": ["Adds weight but can improve stiffness and wear resistance."]
+        "notes": [
+          "Adds weight but can improve stiffness and wear resistance."
+        ]
       },
       {
         "id": "mat-pla-generic",
         "name": "Generic PLA printed polymer",
         "family": "polymer",
         "properties": {
-          "density_kg_m3": 1240,
-          "elastic_modulus_gpa": 2,
-          "yield_strength_mpa": 45,
-          "ultimate_strength_mpa": 60,
+          "density_kg_m3": 1240.0,
+          "elastic_modulus_gpa": 2.0,
+          "yield_strength_mpa": 45.0,
+          "ultimate_strength_mpa": 60.0,
           "poisson_ratio": 0.36,
-          "thermal_conductivity_w_mk": null
+          "thermal_conductivity_w_mk": null,
+          "heat_deflection_temp_c": 55.0,
+          "max_service_temp_c": null
         },
-        "compatible_processes": ["additive_fdm"],
-        "cost": { "currency": "USD", "min": 1, "max": 3, "confidence": "estimated_from_heuristic" },
+        "compatible_processes": [
+          "additive_fdm"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 1.0,
+          "max": 3.0,
+          "confidence": "estimated_from_heuristic"
+        },
         "source": null,
         "confidence": "estimated_from_heuristic",
-        "notes": ["Print settings, orientation, moisture, and temperature control real properties."]
+        "notes": [
+          "Print settings, orientation, moisture, and temperature control real properties."
+        ]
       },
       {
         "id": "mat-petg-generic",
         "name": "Generic PETG printed polymer",
         "family": "polymer",
         "properties": {
-          "density_kg_m3": 1270,
+          "density_kg_m3": 1270.0,
           "elastic_modulus_gpa": 2.1,
-          "yield_strength_mpa": 40,
-          "ultimate_strength_mpa": 50,
+          "yield_strength_mpa": 40.0,
+          "ultimate_strength_mpa": 50.0,
           "poisson_ratio": 0.38,
-          "thermal_conductivity_w_mk": null
+          "thermal_conductivity_w_mk": null,
+          "heat_deflection_temp_c": 70.0,
+          "max_service_temp_c": null
         },
-        "compatible_processes": ["additive_fdm"],
-        "cost": { "currency": "USD", "min": 2, "max": 5, "confidence": "estimated_from_heuristic" },
+        "compatible_processes": [
+          "additive_fdm"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 2.0,
+          "max": 5.0,
+          "confidence": "estimated_from_heuristic"
+        },
         "source": null,
         "confidence": "estimated_from_heuristic",
-        "notes": ["Use supplier data or coupon tests before load-bearing analysis."]
+        "notes": [
+          "Use supplier data or coupon tests before load-bearing analysis."
+        ]
       },
       {
         "id": "mat-fr4-generic",
         "name": "Generic FR-4 PCB laminate",
         "family": "electronics_substrate",
         "properties": {
-          "density_kg_m3": 1850,
-          "elastic_modulus_gpa": 22,
+          "density_kg_m3": 1850.0,
+          "elastic_modulus_gpa": 22.0,
           "yield_strength_mpa": null,
           "ultimate_strength_mpa": null,
           "poisson_ratio": 0.13,
-          "thermal_conductivity_w_mk": null
+          "thermal_conductivity_w_mk": null,
+          "heat_deflection_temp_c": null,
+          "max_service_temp_c": 130.0
         },
-        "compatible_processes": ["pcb_fabrication"],
-        "cost": { "currency": "USD", "min": 2, "max": 8, "confidence": "estimated_from_heuristic" },
+        "compatible_processes": [
+          "pcb_fabrication"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 2.0,
+          "max": 8.0,
+          "confidence": "estimated_from_heuristic"
+        },
         "source": null,
         "confidence": "estimated_from_heuristic",
-        "notes": ["Board stack-up and laminate vendor data are required for structural or thermal analysis."]
+        "notes": [
+          "Board stack-up and laminate vendor data are required for structural or thermal analysis."
+        ]
       }
     ],
     "modifications": [],
@@ -331,8 +559,16 @@
         "project_id": "project-open-gripper-demo",
         "adapter_name": "freecad-worker",
         "local_compute_preferred": true,
-        "input_summary": { "files": ["gripper.step", "gripper.FCStd"] },
-        "result_summary": { "message": "STEP assembly imported and metadata normalized for selectable parts.", "progress": 100 },
+        "input_summary": {
+          "files": [
+            "gripper.step",
+            "gripper.FCStd"
+          ]
+        },
+        "result_summary": {
+          "message": "STEP assembly imported and metadata normalized for selectable parts.",
+          "progress": 100
+        },
         "artifacts": [
           {
             "id": "artifact-cad-metadata",
@@ -357,8 +593,13 @@
         "project_id": "project-open-gripper-demo",
         "adapter_name": "freecad-worker",
         "local_compute_preferred": true,
-        "input_summary": { "assembly": "asm-open-gripper-demo" },
-        "result_summary": { "message": "Exploded transforms are available for concept animation.", "progress": 100 },
+        "input_summary": {
+          "assembly": "asm-open-gripper-demo"
+        },
+        "result_summary": {
+          "message": "Exploded transforms are available for concept animation.",
+          "progress": 100
+        },
         "artifacts": [
           {
             "id": "artifact-exploded-view",
@@ -383,8 +624,13 @@
         "project_id": "project-open-gripper-demo",
         "adapter_name": "calculix-fea-worker",
         "local_compute_preferred": true,
-        "input_summary": { "task": "task-lift-50lb" },
-        "result_summary": { "message": "Quick load heuristic is estimating payload after the active material choice.", "progress": 66 },
+        "input_summary": {
+          "task": "task-lift-50lb"
+        },
+        "result_summary": {
+          "message": "Quick load heuristic is estimating payload after the active material choice.",
+          "progress": 66
+        },
         "artifacts": [],
         "created_at": "2026-09-03T00:00:00Z",
         "updated_at": "2026-09-03T00:00:00Z"
@@ -397,8 +643,13 @@
         "project_id": "project-open-gripper-demo",
         "adapter_name": "wireviz-harness-worker",
         "local_compute_preferred": true,
-        "input_summary": { "route": "route-finger-sensor" },
-        "result_summary": { "message": "Wiring route check is queued behind CAD geometry extraction.", "progress": 18 },
+        "input_summary": {
+          "route": "route-finger-sensor"
+        },
+        "result_summary": {
+          "message": "Wiring route check is queued behind CAD geometry extraction.",
+          "progress": 18
+        },
         "artifacts": [],
         "created_at": "2026-09-03T00:00:00Z",
         "updated_at": "2026-09-03T00:00:00Z"
@@ -411,8 +662,15 @@
         "project_id": "project-open-gripper-demo",
         "adapter_name": "supplier-options-worker",
         "local_compute_preferred": true,
-        "input_summary": { "selected_part_ids": ["part-finger-link"] },
-        "result_summary": { "message": "Supplier and fabrication estimates are ready for a low-cost worker handoff.", "progress": 28 },
+        "input_summary": {
+          "selected_part_ids": [
+            "part-finger-link"
+          ]
+        },
+        "result_summary": {
+          "message": "Supplier and fabrication estimates are ready for a low-cost worker handoff.",
+          "progress": 28
+        },
         "artifacts": [],
         "created_at": "2026-09-03T00:00:00Z",
         "updated_at": "2026-09-03T00:00:00Z"
@@ -425,15 +683,34 @@
         "title": "Advisory material preview report",
         "status": "requires_review",
         "summary": "Local project data can preview material substitutions, but payload, fatigue, wiring, and manufacturability stay advisory until worker adapters run.",
-        "task_results": [{ "task_kind": "lift_payload", "status": "requires_review", "method": "local_schema_update_only" }],
+        "task_results": [
+          {
+            "task_kind": "lift_payload",
+            "status": "requires_review",
+            "method": "local_schema_update_only"
+          }
+        ],
         "weight_delta_kg": null,
         "cost_delta": null,
-        "manufacturing_impacts": ["Preferred manufacturing process can be attached to the part metadata."],
-        "wiring_impacts": ["Target part has wiring routes; clearance and bend radius need a worker check."],
-        "risks": ["Local edit preview does not modify CAD geometry yet.", "Strength and fatigue changes are not authoritative."],
-        "unknowns": ["Updated mass properties are unknown until a CAD worker recalculates them."],
-        "recommendations": ["Queue mass properties and payload re-rating before manufacturing."],
-        "assumptions": ["Part-level schema update is enough for frontend edit flow prototyping."],
+        "manufacturing_impacts": [
+          "Preferred manufacturing process can be attached to the part metadata."
+        ],
+        "wiring_impacts": [
+          "Target part has wiring routes; clearance and bend radius need a worker check."
+        ],
+        "risks": [
+          "Local edit preview does not modify CAD geometry yet.",
+          "Strength and fatigue changes are not authoritative."
+        ],
+        "unknowns": [
+          "Updated mass properties are unknown until a CAD worker recalculates them."
+        ],
+        "recommendations": [
+          "Queue mass properties and payload re-rating before manufacturing."
+        ],
+        "assumptions": [
+          "Part-level schema update is enough for frontend edit flow prototyping."
+        ],
         "generated_at": "2026-09-03T00:00:00Z"
       }
     ],
@@ -445,11 +722,13 @@
       "id": "task-lift-50lb",
       "kind": "lift_payload",
       "description": "Pick and place a 50 lb object with advisory safety-factor tracking.",
-      "target_value": 50,
+      "target_value": 50.0,
       "unit": "lb",
-      "safety_factor_min": 2,
+      "safety_factor_min": 2.0,
       "validation_method": "heuristic",
-      "assumptions": ["Static payload approximation until FEA and actuator models are wired."]
+      "assumptions": [
+        "Static payload approximation until FEA and actuator models are wired."
+      ]
     }
   ],
   "bom_items": [
@@ -457,7 +736,7 @@
       "id": "bom-part-finger-link",
       "part_id": "part-finger-link",
       "name": "Finger link",
-      "quantity": 1,
+      "quantity": 1.0,
       "unit": "part",
       "supplier": null,
       "supplier_part_number": null,
@@ -469,7 +748,7 @@
       "id": "bom-part-palm-plate",
       "part_id": "part-palm-plate",
       "name": "Palm plate",
-      "quantity": 1,
+      "quantity": 1.0,
       "unit": "part",
       "supplier": null,
       "supplier_part_number": null,
@@ -481,7 +760,7 @@
       "id": "bom-part-actuator-bracket",
       "part_id": "part-actuator-bracket",
       "name": "Actuator bracket",
-      "quantity": 1,
+      "quantity": 1.0,
       "unit": "part",
       "supplier": null,
       "supplier_part_number": null,
@@ -493,7 +772,7 @@
       "id": "bom-part-controller-pcb",
       "part_id": "part-controller-pcb",
       "name": "Controller PCB placeholder",
-      "quantity": 1,
+      "quantity": 1.0,
       "unit": "part",
       "supplier": null,
       "supplier_part_number": null,
@@ -512,22 +791,36 @@
           "id": "mfg-finger-cnc",
           "process": "cnc_machining",
           "description": "2.5D CNC machined plate with deburred edges.",
-          "cost": { "currency": "USD", "min": 25, "max": 80, "confidence": "estimated_from_heuristic" },
-          "lead_time_days_min": 3,
-          "lead_time_days_max": 10,
+          "cost": {
+            "currency": "USD",
+            "min": 25.0,
+            "max": 80.0,
+            "confidence": "estimated_from_heuristic"
+          },
+          "lead_time_days_min": 3.0,
+          "lead_time_days_max": 10.0,
           "supplier_url": null,
-          "risk_notes": ["Best current fit for the preserved 50 lb payload task."],
+          "risk_notes": [
+            "Best current fit for the preserved 50 lb payload task."
+          ],
           "confidence": "estimated_from_heuristic"
         },
         {
           "id": "mfg-finger-print",
           "process": "additive_fdm",
           "description": "Prototype print for fit checks only unless re-rated.",
-          "cost": { "currency": "USD", "min": 3, "max": 12, "confidence": "estimated_from_heuristic" },
-          "lead_time_days_min": 1,
-          "lead_time_days_max": 3,
+          "cost": {
+            "currency": "USD",
+            "min": 3.0,
+            "max": 12.0,
+            "confidence": "estimated_from_heuristic"
+          },
+          "lead_time_days_min": 1.0,
+          "lead_time_days_max": 3.0,
           "supplier_url": null,
-          "risk_notes": ["Layer direction can make payload rating much lower."],
+          "risk_notes": [
+            "Layer direction can make payload rating much lower."
+          ],
           "confidence": "estimated_from_heuristic"
         }
       ]
@@ -541,11 +834,18 @@
           "id": "mfg-palm-cnc",
           "process": "cnc_machining",
           "description": "CNC plate with wrist adapter holes and dowel locations.",
-          "cost": { "currency": "USD", "min": 45, "max": 120, "confidence": "estimated_from_heuristic" },
-          "lead_time_days_min": 4,
-          "lead_time_days_max": 10,
+          "cost": {
+            "currency": "USD",
+            "min": 45.0,
+            "max": 120.0,
+            "confidence": "estimated_from_heuristic"
+          },
+          "lead_time_days_min": 4.0,
+          "lead_time_days_max": 10.0,
           "supplier_url": null,
-          "risk_notes": ["Cable pass-through requires a clearance review."],
+          "risk_notes": [
+            "Cable pass-through requires a clearance review."
+          ],
           "confidence": "estimated_from_heuristic"
         }
       ]
@@ -559,11 +859,18 @@
           "id": "mfg-bracket-sheet",
           "process": "sheet_metal",
           "description": "Laser cut and bent low-carbon steel bracket.",
-          "cost": { "currency": "USD", "min": 18, "max": 48, "confidence": "estimated_from_heuristic" },
-          "lead_time_days_min": 3,
-          "lead_time_days_max": 8,
+          "cost": {
+            "currency": "USD",
+            "min": 18.0,
+            "max": 48.0,
+            "confidence": "estimated_from_heuristic"
+          },
+          "lead_time_days_min": 3.0,
+          "lead_time_days_max": 8.0,
           "supplier_url": null,
-          "risk_notes": ["Bend tolerance can shift actuator alignment."],
+          "risk_notes": [
+            "Bend tolerance can shift actuator alignment."
+          ],
           "confidence": "estimated_from_heuristic"
         }
       ]
@@ -577,9 +884,14 @@
           "id": "mfg-controller-pcb",
           "process": "pcb_fabrication",
           "description": "Prototype PCB fabrication for fit and connector placement review.",
-          "cost": { "currency": "USD", "min": 10, "max": 40, "confidence": "estimated_from_heuristic" },
-          "lead_time_days_min": 5,
-          "lead_time_days_max": 12,
+          "cost": {
+            "currency": "USD",
+            "min": 10.0,
+            "max": 40.0,
+            "confidence": "estimated_from_heuristic"
+          },
+          "lead_time_days_min": 5.0,
+          "lead_time_days_max": 12.0,
           "supplier_url": null,
           "risk_notes": [],
           "confidence": "estimated_from_heuristic"
@@ -591,25 +903,81 @@
     {
       "id": "route-finger-sensor",
       "name": "Finger force sensor lead",
-      "from_connector": { "id": "conn-controller-finger", "name": "Controller finger-sensor connector", "pin_count": 4, "part_id": "part-controller-pcb" },
-      "to_connector": { "id": "conn-finger", "name": "Finger sensor connector", "pin_count": 4, "part_id": "part-finger-link" },
-      "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 40, "y": 8, "z": 5 }, { "x": 95, "y": 10, "z": 4 }],
-      "bend_radius_min_mm": 12,
-      "clearance_min_mm": 2,
+      "from_connector": {
+        "id": "conn-controller-finger",
+        "name": "Controller finger-sensor connector",
+        "pin_count": 4,
+        "part_id": "part-controller-pcb"
+      },
+      "to_connector": {
+        "id": "conn-finger",
+        "name": "Finger sensor connector",
+        "pin_count": 4,
+        "part_id": "part-finger-link"
+      },
+      "path_points_mm": [
+        {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        {
+          "x": 40.0,
+          "y": 8.0,
+          "z": 5.0
+        },
+        {
+          "x": 95.0,
+          "y": 10.0,
+          "z": 4.0
+        }
+      ],
+      "bend_radius_min_mm": 12.0,
+      "clearance_min_mm": 2.0,
       "harness_bom": [],
-      "risk_notes": ["Clearance needs a geometry check after exploded-view extraction is real."],
+      "risk_notes": [
+        "Clearance needs a geometry check after exploded-view extraction is real."
+      ],
       "confidence": "estimated_from_heuristic"
     },
     {
       "id": "route-main-harness",
       "name": "Main palm harness",
-      "from_connector": { "id": "conn-controller", "name": "Controller PCB harness connector", "pin_count": 8, "part_id": "part-controller-pcb" },
-      "to_connector": { "id": "conn-palm-main", "name": "Palm pass-through", "pin_count": 8, "part_id": "part-palm-plate" },
-      "path_points_mm": [{ "x": 0, "y": 0, "z": 0 }, { "x": 25, "y": 20, "z": 4 }, { "x": 60, "y": 25, "z": 6 }],
-      "bend_radius_min_mm": 20,
-      "clearance_min_mm": 3,
+      "from_connector": {
+        "id": "conn-controller",
+        "name": "Controller PCB harness connector",
+        "pin_count": 8,
+        "part_id": "part-controller-pcb"
+      },
+      "to_connector": {
+        "id": "conn-palm-main",
+        "name": "Palm pass-through",
+        "pin_count": 8,
+        "part_id": "part-palm-plate"
+      },
+      "path_points_mm": [
+        {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        {
+          "x": 25.0,
+          "y": 20.0,
+          "z": 4.0
+        },
+        {
+          "x": 60.0,
+          "y": 25.0,
+          "z": 6.0
+        }
+      ],
+      "bend_radius_min_mm": 20.0,
+      "clearance_min_mm": 3.0,
       "harness_bom": [],
-      "risk_notes": ["Board keep-outs and service-loop clearance need a geometry worker check."],
+      "risk_notes": [
+        "Board keep-outs and service-loop clearance need a geometry worker check."
+      ],
       "confidence": "estimated_from_heuristic"
     }
   ],
@@ -620,15 +988,34 @@
       "title": "Advisory material preview report",
       "status": "requires_review",
       "summary": "Local project data can preview material substitutions, but payload, fatigue, wiring, and manufacturability stay advisory until worker adapters run.",
-      "task_results": [{ "task_kind": "lift_payload", "status": "requires_review", "method": "local_schema_update_only" }],
+      "task_results": [
+        {
+          "task_kind": "lift_payload",
+          "status": "requires_review",
+          "method": "local_schema_update_only"
+        }
+      ],
       "weight_delta_kg": null,
       "cost_delta": null,
-      "manufacturing_impacts": ["Preferred manufacturing process can be attached to the part metadata."],
-      "wiring_impacts": ["Target part has wiring routes; clearance and bend radius need a worker check."],
-      "risks": ["Local edit preview does not modify CAD geometry yet.", "Strength and fatigue changes are not authoritative."],
-      "unknowns": ["Updated mass properties are unknown until a CAD worker recalculates them."],
-      "recommendations": ["Queue mass properties and payload re-rating before manufacturing."],
-      "assumptions": ["Part-level schema update is enough for frontend edit flow prototyping."],
+      "manufacturing_impacts": [
+        "Preferred manufacturing process can be attached to the part metadata."
+      ],
+      "wiring_impacts": [
+        "Target part has wiring routes; clearance and bend radius need a worker check."
+      ],
+      "risks": [
+        "Local edit preview does not modify CAD geometry yet.",
+        "Strength and fatigue changes are not authoritative."
+      ],
+      "unknowns": [
+        "Updated mass properties are unknown until a CAD worker recalculates them."
+      ],
+      "recommendations": [
+        "Queue mass properties and payload re-rating before manufacturing."
+      ],
+      "assumptions": [
+        "Part-level schema update is enough for frontend edit flow prototyping."
+      ],
       "generated_at": "2026-09-03T00:00:00Z"
     }
   ]

@@ -15,6 +15,7 @@ import type {
   BackendTaskRequirement,
   BackendWiringRoute,
   BOMItem,
+  DesignCriterion,
   JobStatus,
   ManufacturingOption,
   MaterialOption,
@@ -36,6 +37,10 @@ const toTitle = (value: string): string =>
     .join(' ');
 
 const round = (value: number, decimals = 1): number => Number(value.toFixed(decimals));
+
+const formatMeasurement = (value: number, maximumFractionDigits = 2): string => new Intl.NumberFormat('en-US', {
+  maximumFractionDigits,
+}).format(value);
 
 const formatUsd = (value: number): string => {
   const fractionDigits = Number.isInteger(value) ? 0 : 2;
@@ -166,6 +171,88 @@ const activeManufacturingOption = (part: BackendPart): BackendManufacturingOptio
   return part.manufacturing_options[0];
 };
 
+const criterionStatus = (confidence?: unknown): DesignCriterion['status'] => {
+  if (confidence === 'measured') return 'measured';
+  if (typeof confidence === 'string' && confidence.trim() !== '') return 'estimated';
+  return 'review-required';
+};
+
+const metadataRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+
+const numberMetadata = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+const stringMetadata = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' ? value : undefined;
+
+const materialValue = (
+  value: number | null | undefined,
+  unit: string,
+  decimals = 1,
+): string => (value == null ? 'Review required' : `${formatMeasurement(value, decimals)} ${unit}`);
+
+const buildDesignCriteria = (
+  part: BackendPart,
+  material: BackendMaterial | undefined,
+  manufacturingOption: BackendManufacturingOption | undefined,
+): DesignCriterion[] => {
+  const demoCriteria = metadataRecord(part.metadata.demo_design_criteria);
+  const demoLoadCapacityLb = numberMetadata(demoCriteria.load_capacity_lb);
+  const loadStatus = criterionStatus(demoCriteria.load_capacity_status);
+  const materialStatus = criterionStatus(material?.confidence);
+  const processStatus = criterionStatus(manufacturingOption?.confidence);
+  const stiffnessGpa = material?.properties.elastic_modulus_gpa ?? null;
+  const yieldMpa = material?.properties.yield_strength_mpa ?? null;
+  const heatLimitC = material?.properties.heat_deflection_temp_c ?? material?.properties.max_service_temp_c ?? null;
+  return [
+    {
+      id: 'load-capacity',
+      label: 'Load capacity seed',
+      value: demoLoadCapacityLb == null ? 'Review required' : `${formatMeasurement(demoLoadCapacityLb)} lb demo limit`,
+      status: demoLoadCapacityLb == null ? 'review-required' : loadStatus,
+      plainEnglish: stringMetadata(demoCriteria.load_capacity_note)
+        ?? 'This is a seed or heuristic capacity for demo triage only. It is not an FEA result.',
+    },
+    {
+      id: 'elasticity-stiffness',
+      label: 'Elasticity and stiffness',
+      value: materialValue(stiffnessGpa, 'GPa elastic modulus'),
+      status: stiffnessGpa == null ? 'review-required' : materialStatus,
+      plainEnglish: stiffnessGpa == null
+        ? 'No stiffness value is available for this material yet.'
+        : 'Higher modulus usually means the part bends less under the same load. This seed is material-level only, not a part deflection calculation.',
+    },
+    {
+      id: 'temperature-limit',
+      label: 'Heat deflection or service temperature',
+      value: materialValue(heatLimitC, 'C'),
+      status: heatLimitC == null ? 'review-required' : materialStatus,
+      plainEnglish: heatLimitC == null
+        ? 'Temperature limits are missing and need material datasheet review.'
+        : 'Keep the part below this seeded material temperature limit until a sourced datasheet and thermal check confirm it.',
+    },
+    {
+      id: 'material-strength',
+      label: 'Material strength seed',
+      value: materialValue(yieldMpa, 'MPa yield strength'),
+      status: yieldMpa == null ? 'review-required' : materialStatus,
+      plainEnglish: yieldMpa == null
+        ? 'Yield strength is not available for this material seed.'
+        : 'Yield strength is a material property. Real part strength still depends on geometry, fasteners, load direction, and validation.',
+    },
+    {
+      id: 'manufacturing-process',
+      label: 'Manufacturing process',
+      value: manufacturingOption == null ? 'Review required' : toTitle(manufacturingOption.process),
+      status: manufacturingOption == null ? 'review-required' : processStatus,
+      plainEnglish: manufacturingOption?.risk_notes[0]
+        ?? manufacturingOption?.description
+        ?? 'Process compatibility needs review before release.',
+    },
+  ];
+};
+
 const mapPart = (
   part: BackendPart,
   index: number,
@@ -195,6 +282,7 @@ const mapPart = (
       summary: `${part.name} has no worker-supplied payload rating; engineering review is required.`,
       warning: part.wiring_route_ids.length > 0 ? 'Linked wiring routes require clearance checks after geometry edits.' : undefined,
     },
+    designCriteria: buildDesignCriteria(part, material, manufacturingOption),
     visual: visualFor(part, index, node?.exploded_transform.translation_mm),
   };
 };

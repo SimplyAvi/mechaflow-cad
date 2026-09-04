@@ -78,6 +78,7 @@ function App() {
   const [selectedPartId, setSelectedPartId] = useState('finger-link-left');
   const [selectedOptionId, setSelectedOptionId] = useState('ribbed-aluminum-left');
   const [isExploded, setIsExploded] = useState(true);
+  const [rotationDeg, setRotationDeg] = useState(18);
 
   useEffect(() => {
     let cancelled = false;
@@ -224,39 +225,59 @@ function App() {
               <p className="eyebrow">Animated exploded view concept</p>
               <h2>{activeAssembly.name}</h2>
             </div>
-            <button type="button" onClick={() => setIsExploded((value) => !value)}>
-              {isExploded ? 'Collapse assembly' : 'Explode assembly'}
-            </button>
-          </div>
-          <div className="viewer-stage" role="img" aria-label="Mock exploded view of a robot gripper assembly">
-            <div className="wire wire-main" />
-            <div className="wire wire-left" />
-            {activeAssembly.parts.map((part) => (
-              <button
-                className={`part-shape risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
-                key={part.id}
-                onClick={() => setSelectedPartId(part.id)}
-                style={{
-                  '--x': `${part.visual.x}%`,
-                  '--y': `${part.visual.y}%`,
-                  '--w': `${part.visual.width}%`,
-                  '--h': `${part.visual.height}%`,
-                  '--tx': isExploded ? `${part.visual.explodeX}%` : '0%',
-                  '--ty': isExploded ? `${part.visual.explodeY}%` : '0%',
-                  '--part-color': part.visual.color,
-                } as CSSProperties}
-                type="button"
-              >
-                <span>{part.name}</span>
+            <div className="viewer-controls" aria-label="Exploded view controls">
+              <button type="button" onClick={() => setIsExploded((value) => !value)}>
+                {isExploded ? 'Collapse assembly' : 'Explode assembly'}
               </button>
-            ))}
+              <button type="button" onClick={() => setRotationDeg((value) => value - 15)}>Rotate left</button>
+              <label>
+                <span>Rotation</span>
+                <input
+                  aria-label="Assembly rotation"
+                  max="180"
+                  min="-180"
+                  onChange={(event) => setRotationDeg(Number(event.target.value))}
+                  type="range"
+                  value={rotationDeg}
+                />
+              </label>
+              <button type="button" onClick={() => setRotationDeg((value) => value + 15)}>Rotate right</button>
+            </div>
+          </div>
+          <div className="viewer-stage" role="img" aria-label="Interactive exploded view of a robot gripper assembly">
+            <div
+              className="assembly-rotor"
+              style={{ '--rotation-deg': `${rotationDeg}deg` } as CSSProperties}
+            >
+              <div className="wire wire-main" />
+              <div className="wire wire-left" />
+              {activeAssembly.parts.map((part) => (
+                <button
+                  className={`part-shape risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
+                  key={part.id}
+                  onClick={() => setSelectedPartId(part.id)}
+                  style={{
+                    '--x': `${part.visual.x}%`,
+                    '--y': `${part.visual.y}%`,
+                    '--w': `${part.visual.width}%`,
+                    '--h': `${part.visual.height}%`,
+                    '--tx': isExploded ? `${part.visual.explodeX}%` : '0%',
+                    '--ty': isExploded ? `${part.visual.explodeY}%` : '0%',
+                    '--part-color': part.visual.color,
+                  } as CSSProperties}
+                  type="button"
+                >
+                  <span>{part.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="viewer-footer">
             <span>
               Exploded-view progress:{' '}
               {activeAssembly.explodedProgress == null ? 'review required' : `${activeAssembly.explodedProgress}%`}
             </span>
-            <span>Blue lines show wiring routes and service-loop review state.</span>
+            <span>Rotation: {rotationDeg} degrees. Blue lines show wiring routes and service-loop review state.</span>
           </div>
         </section>
 
@@ -291,6 +312,7 @@ function App() {
             safetyFactorMin={design.task.safetyFactorMin ?? null}
             targetPayloadLb={design.task.targetPayloadLb}
           />
+          <StrengthInfoPanel part={selectedPart} />
           <MaterialSubstitution options={materialOptions} selectedOption={selectedOption} onSelect={setSelectedOptionId} />
           <ModificationPreview selectedOption={selectedOption} />
         </aside>
@@ -402,6 +424,29 @@ function CapabilityCard({
       <p>{rating.summary}</p>
       {rating.warning ? <p className="warning">{rating.warning}</p> : null}
     </div>
+  );
+}
+
+function StrengthInfoPanel({ part }: { part: Part }) {
+  return (
+    <section className="strength-panel" aria-label="Design criteria and strength information">
+      <h3>Design criteria and strength notes</h3>
+      <p className="muted">
+        These values are demo seed data or material properties unless marked measured. They are not real FEA results.
+      </p>
+      <div className="criteria-list">
+        {part.designCriteria.map((criterion) => (
+          <article className={`criterion-card status-${criterion.status}`} key={criterion.id}>
+            <div>
+              <strong>{criterion.label}</strong>
+              <span>{criterion.status.replace('-', ' ')}</span>
+            </div>
+            <p>{criterion.value}</p>
+            <small>{criterion.plainEnglish}</small>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -41,6 +41,7 @@ DEFAULT_MATERIALS = [
             yield_strength_mpa=276,
             ultimate_strength_mpa=310,
             poisson_ratio=0.33,
+            max_service_temp_c=150,
         ),
         compatible_processes=[ManufacturingProcess.cnc_machining, ManufacturingProcess.sheet_metal],
         cost=MoneyRange(min=3, max=8, confidence=RecommendationConfidence.heuristic),
@@ -51,7 +52,12 @@ DEFAULT_MATERIALS = [
         id="mat-carbon-fiber-nylon",
         name="Carbon-fiber reinforced nylon",
         family="polymer_composite",
-        properties=MaterialProperties(density_kg_m3=1150, elastic_modulus_gpa=7.5, yield_strength_mpa=70),
+        properties=MaterialProperties(
+            density_kg_m3=1150,
+            elastic_modulus_gpa=7.5,
+            yield_strength_mpa=70,
+            heat_deflection_temp_c=120,
+        ),
         compatible_processes=[ManufacturingProcess.additive_fdm, ManufacturingProcess.additive_sls],
         cost=MoneyRange(min=8, max=20, confidence=RecommendationConfidence.heuristic),
         confidence=RecommendationConfidence.heuristic,
@@ -61,7 +67,12 @@ DEFAULT_MATERIALS = [
         id="mat-low-carbon-steel",
         name="Low-carbon steel",
         family="steel",
-        properties=MaterialProperties(density_kg_m3=7850, elastic_modulus_gpa=200, yield_strength_mpa=250),
+        properties=MaterialProperties(
+            density_kg_m3=7850,
+            elastic_modulus_gpa=200,
+            yield_strength_mpa=250,
+            max_service_temp_c=250,
+        ),
         compatible_processes=[ManufacturingProcess.cnc_machining, ManufacturingProcess.sheet_metal],
         cost=MoneyRange(min=1, max=4, confidence=RecommendationConfidence.heuristic),
         confidence=RecommendationConfidence.heuristic,
@@ -77,6 +88,7 @@ DEFAULT_MATERIALS = [
             yield_strength_mpa=45,
             ultimate_strength_mpa=60,
             poisson_ratio=0.36,
+            heat_deflection_temp_c=55,
         ),
         compatible_processes=[ManufacturingProcess.additive_fdm],
         cost=MoneyRange(min=1, max=3, confidence=RecommendationConfidence.heuristic),
@@ -93,6 +105,7 @@ DEFAULT_MATERIALS = [
             yield_strength_mpa=40,
             ultimate_strength_mpa=50,
             poisson_ratio=0.38,
+            heat_deflection_temp_c=70,
         ),
         compatible_processes=[ManufacturingProcess.additive_fdm],
         cost=MoneyRange(min=2, max=5, confidence=RecommendationConfidence.heuristic),
@@ -103,7 +116,12 @@ DEFAULT_MATERIALS = [
         id="mat-fr4-generic",
         name="Generic FR-4 PCB laminate",
         family="electronics_substrate",
-        properties=MaterialProperties(density_kg_m3=1850, elastic_modulus_gpa=22, poisson_ratio=0.13),
+        properties=MaterialProperties(
+            density_kg_m3=1850,
+            elastic_modulus_gpa=22,
+            poisson_ratio=0.13,
+            max_service_temp_c=130,
+        ),
         compatible_processes=[ManufacturingProcess.pcb_fabrication],
         cost=MoneyRange(min=2, max=8, confidence=RecommendationConfidence.heuristic),
         confidence=RecommendationConfidence.heuristic,
@@ -202,7 +220,17 @@ DEFAULT_ASSEMBLY = Assembly(
             related_fasteners=["M4 shoulder screw", "M4 locknut"],
             wiring_route_ids=["route-finger-sensor"],
             source_file="gripper.step#finger-link",
-            metadata={"service_minutes": 10},
+            metadata={
+                "service_minutes": 10,
+                "demo_design_criteria": {
+                    "load_capacity_lb": 58,
+                    "load_capacity_status": "estimated_from_heuristic",
+                    "load_capacity_note": (
+                        "Seeded quick-check limit for the demo finger link. This is not FEA and needs review "
+                        "before the 50 lb task is trusted."
+                    ),
+                },
+            },
         ),
         Part(
             id="part-palm-plate",
@@ -226,7 +254,17 @@ DEFAULT_ASSEMBLY = Assembly(
             related_fasteners=["M6 ISO 9409 screw", "dowel pin"],
             wiring_route_ids=["route-main-harness"],
             source_file="gripper.step#palm-plate",
-            metadata={"preferred_manufacturing_process": "cnc_machining"},
+            metadata={
+                "preferred_manufacturing_process": "cnc_machining",
+                "demo_design_criteria": {
+                    "load_capacity_lb": 75,
+                    "load_capacity_status": "estimated_from_heuristic",
+                    "load_capacity_note": (
+                        "Seeded support capacity for visual triage. Fastener pull-out and wrist adapter loads "
+                        "still need engineering review."
+                    ),
+                },
+            },
         ),
         Part(
             id="part-actuator-bracket",
@@ -249,6 +287,16 @@ DEFAULT_ASSEMBLY = Assembly(
             ],
             related_fasteners=["M5 rail screw", "M3 motor mount screw"],
             source_file="gripper.step#actuator-bracket",
+            metadata={
+                "demo_design_criteria": {
+                    "load_capacity_lb": 62,
+                    "load_capacity_status": "estimated_from_heuristic",
+                    "load_capacity_note": (
+                        "Seeded bracket reaction-load capacity for the local demo only. Bend radius, fatigue, "
+                        "and actuator mounting loads are not solved."
+                    ),
+                },
+            },
         ),
         Part(
             id="part-controller-pcb",
@@ -269,6 +317,16 @@ DEFAULT_ASSEMBLY = Assembly(
                 )
             ],
             wiring_route_ids=["route-finger-sensor", "route-main-harness"],
+            metadata={
+                "demo_design_criteria": {
+                    "load_capacity_lb": None,
+                    "load_capacity_status": "review-required",
+                    "load_capacity_note": (
+                        "The PCB is not a load-bearing part in this seed assembly. Board support and connector "
+                        "loads need review."
+                    ),
+                },
+            },
         ),
     ],
     wiring_routes=[

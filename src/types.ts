@@ -61,7 +61,16 @@ export interface Part {
   fasteners: string[];
   relatedWires: string[];
   rating: CapabilityRating;
+  designCriteria: DesignCriterion[];
   visual: PartVisual;
+}
+
+export interface DesignCriterion {
+  id: string;
+  label: string;
+  value: string;
+  status: 'measured' | 'estimated' | 'review-required';
+  plainEnglish: string;
 }
 
 export interface PartVisual {
@@ -269,6 +278,8 @@ export interface BackendMaterial {
     ultimate_strength_mpa?: number | null;
     poisson_ratio?: number | null;
     thermal_conductivity_w_mk?: number | null;
+    heat_deflection_temp_c?: number | null;
+    max_service_temp_c?: number | null;
   };
   compatible_processes: string[];
   cost?: BackendMoneyRange | null;

@@ -151,6 +151,8 @@ class MaterialProperties(StrictModel):
     ultimate_strength_mpa: PositiveFloat | None = None
     poisson_ratio: float | None = Field(default=None, ge=0.0, lt=0.5)
     thermal_conductivity_w_mk: PositiveFloat | None = None
+    heat_deflection_temp_c: PositiveFloat | None = None
+    max_service_temp_c: PositiveFloat | None = None
 
 
 class Material(StrictModel):

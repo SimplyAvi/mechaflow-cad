@@ -19,6 +19,7 @@ This repository contains product and technical documentation plus an integrated 
 - [Integration adapter plan](docs/integrations/README.md)
 - [Dependency license verification](docs/dependency-license-verification.md)
 - [Local development](docs/local-development.md)
+- [Desktop demo](docs/desktop.md)
 - [Business model](docs/business-model.md)
 - [Cheap hosting plan](docs/hosting-plan.md)
 - [MVP roadmap](docs/mvp-roadmap.md)
@@ -125,6 +126,14 @@ Keep hosting cheap by making the platform cloud-assisted rather than cloud-depen
 
 Backend dependencies are managed by Python packaging, while frontend dependencies are managed by npm.
 Use Node.js matching the `engines.node` requirement in `package.json`.
+
+To open the local desktop demo after installing npm dependencies:
+
+```bash
+npm run desktop:dev
+```
+
+This starts the mock API, Vite frontend, and an Electron desktop window for the interactive gripper assembly demo. See [Desktop demo](docs/desktop.md).
 
 ```bash
 python3 -m venv .venv
