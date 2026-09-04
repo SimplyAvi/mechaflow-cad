@@ -213,81 +213,53 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.backend.integrationStubs).toContain('kicad-electronics-worker');
   });
 
-  it('uses the active safety-factor requirement for part and substitution ratings', () => {
+  it('does not derive a physical payload rating from the task target', () => {
     const panelData = structuredClone(mockProjectPanelData);
-    panelData.project.active_task!.safety_factor_min = 1.5;
-    const designWithLowerMinimum = mapProjectPanelDataToReferenceDesign(
+    panelData.project.active_task!.target_value = 50;
+    const designWithLowerTarget = mapProjectPanelDataToReferenceDesign(
       panelData,
       mockBackendMetadata,
       'http://api.test',
     );
-    const finger = designWithLowerMinimum.assembly.parts.find((part) => part.id === 'part-finger-link');
-    expect(finger?.rating.safetyFactor).toBe(1.7);
-    expect(finger?.rating.status).toBe('passes');
+    const lowerTargetRating = designWithLowerTarget.assembly.parts.find(
+      (part) => part.id === 'part-finger-link',
+    )?.rating;
 
-    panelData.project.active_task!.safety_factor_min = 3;
+    panelData.project.active_task!.target_value = 100;
 
-    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+    const designWithHigherTarget = mapProjectPanelDataToReferenceDesign(
+      panelData,
+      mockBackendMetadata,
+      'http://api.test',
+    );
+    const higherTargetRating = designWithHigherTarget.assembly.parts.find(
+      (part) => part.id === 'part-finger-link',
+    )?.rating;
+
+    expect(lowerTargetRating).toEqual(higherTargetRating);
+    expect(higherTargetRating?.payloadLb).toBeNull();
+    expect(higherTargetRating?.safetyFactor).toBeNull();
+    expect(higherTargetRating?.status).toBe('watch');
+    expect(higherTargetRating?.summary).toMatch(/no worker-supplied payload rating/i);
+  });
+
+  it('keeps unrated parts and material previews under review', () => {
+    const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata, 'http://api.test');
+    const finger = design.assembly.parts.find((part) => part.id === 'part-finger-link');
     const steelOption = design.materialOptions.find(
       (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
     );
 
-    expect(steelOption?.safetyFactor).toBeCloseTo(2.516);
+    expect(finger?.rating.payloadLb).toBeNull();
+    expect(finger?.rating.safetyFactor).toBeNull();
+    expect(finger?.rating.status).toBe('watch');
+    expect(steelOption?.payloadLb).toBeNull();
+    expect(steelOption?.safetyFactor).toBeNull();
     expect(steelOption?.status).toBe('watch');
-    expect(steelOption?.taskImpact).toMatch(/below the preserved 3\.0 minimum/i);
-
-    panelData.project.active_task!.safety_factor_min = null;
-    const designWithoutMinimum = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
-    const optionWithoutMinimum = designWithoutMinimum.materialOptions.find(
-      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
-    );
-
-    expect(optionWithoutMinimum?.status).toBe('watch');
-    expect(optionWithoutMinimum?.taskImpact).toMatch(/minimum is unknown.*review is required/i);
+    expect(steelOption?.taskImpact).toMatch(/no worker-supplied payload rating.*review is required/i);
   });
 
-  it('uses unrounded safety factors for pass decisions', () => {
-    const panelData = structuredClone(mockProjectPanelData);
-    panelData.project.active_task!.target_value = 50;
-    panelData.project.active_task!.safety_factor_min = 2;
-    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
-    finger.dimensions.thickness_mm = 16.5;
-    panelData.project.materials.find((material) => material.id === finger.material_id)!.family = 'other';
-    panelData.project.materials.find((material) => material.id === 'mat-low-carbon-steel')!.family = 'other';
-
-    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
-    const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
-    const steelOption = design.materialOptions.find(
-      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
-    );
-
-    expect(mappedFinger?.rating.payloadLb).toBe(99.5);
-    expect(mappedFinger?.rating.safetyFactor).toBe(1.99);
-    expect(mappedFinger?.rating.status).toBe('watch');
-    expect(mappedFinger?.rating.summary).toMatch(/below the preserved 2\.0 minimum/i);
-    expect(mappedFinger?.rating.summary).not.toMatch(/2\.0 safety factor below the preserved 2\.0 minimum/i);
-    expect(steelOption?.payloadLb).toBe(99.5);
-    expect(steelOption?.safetyFactor).toBe(1.99);
-    expect(steelOption?.status).toBe('watch');
-    expect(steelOption?.taskImpact).not.toMatch(/2\.0 safety factor.*below the preserved 2\.0 minimum/i);
-  });
-
-  it('preserves near-threshold payload precision for rendering', () => {
-    const panelData = structuredClone(mockProjectPanelData);
-    panelData.project.active_task!.target_value = 50;
-    panelData.project.active_task!.safety_factor_min = 2;
-    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
-    finger.dimensions.thickness_mm = 9.9893;
-
-    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
-    const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
-
-    expect(mappedFinger?.rating.payloadLb).toBeCloseTo(99.959875);
-    expect(mappedFinger?.rating.safetyFactor).toBeCloseTo(1.9991975);
-    expect(mappedFinger?.rating.status).toBe('watch');
-  });
-
-  it('rates combined material-and-geometry previews from submitted dimensions', () => {
+  it('keeps unrated material previews material-only', () => {
     const design = mapProjectPanelDataToReferenceDesign(
       structuredClone(mockProjectPanelData),
       mockBackendMetadata,
@@ -297,14 +269,12 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
       (option) => option.id === 'part-finger-link-mat-carbon-fiber-nylon',
     );
 
-    expect(compositeOption?.backendModification.payload.dimension_changes).toEqual({ thickness_mm: 8 });
-    expect(compositeOption?.payloadLb).toBe(40.7);
-    expect(compositeOption?.weightDeltaLb).toBe(-0.1);
-    expect(compositeOption?.taskImpact).toMatch(
-      /combined material-and-geometry preview at 8 mm thickness is rated at 40\.7 lb/i,
-    );
+    expect(compositeOption?.backendModification.payload.dimension_changes).toEqual({});
+    expect(compositeOption?.payloadLb).toBeNull();
+    expect(compositeOption?.weightDeltaLb).toBe(-0.14);
+    expect(compositeOption?.taskImpact).toMatch(/no worker-supplied payload rating/i);
     expect(compositeOption?.backendModification.payload.description).toMatch(
-      /combined material-and-geometry preview at 8 mm thickness/i,
+      /material-only preview/i,
     );
   });
 
