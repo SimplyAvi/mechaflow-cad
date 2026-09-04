@@ -286,6 +286,53 @@ class SeedDataValidationTest(unittest.TestCase):
         self.assertIn("handoff adapter freecad does not produce artifact bom", errors)
         self.assertIn("handoff job type run_fea must produce artifact fea_summary, not bom", errors)
 
+    def test_handoff_requires_job_and_artifact_from_one_capability(self) -> None:
+        sys.path.insert(0, str(ROOT))
+        from scripts import validate_catalog
+
+        adapters = copy.deepcopy(self.load_json("data/integration-adapters.seed.json"))
+        freecad = next(adapter for adapter in adapters if adapter["id"] == "freecad")
+        freecad["capabilities"] = [
+            {
+                "id": "split-job",
+                "backend_job_types": ["run_fea"],
+                "expected_artifacts": ["bom"],
+            },
+            {
+                "id": "split-artifact",
+                "backend_job_types": ["generate_bom"],
+                "expected_artifacts": ["fea_summary"],
+            },
+        ]
+        errors: list[str] = []
+        with patch.object(validate_catalog, "load_json", return_value=adapters):
+            adapter_ids, adapter_contracts = validate_catalog.validate_integration_adapters(errors)
+
+        ids_by_name = validate_catalog.validate_datasets(errors)
+        design_ids = validate_catalog.validate_reference_designs(errors, adapter_ids, ids_by_name)
+        handoff = copy.deepcopy(self.load_json("data/backend-frontend-handoff.seed.json"))
+        handoff["mvp_seed_project"]["analysis_job_sequence"] = [
+            {
+                "job_type": "run_fea",
+                "adapter_id": "freecad",
+                "artifact_kind": "fea_summary",
+            }
+        ]
+
+        with patch.object(validate_catalog, "load_json", return_value=handoff):
+            validate_catalog.validate_handoff(
+                errors,
+                ids_by_name,
+                design_ids,
+                adapter_ids,
+                adapter_contracts,
+            )
+
+        self.assertIn(
+            "handoff adapter freecad has no capability for job type run_fea and artifact fea_summary",
+            errors,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

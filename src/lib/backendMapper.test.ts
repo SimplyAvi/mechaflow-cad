@@ -51,7 +51,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
       (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
     );
 
-    expect(steelOption?.safetyFactor).toBe(2.5);
+    expect(steelOption?.safetyFactor).toBeCloseTo(2.516);
     expect(steelOption?.status).toBe('watch');
     expect(steelOption?.taskImpact).toMatch(/below the preserved 3\.0 minimum/i);
 
@@ -81,14 +81,29 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     );
 
     expect(mappedFinger?.rating.payloadLb).toBe(99.5);
-    expect(mappedFinger?.rating.safetyFactor).toBe(2);
+    expect(mappedFinger?.rating.safetyFactor).toBe(1.99);
     expect(mappedFinger?.rating.status).toBe('watch');
     expect(mappedFinger?.rating.summary).toMatch(/below the preserved 2\.0 minimum/i);
     expect(mappedFinger?.rating.summary).not.toMatch(/2\.0 safety factor below the preserved 2\.0 minimum/i);
     expect(steelOption?.payloadLb).toBe(99.5);
-    expect(steelOption?.safetyFactor).toBe(2);
+    expect(steelOption?.safetyFactor).toBe(1.99);
     expect(steelOption?.status).toBe('watch');
     expect(steelOption?.taskImpact).not.toMatch(/2\.0 safety factor.*below the preserved 2\.0 minimum/i);
+  });
+
+  it('preserves near-threshold payload precision for rendering', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.project.active_task!.target_value = 50;
+    panelData.project.active_task!.safety_factor_min = 2;
+    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.dimensions.thickness_mm = 9.9893;
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+    const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
+
+    expect(mappedFinger?.rating.payloadLb).toBeCloseTo(99.959875);
+    expect(mappedFinger?.rating.safetyFactor).toBeCloseTo(1.9991975);
+    expect(mappedFinger?.rating.status).toBe('watch');
   });
 
   it('rates combined material-and-geometry previews from submitted dimensions', () => {
@@ -103,6 +118,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
 
     expect(compositeOption?.backendModification.payload.dimension_changes).toEqual({ thickness_mm: 8 });
     expect(compositeOption?.payloadLb).toBe(40.7);
+    expect(compositeOption?.weightDeltaLb).toBe(-0.1);
     expect(compositeOption?.taskImpact).toMatch(
       /combined material-and-geometry preview at 8 mm thickness is rated at 40\.7 lb/i,
     );

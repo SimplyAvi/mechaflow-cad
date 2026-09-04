@@ -70,9 +70,26 @@ CROSS_REFERENCES = (
 
 
 @dataclass(frozen=True)
-class AdapterContract:
+class CapabilityContract:
     job_types: frozenset[str]
     artifact_kinds: frozenset[str]
+
+
+@dataclass(frozen=True)
+class AdapterContract:
+    capabilities: tuple[CapabilityContract, ...]
+
+    @property
+    def job_types(self) -> frozenset[str]:
+        return frozenset(job_type for capability in self.capabilities for job_type in capability.job_types)
+
+    @property
+    def artifact_kinds(self) -> frozenset[str]:
+        return frozenset(
+            artifact_kind
+            for capability in self.capabilities
+            for artifact_kind in capability.artifact_kinds
+        )
 
 
 def load_json(path: Path) -> Any:
@@ -238,8 +255,7 @@ def validate_integration_adapters(errors: list[str]) -> tuple[set[str], dict[str
         ensure(isinstance(capabilities, list), f"{adapter_id} capabilities must be a list", errors)
         if not isinstance(capabilities, list):
             continue
-        supported_job_types: set[str] = set()
-        expected_artifact_kinds: set[str] = set()
+        capability_contracts: list[CapabilityContract] = []
         for capability in capabilities:
             if not isinstance(capability, dict):
                 ensure(False, f"{adapter_id} capability must be an object", errors)
@@ -256,7 +272,6 @@ def validate_integration_adapters(errors: list[str]) -> tuple[set[str], dict[str
                     f"{adapter_id}:{capability_id} has unknown job type {job_type}",
                     errors,
                 )
-                supported_job_types.add(job_type)
             artifact_kinds = string_list(
                 capability.get("expected_artifacts", []),
                 f"{adapter_id}:{capability_id} expected_artifacts",
@@ -268,11 +283,15 @@ def validate_integration_adapters(errors: list[str]) -> tuple[set[str], dict[str
                     f"{adapter_id}:{capability_id} has unknown artifact kind {artifact_kind}",
                     errors,
                 )
-                expected_artifact_kinds.add(artifact_kind)
+            capability_contracts.append(
+                CapabilityContract(
+                    job_types=frozenset(job_types),
+                    artifact_kinds=frozenset(artifact_kinds),
+                )
+            )
         if isinstance(adapter_id, str):
             adapter_contracts[adapter_id] = AdapterContract(
-                job_types=frozenset(supported_job_types),
-                artifact_kinds=frozenset(expected_artifact_kinds),
+                capabilities=tuple(capability_contracts),
             )
     return adapter_ids, adapter_contracts
 
@@ -468,6 +487,19 @@ def validate_handoff(
             ensure(
                 artifact_kind in adapter_contract.artifact_kinds,
                 f"handoff adapter {adapter_id} does not produce artifact {artifact_kind}",
+                errors,
+            )
+        if (
+            adapter_contract is not None
+            and job_type in adapter_contract.job_types
+            and artifact_kind in adapter_contract.artifact_kinds
+        ):
+            ensure(
+                any(
+                    job_type in capability.job_types and artifact_kind in capability.artifact_kinds
+                    for capability in adapter_contract.capabilities
+                ),
+                f"handoff adapter {adapter_id} has no capability for job type {job_type} and artifact {artifact_kind}",
                 errors,
             )
         if job_type in CANONICAL_ARTIFACT_BY_JOB_TYPE and artifact_kind in BACKEND_ARTIFACT_KINDS:

@@ -22,9 +22,27 @@ const formatUsdRange = (range: UsdRange): string => {
   return `Up to ${formatCurrency(range.max ?? 0)}`;
 };
 
-const formatMeasurement = (value: number): string => new Intl.NumberFormat('en-US', {
-  maximumFractionDigits: 2,
+const formatMeasurement = (value: number, maximumFractionDigits = 2): string => new Intl.NumberFormat('en-US', {
+  maximumFractionDigits,
 }).format(value);
+
+const formatThresholdMeasurement = (value: number, threshold: number): string => {
+  const isBelow = value < threshold;
+  for (let digits = 2; digits <= 6; digits += 1) {
+    if ((Number(value.toFixed(digits)) < threshold) === isBelow) {
+      return formatMeasurement(value, digits);
+    }
+  }
+  return `${isBelow ? '<' : '>='} ${formatMeasurement(threshold)}`;
+};
+
+const formatSignedThresholdMeasurement = (value: number, threshold: number): string => {
+  const formatted = formatThresholdMeasurement(value, threshold);
+  if (formatted.startsWith('< ') || formatted.startsWith('>= ')) {
+    return value >= 0 ? `${formatted.slice(0, 2)}+${formatted.slice(2)}` : formatted;
+  }
+  return `${value >= 0 ? '+' : ''}${formatted}`;
+};
 
 const totalBomCost = (items: ReferenceDesign['bom']): UsdRange | null => {
   if (items.length === 0 || items.some((item) => item.unitCostRangeUsd == null)) return null;
@@ -349,17 +367,36 @@ function CapabilityCard({
 }) {
   const hasRating = rating.payloadLb != null && rating.safetyFactor != null && targetPayloadLb != null;
   const delta = hasRating ? rating.payloadLb! - targetPayloadLb! : null;
-  const safetyFactorDisplay = rating.status === 'watch' && safetyFactorMin != null
-    ? `< ${safetyFactorMin.toFixed(1)}`
-    : rating.safetyFactor?.toFixed(1);
+  const payloadThreshold = rating.status === 'fails'
+    ? targetPayloadLb
+    : rating.status === 'watch' && targetPayloadLb != null && safetyFactorMin != null
+      ? targetPayloadLb * safetyFactorMin
+      : null;
+  const payloadDisplay = rating.payloadLb == null
+    ? null
+    : payloadThreshold == null
+      ? formatMeasurement(rating.payloadLb)
+      : formatThresholdMeasurement(rating.payloadLb, payloadThreshold);
+  const safetyFactorThreshold = rating.status === 'fails'
+    ? 1
+    : rating.status === 'watch' ? safetyFactorMin : null;
+  const safetyFactorDisplay = rating.safetyFactor == null
+    ? undefined
+    : safetyFactorThreshold == null
+      ? formatMeasurement(rating.safetyFactor)
+      : formatThresholdMeasurement(rating.safetyFactor, safetyFactorThreshold);
+  const deltaDisplay = delta == null
+    ? null
+    : payloadThreshold == null || targetPayloadLb == null
+      ? `${delta >= 0 ? '+' : ''}${formatMeasurement(delta)}`
+      : formatSignedThresholdMeasurement(delta, payloadThreshold - targetPayloadLb);
   return (
     <div className={`capability-card status-${rating.status}`}>
       <span>{statusLabel[rating.status]}</span>
-      <strong>{hasRating ? `${rating.payloadLb} lb projected rating` : 'Payload rating review required'}</strong>
+      <strong>{hasRating ? `${payloadDisplay} lb projected rating` : 'Payload rating review required'}</strong>
       {hasRating && delta != null ? (
         <small>
-          Safety factor {safetyFactorDisplay} - {delta >= 0 ? '+' : ''}
-          {formatMeasurement(delta)} lb against preserved task
+          Safety factor {safetyFactorDisplay} - {deltaDisplay} lb against preserved task
         </small>
       ) : <small>Safety factor and payload delta are unknown.</small>}
       <p>{rating.summary}</p>

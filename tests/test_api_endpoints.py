@@ -863,3 +863,18 @@ def test_analysis_job_contract_supports_planning_and_local_stub_execution() -> N
     assert completed_payload["status"] == "completed"
     assert completed_payload["artifacts"][0]["generated_by"] == "supplier-options-worker"
     assert completed_payload["result_summary"]["artifact_kind"] == "manufacturing_report"
+
+
+def test_analysis_job_request_accepts_unrelated_extension_fields() -> None:
+    response = client.post(
+        "/api/analysis-jobs",
+        json={
+            "job_type": AnalysisJobType.run_fea.value,
+            "target_id": "project-open-gripper-demo",
+            "project_id": "project-open-gripper-demo",
+            "trace_id": "trace-review-contract",
+        },
+    )
+
+    assert response.status_code == 202
+    assert "trace_id" not in response.json()

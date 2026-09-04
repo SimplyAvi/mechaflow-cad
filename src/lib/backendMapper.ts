@@ -203,17 +203,15 @@ const mapPart = (
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
   const rawPayloadLb = estimatePayload(part, material, taskPayload);
-  const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 1);
   const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
     ? rawPayloadLb / taskPayload
     : null;
-  const safetyFactor = rawSafetyFactor == null ? null : round(rawSafetyFactor, 1);
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
   const manufacturingOption = activeManufacturingOption(part);
   const status = ratingStatus(rawPayloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
   const ratingSummary = taskPayload == null
     ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
-    : payloadLb == null || safetyFactor == null
+    : rawPayloadLb == null || rawSafetyFactor == null
       ? `${part.name} has incomplete payload evidence; engineering review is required.`
       : rawPayloadLb != null && rawPayloadLb < taskPayload
         ? `${part.name} falls below the preserved ${taskPayload} lb payload target.`
@@ -237,8 +235,8 @@ const mapPart = (
     relatedWires: part.wiring_route_ids,
     rating: {
       status,
-      payloadLb,
-      safetyFactor,
+      payloadLb: rawPayloadLb,
+      safetyFactor: rawSafetyFactor,
       summary: ratingSummary,
       warning: part.wiring_route_ids.length > 0 ? 'Linked wiring routes require clearance checks after geometry edits.' : undefined,
     },
@@ -285,17 +283,18 @@ const mapMaterialOptions = (
         ? part
         : { ...part, dimensions: { ...part.dimensions, ...dimensionChanges } };
       const rawPayloadLb = estimatePayload(previewPart, material, taskPayload);
-      const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 1);
       const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
         ? rawPayloadLb / taskPayload
         : null;
-      const safetyFactor = rawSafetyFactor == null ? null : round(rawSafetyFactor, 1);
       const status = ratingStatus(rawPayloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
       const manufacturingProcess = compatibleProcesses[0];
       const currentDensity = currentMaterial?.properties.density_kg_m3;
       const nextDensity = material.properties.density_kg_m3;
+      const thicknessRatio = nextThicknessMm != null && currentThicknessMm != null
+        ? nextThicknessMm / currentThicknessMm
+        : 1;
       const weightDeltaLb = part.mass_kg != null && currentDensity != null && currentDensity > 0 && nextDensity != null
-        ? round(part.mass_kg * (nextDensity / currentDensity - 1) * 2.20462, 2)
+        ? round(part.mass_kg * (nextDensity / currentDensity * thicknessRatio - 1) * 2.20462, 2)
         : null;
       const manufacturingOption = part.manufacturing_options.find(
         (option) => option.process === manufacturingProcess,
@@ -308,19 +307,19 @@ const mapMaterialOptions = (
         partId: part.id,
         material: material.name,
         process: toTitle(manufacturingProcess),
-        payloadLb,
-        safetyFactor,
+        payloadLb: rawPayloadLb,
+        safetyFactor: rawSafetyFactor,
         weightDeltaLb,
         costRangeUsd: usdCostRange(manufacturingOption?.cost),
-        taskImpact: taskPayload == null || payloadLb == null || safetyFactor == null
+        taskImpact: taskPayload == null || rawPayloadLb == null || rawSafetyFactor == null
           ? 'Payload target or rating is unknown; engineering review is required.'
           : status === 'fails'
-            ? `${previewScope} is rated at ${payloadLb} lb and remains below the preserved ${taskPayload} lb task.`
+            ? `${previewScope} is rated at ${round(rawPayloadLb, 2)} lb and remains below the preserved ${taskPayload} lb task.`
             : taskSafetyFactorMin == null
               ? `${previewScope}: the active safety-factor minimum is unknown; engineering review is required.`
               : status === 'watch'
                 ? `${previewScope} has an estimated safety factor below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
-                : `${previewScope} keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
+                : `${previewScope} keeps the preserved ${taskPayload} lb task active with a ${rawSafetyFactor.toFixed(1)} safety factor estimate.`,
         wiringImpact: part.wiring_route_ids.length > 0
           ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
           : 'No linked wiring route is known for this part in the sample project.',
