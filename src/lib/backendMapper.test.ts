@@ -246,6 +246,30 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(optionWithoutMinimum?.taskImpact).toMatch(/minimum is unknown.*review is required/i);
   });
 
+  it('uses unrounded safety factors for pass decisions', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.project.active_task!.target_value = 50;
+    panelData.project.active_task!.safety_factor_min = 2;
+    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.dimensions.thickness_mm = 16;
+    panelData.project.materials.find((material) => material.id === finger.material_id)!.family = 'other';
+    panelData.project.materials.find((material) => material.id === 'mat-low-carbon-steel')!.family = 'other';
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+    const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
+    const steelOption = design.materialOptions.find(
+      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
+    );
+
+    expect(mappedFinger?.rating.payloadLb).toBe(98);
+    expect(mappedFinger?.rating.safetyFactor).toBe(2);
+    expect(mappedFinger?.rating.status).toBe('watch');
+    expect(mappedFinger?.rating.summary).toMatch(/below the preserved 2\.0 minimum/i);
+    expect(steelOption?.payloadLb).toBe(98);
+    expect(steelOption?.safetyFactor).toBe(2);
+    expect(steelOption?.status).toBe('watch');
+  });
+
   it('keeps missing values and non-USD costs unknown', () => {
     const panelData = structuredClone(mockProjectPanelData);
     const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
