@@ -277,6 +277,12 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
 
   it('preserves explicit manufacturing and BOM cost ranges', () => {
     const panelData = structuredClone(mockProjectPanelData);
+    panelData.manufacturing_options[0]!.options[0]!.cost = {
+      currency: 'USD',
+      min: 0.1,
+      max: 0.2,
+      confidence: 'estimated_from_heuristic',
+    };
     panelData.bom_items[0]!.price = {
       currency: 'USD',
       min: 14,
@@ -293,7 +299,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(finger?.costRangeUsd).toEqual({ min: 25, max: 80 });
     expect(compositeOption?.costRangeUsd).toEqual({ min: 3, max: 12 });
     expect(design.bom[0]?.unitCostRangeUsd).toEqual({ min: 14, max: 20 });
-    expect(design.manufacturingOptions[0]?.costDisplay).toBe('$25-$80');
+    expect(design.manufacturingOptions[0]?.costDisplay).toBe('$0.10-$0.20');
   });
 
   it('maps every assembly, defaults to selectable parts, and keeps the full worker fallback', () => {
