@@ -125,6 +125,18 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
       .toBe('Up to 3 days');
   });
 
+  it('falls back to an available manufacturing option when the preference is stale', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.metadata.preferred_manufacturing_process = 'laser_cutting';
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata);
+    const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
+
+    expect(mappedFinger?.manufacturingProcess).toBe('Cnc Machining');
+    expect(mappedFinger?.costRangeUsd).toEqual({ min: 25, max: 80 });
+  });
+
   it('keeps missing values and non-USD costs unknown', () => {
     const panelData = structuredClone(mockProjectPanelData);
     const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;

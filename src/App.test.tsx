@@ -220,7 +220,7 @@ describe('MechaFlow cockpit', () => {
     const inspectorPanel = screen.getByText('Part inspector').closest('aside');
     expect(inspectorPanel).not.toBeNull();
     expect(within(inspectorPanel as HTMLElement).getAllByText('Review required').length).toBeGreaterThanOrEqual(2);
-    const stressRisk = within(inspectorPanel as HTMLElement).getByText('Stress risk').closest('div');
+    const stressRisk = within(inspectorPanel as HTMLElement).getByText('Stress risk (demo heuristic)').closest('div');
     expect(stressRisk).toHaveTextContent('Review required');
     expect(screen.getByLabelText(/Import Design progress unknown/i)).toBeInTheDocument();
     expect(screen.getByText(/^failed$/i)).toBeInTheDocument();
