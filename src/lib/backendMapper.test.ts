@@ -25,11 +25,13 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
     const finger = design.assembly.parts.find((part) => part.id === 'part-finger-link');
 
-    expect(design.task.cycleTimeSeconds).toBeNull();
-    expect(design.task.reachMeters).toBeNull();
+    expect(design.task.cycleTimeSeconds).toBe(8);
+    expect(design.task.reachMeters).toBe(0.65);
     expect(design.assembly.explodedProgress).toBe(100);
-    expect(finger?.subassembly).toBe('Finger subassembly');
-    expect(finger?.visual.explodeX).toBe(20);
+    expect(finger?.subassembly).toBe('Wrist gripper tool');
+    expect(finger?.visual.explodeX).toBe(32);
+    expect(finger?.visual.shape).toBe('tool');
+    expect(finger?.designCriteria[0]?.sourceConfidence).toMatch(/Part metadata demo estimate/i);
   });
 
   it('does not derive a physical payload rating from the task target', () => {
@@ -90,7 +92,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
 
     expect(compositeOption?.backendModification.payload.dimension_changes).toEqual({});
     expect(compositeOption?.payloadLb).toBeNull();
-    expect(compositeOption?.weightDeltaLb).toBe(-0.14);
+    expect(compositeOption?.weightDeltaLb).toBe(-0.13);
     expect(compositeOption?.taskImpact).toMatch(/no worker-supplied payload rating/i);
     expect(compositeOption?.backendModification.payload.description).toMatch(
       /material-only preview/i,

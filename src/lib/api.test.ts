@@ -13,7 +13,7 @@ describe('loadCockpitDesign', () => {
 
     const design = await loadCockpitDesign();
 
-    expect(design.name).toContain('Open gripper task-preserving edit demo');
+    expect(design.name).toContain('Robot arm visual MVP task-preserving edit demo');
     expect(design.backend.source).toBe('bundled-mock');
     expect(design.analysisJobs.some((job) => job.worker === 'freecad-worker')).toBe(true);
   });
@@ -32,7 +32,7 @@ describe('loadCockpitDesign', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
-    expect(design.name).toBe('Open gripper task-preserving edit demo');
+    expect(design.name).toBe('Robot arm visual MVP task-preserving edit demo');
     expect(design.backend.source).toBe('backend-panel-data');
   });
 

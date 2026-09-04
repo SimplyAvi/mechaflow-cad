@@ -6,12 +6,13 @@ The first MechaFlow CAD frontend is a Vite, React, and TypeScript application. I
 
 The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. It includes mocked orchestration data for:
 
-- Opening an open reference robot gripper design.
-- Viewing an animated exploded assembly concept with desktop-demo rotation controls.
-- Selecting parts from the assembly and part tree.
+- Opening a bundled robot arm visual MVP with a wrist gripper.
+- Viewing an interactive exploded assembly concept with desktop-demo orbit, yaw, pitch, and explode controls.
+- Selecting parts from the assembly and part tree with visual highlighting tied to the inspector.
 - Preserving the active task while previewing material substitution.
 - Keeping payload capability and safety factor under review until a backend worker supplies a task-independent rating.
-- Showing background CAD, FEA, wiring, and supplier job status.
+- Showing plain-English part criteria for load role, material, stiffness, heat limit, manufacturing process, source confidence, and review-required values.
+- Showing background CAD, future FEA, wiring, and supplier job status without claiming that real FEA has run.
 - Reviewing BOM, cost, manufacturing, and lead-time panels.
 - Surfacing wiring routes, bend radius, service loops, and clearance risk.
 - Mirroring the backend project, panel-data, modification preview, report, catalog, and metadata contracts.
@@ -166,7 +167,7 @@ backend owns the conditional validation and mass-invalidation rules in the
 [backend modification contract](backend.md#modification-contract). A real backend response should attach an
 advisory report until CAD, FEA, wiring, and supplier workers produce authoritative artifacts.
 
-The bundled mock lives in `src/data/backendPanelData.json` and follows the backend handoff concepts from the local FastAPI scaffold. The Node mock API in `scripts/mock-backend.mjs` serves the same data for frontend-to-backend development.
+The bundled mock lives in `src/data/backendPanelData.json` and follows the backend handoff concepts from the local FastAPI scaffold. The Node mock API in `scripts/mock-backend.mjs` serves the same data for frontend-to-backend development. The current visual MVP seed intentionally keeps the legacy `project-open-gripper-demo` id for compatibility while presenting a robot arm with a wrist gripper.
 
 ## Connecting to a real backend later
 

@@ -71,6 +71,7 @@ export interface DesignCriterion {
   value: string;
   status: 'measured' | 'estimated' | 'review-required';
   plainEnglish: string;
+  sourceConfidence: string;
 }
 
 export interface PartVisual {
@@ -81,6 +82,9 @@ export interface PartVisual {
   explodeX: number;
   explodeY: number;
   color: string;
+  shape?: 'base' | 'joint' | 'link' | 'plate' | 'tool' | 'pcb';
+  rotationDeg?: number;
+  zIndex?: number;
 }
 
 export interface CapabilityRating {

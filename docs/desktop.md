@@ -34,15 +34,16 @@ Close the desktop window or press `Ctrl+C` in the terminal to stop the local API
 
 ## What to test visually
 
-The desktop demo centers on the open gripper assembly seed. In the window, verify that you can:
+The desktop demo centers on a robot arm visual MVP with a wrist gripper. The legacy local project id is still `project-open-gripper-demo` so the backend and smoke-test contracts stay compatible, but the bundled visual seed now shows a base, shoulder, upper arm, elbow, forearm, wrist plate, gripper jaw, and controller PCB. In the window, verify that you can:
 
-1. Toggle the exploded view between collapsed and exploded states.
-2. Rotate the assembly with the left and right buttons or the rotation slider.
+1. Toggle the assembly between collapsed and exploded states, or scrub the explode slider from 0 to 100 percent.
+2. Orbit the assembly with yaw buttons, the yaw slider, and the pitch slider.
 3. Click a part in the visual assembly or the selectable part list.
-4. Read plain-English design criteria for the selected part, including load capacity seed, stiffness, temperature limit, material strength, and manufacturing process.
-5. Confirm that seeded or heuristic values are labeled as estimates, and that missing or unsupported engineering values are marked review-required.
+4. See selected-part highlighting in the assembly and the same part in the inspector.
+5. Read plain-English design criteria for the selected part, including intended load or lift role, material, stiffness and elasticity, heat or temperature limitation, manufacturing process, known versus estimated versus review-required values, and source confidence.
+6. Confirm that seeded or heuristic values are labeled as demo estimates or seeded material guidance, and that missing or unsupported engineering values are marked review-required.
 
-No real FEA solver is running in this slice. The background FEA-related rows are adapter handoff stubs and advisory seed data only.
+No real FEA solver is running in this slice. The FEA row is a blocked adapter handoff, and the visible strength criteria are advisory demo seed data only. Later FEA integration should replace the load-capacity cards with solver artifacts such as stress, deflection, boundary conditions, and mesh provenance.
 
 ## Checks
 

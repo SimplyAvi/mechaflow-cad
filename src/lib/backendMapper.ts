@@ -110,20 +110,45 @@ const replacementRisk = (part: BackendPart): RiskLevel => {
   return 'low';
 };
 
+const visualShape = (value: unknown): PartVisual['shape'] | undefined => {
+  if (value === 'base' || value === 'joint' || value === 'link' || value === 'plate' || value === 'tool' || value === 'pcb') {
+    return value;
+  }
+  return undefined;
+};
+
 const visualFor = (part: BackendPart, index: number, nodeExplode?: { x: number; y: number }): PartVisual => {
   const presets: Array<Omit<PartVisual, 'color'>> = [
-    { x: 16, y: 34, width: 20, height: 34, explodeX: -18, explodeY: -12 },
-    { x: 42, y: 62, width: 34, height: 14, explodeX: 0, explodeY: 18 },
-    { x: 42, y: 38, width: 22, height: 22, explodeX: 8, explodeY: 8 },
-    { x: 64, y: 32, width: 18, height: 38, explodeX: 18, explodeY: -10 },
-    { x: 26, y: 22, width: 14, height: 44, explodeX: -26, explodeY: -2 },
+    { x: 14, y: 68, width: 24, height: 16, explodeX: -18, explodeY: 18, shape: 'base', zIndex: 2 },
+    { x: 25, y: 54, width: 16, height: 16, explodeX: -14, explodeY: 10, shape: 'joint', zIndex: 5 },
+    { x: 35, y: 43, width: 28, height: 12, explodeX: -4, explodeY: -6, shape: 'link', rotationDeg: -18, zIndex: 4 },
+    { x: 58, y: 34, width: 14, height: 14, explodeX: 10, explodeY: -10, shape: 'joint', zIndex: 6 },
+    { x: 67, y: 29, width: 22, height: 10, explodeX: 20, explodeY: -16, shape: 'link', rotationDeg: -9, zIndex: 4 },
+    { x: 83, y: 24, width: 11, height: 13, explodeX: 28, explodeY: -18, shape: 'plate', zIndex: 7 },
+    { x: 90, y: 20, width: 10, height: 22, explodeX: 34, explodeY: -20, shape: 'tool', zIndex: 8 },
+    { x: 18, y: 82, width: 20, height: 10, explodeX: -24, explodeY: 24, shape: 'pcb', zIndex: 3 },
   ];
   const preset = presets[index % presets.length];
+  const metadataVisual = metadataRecord(part.metadata.mvp_visual);
+  const numberOr = (value: unknown, fallback: number): number => numberMetadata(value) ?? fallback;
   return {
     ...preset,
-    explodeX: nodeExplode ? Math.sign(nodeExplode.x || preset.explodeX) * Math.max(10, Math.abs(nodeExplode.x) / 4) : preset.explodeX,
-    explodeY: nodeExplode ? Math.sign(nodeExplode.y || preset.explodeY) * Math.max(4, Math.abs(nodeExplode.y) / 4) : preset.explodeY,
-    color: colors[index % colors.length],
+    x: numberOr(metadataVisual.x, preset.x),
+    y: numberOr(metadataVisual.y, preset.y),
+    width: numberOr(metadataVisual.width, preset.width),
+    height: numberOr(metadataVisual.height, preset.height),
+    explodeX: numberOr(
+      metadataVisual.explodeX,
+      nodeExplode ? Math.sign(nodeExplode.x || preset.explodeX) * Math.max(10, Math.abs(nodeExplode.x) / 4) : preset.explodeX,
+    ),
+    explodeY: numberOr(
+      metadataVisual.explodeY,
+      nodeExplode ? Math.sign(nodeExplode.y || preset.explodeY) * Math.max(4, Math.abs(nodeExplode.y) / 4) : preset.explodeY,
+    ),
+    color: stringMetadata(metadataVisual.color) ?? colors[index % colors.length],
+    shape: visualShape(metadataVisual.shape) ?? preset.shape,
+    rotationDeg: numberOr(metadataVisual.rotationDeg, preset.rotationDeg ?? 0),
+    zIndex: numberOr(metadataVisual.zIndex, preset.zIndex ?? 2),
   };
 };
 
@@ -192,6 +217,14 @@ const materialValue = (
   decimals = 1,
 ): string => (value == null ? 'Review required' : `${formatMeasurement(value, decimals)} ${unit}`);
 
+const confidenceLabel = (value?: unknown): string => {
+  if (value === 'measured') return 'measured source';
+  if (typeof value === 'string' && value.trim() !== '') return toTitle(value);
+  return 'review-required source';
+};
+
+const criterionSource = (source: string, confidence?: unknown): string => `${source} - ${confidenceLabel(confidence)}`;
+
 const buildDesignCriteria = (
   part: BackendPart,
   material: BackendMaterial | undefined,
@@ -208,11 +241,12 @@ const buildDesignCriteria = (
   return [
     {
       id: 'load-capacity',
-      label: 'Load capacity seed',
+      label: 'Intended load or lift role',
       value: demoLoadCapacityLb == null ? 'Review required' : `${formatMeasurement(demoLoadCapacityLb)} lb demo limit`,
       status: demoLoadCapacityLb == null ? 'review-required' : loadStatus,
       plainEnglish: stringMetadata(demoCriteria.load_capacity_note)
         ?? 'This is a seed or heuristic capacity for demo triage only. It is not an FEA result.',
+      sourceConfidence: criterionSource('Part metadata demo estimate', demoCriteria.load_capacity_status),
     },
     {
       id: 'elasticity-stiffness',
@@ -222,15 +256,17 @@ const buildDesignCriteria = (
       plainEnglish: stiffnessGpa == null
         ? 'No stiffness value is available for this material yet.'
         : 'Higher modulus usually means the part bends less under the same load. This seed is material-level only, not a part deflection calculation.',
+      sourceConfidence: criterionSource('Seeded material guidance', material?.confidence),
     },
     {
       id: 'temperature-limit',
-      label: 'Heat deflection or service temperature',
+      label: 'Heat or temperature limitation',
       value: materialValue(heatLimitC, 'C'),
       status: heatLimitC == null ? 'review-required' : materialStatus,
       plainEnglish: heatLimitC == null
         ? 'Temperature limits are missing and need material datasheet review.'
         : 'Keep the part below this seeded material temperature limit until a sourced datasheet and thermal check confirm it.',
+      sourceConfidence: criterionSource('Seeded material guidance', material?.confidence),
     },
     {
       id: 'material-strength',
@@ -240,6 +276,7 @@ const buildDesignCriteria = (
       plainEnglish: yieldMpa == null
         ? 'Yield strength is not available for this material seed.'
         : 'Yield strength is a material property. Real part strength still depends on geometry, fasteners, load direction, and validation.',
+      sourceConfidence: criterionSource('Seeded material guidance', material?.confidence),
     },
     {
       id: 'manufacturing-process',
@@ -249,6 +286,7 @@ const buildDesignCriteria = (
       plainEnglish: manufacturingOption?.risk_notes[0]
         ?? manufacturingOption?.description
         ?? 'Process compatibility needs review before release.',
+      sourceConfidence: criterionSource('Manufacturing option seed', manufacturingOption?.confidence),
     },
   ];
 };

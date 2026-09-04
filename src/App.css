@@ -288,15 +288,29 @@ small,
   border: 1px dashed rgba(125, 211, 252, 0.2);
   border-radius: 999px;
   content: '';
-  inset: 18% 26%;
+  inset: 18% 18% 10% 8%;
   position: absolute;
+}
+
+.reach-envelope {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.18), transparent);
+  border: 1px dashed rgba(125, 211, 252, 0.28);
+  border-radius: 999px 999px 80px 80px;
+  height: 72%;
+  left: 17%;
+  opacity: 0.7;
+  position: absolute;
+  top: 13%;
+  transform: rotate(-18deg);
+  transform-origin: 4% 82%;
+  width: 76%;
 }
 
 .assembly-rotor {
   inset: 0;
   position: absolute;
-  transform: perspective(900px) rotateX(8deg) rotateZ(var(--rotation-deg));
-  transform-origin: center;
+  transform: perspective(900px) rotateX(var(--orbit-pitch-deg)) rotateZ(var(--rotation-deg));
+  transform-origin: 42% 64%;
   transform-style: preserve-3d;
   transition: transform 400ms ease;
 }
@@ -319,10 +333,37 @@ small,
   position: absolute;
   text-align: center;
   top: var(--y);
-  transform: translate(var(--tx), var(--ty));
-  transition: transform 700ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease, border 180ms ease;
+  transform: translate(var(--tx), var(--ty)) rotate(var(--part-rotation));
+  transition: transform 700ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease, border 180ms ease, filter 180ms ease;
   width: var(--w);
-  z-index: 2;
+  z-index: var(--part-z);
+}
+
+.part-shape:hover,
+.part-shape:focus-visible {
+  filter: brightness(1.16);
+  outline: none;
+}
+
+.part-shape.shape-base {
+  border-radius: 18px 18px 12px 12px;
+}
+
+.part-shape.shape-joint {
+  border-radius: 999px;
+}
+
+.part-shape.shape-link {
+  border-radius: 999px 24px 24px 999px;
+}
+
+.part-shape.shape-tool {
+  clip-path: polygon(12% 0, 88% 0, 100% 24%, 78% 100%, 22% 100%, 0 24%);
+}
+
+.part-shape.shape-pcb {
+  background: linear-gradient(135deg, #16a34a, rgba(21, 128, 61, 0.72));
+  border-style: dashed;
 }
 
 .part-shape.selected {
@@ -376,6 +417,14 @@ small,
   top: 30%;
   transform: rotate(-18deg);
   width: 32%;
+}
+
+.wire-wrist {
+  height: 92px;
+  left: 68%;
+  top: 24%;
+  transform: rotate(14deg);
+  width: 22%;
 }
 
 .viewer-footer {
@@ -455,6 +504,10 @@ small,
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.criterion-source {
+  color: #bae6fd;
 }
 
 .criterion-card.status-measured {

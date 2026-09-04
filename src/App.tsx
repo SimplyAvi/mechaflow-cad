@@ -75,10 +75,11 @@ const riskLabel: Record<Part['stressRisk'], string> = {
 function App() {
   const [design, setDesign] = useState<ReferenceDesign | null>(null);
   const [selectedAssemblyId, setSelectedAssemblyId] = useState('');
-  const [selectedPartId, setSelectedPartId] = useState('finger-link-left');
-  const [selectedOptionId, setSelectedOptionId] = useState('ribbed-aluminum-left');
-  const [isExploded, setIsExploded] = useState(true);
+  const [selectedPartId, setSelectedPartId] = useState('part-palm-plate');
+  const [selectedOptionId, setSelectedOptionId] = useState('');
+  const [explodePercent, setExplodePercent] = useState(100);
   const [rotationDeg, setRotationDeg] = useState(18);
+  const [orbitPitchDeg, setOrbitPitchDeg] = useState(10);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,11 +164,11 @@ function App() {
     <main className="app-shell">
       <header className="hero-card">
         <div>
-          <p className="eyebrow">MechaFlow CAD frontend foundation</p>
-          <h1>Robot CAD orchestration cockpit</h1>
+          <p className="eyebrow">Review-ready visual MVP</p>
+          <h1>Robot arm CAD review cockpit</h1>
           <p className="hero-copy">
-            Open a reference design, inspect an exploded assembly, preserve the task, and preview material,
-            wiring, manufacturing, BOM, and analysis impact before FreeCAD workers exist.
+            Open the desktop-style demo, orbit a robot arm assembly, explode or collapse the mechanism, select
+            individual parts, and read honest design criteria before real FreeCAD or FEA workers exist.
           </p>
         </div>
         <div className="task-card" aria-label="Preserved task">
@@ -222,18 +223,30 @@ function App() {
         <section className="viewer-card panel">
           <div className="viewer-toolbar">
             <div>
-              <p className="eyebrow">Animated exploded view concept</p>
+              <p className="eyebrow">Interactive robot assembly</p>
               <h2>{activeAssembly.name}</h2>
+              <small>Click any highlighted mechanical or electrical part to update the inspector.</small>
             </div>
             <div className="viewer-controls" aria-label="Exploded view controls">
-              <button type="button" onClick={() => setIsExploded((value) => !value)}>
-                {isExploded ? 'Collapse assembly' : 'Explode assembly'}
+              <button type="button" onClick={() => setExplodePercent((value) => (value > 0 ? 0 : 100))}>
+                {explodePercent > 0 ? 'Collapse assembly' : 'Explode assembly'}
               </button>
-              <button type="button" onClick={() => setRotationDeg((value) => value - 15)}>Rotate left</button>
               <label>
-                <span>Rotation</span>
+                <span>Explode</span>
                 <input
-                  aria-label="Assembly rotation"
+                  aria-label="Explode amount"
+                  max="100"
+                  min="0"
+                  onChange={(event) => setExplodePercent(Number(event.target.value))}
+                  type="range"
+                  value={explodePercent}
+                />
+              </label>
+              <button type="button" onClick={() => setRotationDeg((value) => value - 15)}>Orbit left</button>
+              <label>
+                <span>Yaw</span>
+                <input
+                  aria-label="Assembly yaw rotation"
                   max="180"
                   min="-180"
                   onChange={(event) => setRotationDeg(Number(event.target.value))}
@@ -241,43 +254,65 @@ function App() {
                   value={rotationDeg}
                 />
               </label>
-              <button type="button" onClick={() => setRotationDeg((value) => value + 15)}>Rotate right</button>
+              <button type="button" onClick={() => setRotationDeg((value) => value + 15)}>Orbit right</button>
+              <label>
+                <span>Pitch</span>
+                <input
+                  aria-label="Assembly orbit pitch"
+                  max="42"
+                  min="-18"
+                  onChange={(event) => setOrbitPitchDeg(Number(event.target.value))}
+                  type="range"
+                  value={orbitPitchDeg}
+                />
+              </label>
             </div>
           </div>
-          <div className="viewer-stage" role="img" aria-label="Interactive exploded view of a robot gripper assembly">
+          <div className="viewer-stage" role="img" aria-label="Interactive exploded view of a robot arm assembly">
+            <div className="reach-envelope" aria-hidden="true" />
             <div
               className="assembly-rotor"
-              style={{ '--rotation-deg': `${rotationDeg}deg` } as CSSProperties}
+              style={{
+                '--rotation-deg': `${rotationDeg}deg`,
+                '--orbit-pitch-deg': `${orbitPitchDeg}deg`,
+              } as CSSProperties}
             >
               <div className="wire wire-main" />
               <div className="wire wire-left" />
-              {activeAssembly.parts.map((part) => (
-                <button
-                  className={`part-shape risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
-                  key={part.id}
-                  onClick={() => setSelectedPartId(part.id)}
-                  style={{
-                    '--x': `${part.visual.x}%`,
-                    '--y': `${part.visual.y}%`,
-                    '--w': `${part.visual.width}%`,
-                    '--h': `${part.visual.height}%`,
-                    '--tx': isExploded ? `${part.visual.explodeX}%` : '0%',
-                    '--ty': isExploded ? `${part.visual.explodeY}%` : '0%',
-                    '--part-color': part.visual.color,
-                  } as CSSProperties}
-                  type="button"
-                >
-                  <span>{part.name}</span>
-                </button>
-              ))}
+              <div className="wire wire-wrist" />
+              {activeAssembly.parts.map((part) => {
+                const explodeScale = explodePercent / 100;
+                return (
+                  <button
+                    aria-pressed={part.id === selectedPart.id}
+                    className={`part-shape shape-${part.visual.shape ?? 'plate'} risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
+                    key={part.id}
+                    onClick={() => setSelectedPartId(part.id)}
+                    style={{
+                      '--x': `${part.visual.x}%`,
+                      '--y': `${part.visual.y}%`,
+                      '--w': `${part.visual.width}%`,
+                      '--h': `${part.visual.height}%`,
+                      '--tx': `${part.visual.explodeX * explodeScale}%`,
+                      '--ty': `${part.visual.explodeY * explodeScale}%`,
+                      '--part-color': part.visual.color,
+                      '--part-rotation': `${part.visual.rotationDeg ?? 0}deg`,
+                      '--part-z': part.visual.zIndex ?? 2,
+                    } as CSSProperties}
+                    type="button"
+                  >
+                    <span>{part.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div className="viewer-footer">
             <span>
-              Exploded-view progress:{' '}
-              {activeAssembly.explodedProgress == null ? 'review required' : `${activeAssembly.explodedProgress}%`}
+              Exploded-view data:{' '}
+              {activeAssembly.explodedProgress == null ? 'review required' : `${activeAssembly.explodedProgress}% demo transforms ready`} - explode {explodePercent}%
             </span>
-            <span>Rotation: {rotationDeg} degrees. Blue lines show wiring routes and service-loop review state.</span>
+            <span>Orbit yaw {rotationDeg} degrees, pitch {orbitPitchDeg} degrees. Blue lines are harness routes under review.</span>
           </div>
         </section>
 
@@ -443,6 +478,7 @@ function StrengthInfoPanel({ part }: { part: Part }) {
             </div>
             <p>{criterion.value}</p>
             <small>{criterion.plainEnglish}</small>
+            <small className="criterion-source">Source and confidence: {criterion.sourceConfidence}</small>
           </article>
         ))}
       </div>

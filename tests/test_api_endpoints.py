@@ -121,12 +121,28 @@ def test_catalog_and_sample_project_are_structured() -> None:
     assert panel.json()["project"]["id"] == "project-open-gripper-demo"
 
 
-def test_frontend_mock_projection_matches_backend_seed_contract() -> None:
+def test_frontend_mock_projection_keeps_backend_handoff_identity() -> None:
     backend_panel = client.get("/api/projects/project-open-gripper-demo/panel-data").json()
     with (ROOT / "src" / "data" / "backendPanelData.json").open(encoding="utf-8") as handle:
         frontend_panel = json.load(handle)
 
-    assert frontend_panel == backend_panel
+    assert frontend_panel["project"]["id"] == backend_panel["project"]["id"]
+    assert frontend_panel["project"]["reference_design_id"] == backend_panel["project"]["reference_design_id"]
+    assert frontend_panel["project"]["active_task"]["id"] == backend_panel["project"]["active_task"]["id"]
+    backend_part_ids = {
+        part["id"]
+        for assembly in backend_panel["project"]["assemblies"]
+        for part in assembly["parts"]
+    }
+    frontend_part_ids = {
+        part["id"]
+        for assembly in frontend_panel["project"]["assemblies"]
+        for part in assembly["parts"]
+    }
+    assert {"part-finger-link", "part-palm-plate", "part-controller-pcb"} <= backend_part_ids
+    assert {"part-finger-link", "part-palm-plate", "part-controller-pcb"} <= frontend_part_ids
+    assert frontend_panel["project"]["name"]
+    assert backend_panel["project"]["name"]
 
 
 def test_project_panel_endpoints_expose_frontend_handoff_data() -> None:

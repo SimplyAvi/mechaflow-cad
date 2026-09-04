@@ -36,50 +36,18 @@ export const mockBackendMetadata = {
   ],
 };
 
-export const mockTaskRequirements = [
-  mockBackendPanelData.project.active_task,
-  {
-    id: 'task-reach-envelope',
-    kind: 'reach',
-    description: 'Reach the target work envelope without changing the wrist interface.',
-    target_value: 0.6,
-    unit: 'm',
-    safety_factor_min: null,
-    validation_method: 'heuristic',
-    assumptions: [],
-  },
-  {
-    id: 'task-wire-clearance',
-    kind: 'wiring_clearance',
-    description: 'Maintain wiring clearance and bend radius through the gripper assembly.',
-    target_value: 2,
-    unit: 'mm',
-    safety_factor_min: null,
-    validation_method: 'review',
-    assumptions: [],
-  },
-  {
-    id: 'task-manufacturing-substitution',
-    kind: 'serviceability',
-    description: 'Compare manufacturing substitutions without losing service access.',
-    target_value: null,
-    unit: null,
-    safety_factor_min: null,
-    validation_method: 'review',
-    assumptions: [],
-  },
-];
+export const mockTaskRequirements = mockBackendPanelData.task_requirements;
 
 export const mockReferenceDesigns = [
   {
     id: 'ref-open-gripper-demo',
-    name: 'MechaFlow open gripper demo',
+    name: 'MechaFlow robot arm visual MVP demo',
     source_url: 'https://github.com/SimplyAvi/mechaflow-cad',
     license: 'MIT',
     supported_file_formats: ['step', 'freecad', 'gltf'],
-    cad_files: ['gripper.step', 'gripper.FCStd'],
-    assembly_files: ['assembly.json'],
-    drawings: ['finger-link.pdf'],
+    cad_files: ['robot-arm-demo.step', 'robot-arm-demo.FCStd'],
+    assembly_files: ['robot-arm-assembly.json'],
+    drawings: ['upper-arm-link.pdf', 'wrist-tool-plate.pdf'],
     bom_items: [
       {
         id: 'bom-m4-shoulder',
@@ -106,9 +74,9 @@ export const mockReferenceDesigns = [
         license_or_terms: null,
       },
     ],
-    electronics_files: ['finger-sensor.kicad_pcb'],
-    manufacturing_notes: ['Use as an API shape example until a real permissively licensed design is imported.'],
-    known_limitations: ['No geometry file is bundled in this repository yet.', 'Analysis results are advisory stub data.'],
+    electronics_files: ['arm-controller-placeholder.kicad_pcb'],
+    manufacturing_notes: ['Use as an API shape example until a real permissively licensed arm design is imported.'],
+    known_limitations: ['No geometry file is bundled in this repository yet.', 'Analysis results are advisory stub data, not FEA.'],
     example_tasks: mockTaskRequirements,
     source: {
       label: 'MechaFlow CAD repository',
