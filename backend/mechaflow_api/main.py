@@ -121,11 +121,7 @@ CATALOG_TASKS_PATH = Path(__file__).resolve().parents[2] / "data" / "tasks.seed.
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
     project_store = project_store or build_default_project_store()
-    job_store = {
-        job.id: job
-        for project in project_store.list_projects()
-        for job in project.analysis_jobs
-    }
+    standalone_job_store: dict[str, AnalysisJob] = {}
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -152,6 +148,35 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if stored_project is None:
             raise HTTPException(status_code=404, detail="project not found")
         return stored_project
+
+    def list_analysis_jobs() -> list[AnalysisJob]:
+        jobs_by_id = dict(standalone_job_store)
+        for stored_project in project_store.list_projects():
+            jobs_by_id.update({job.id: job for job in stored_project.analysis_jobs})
+        return list(jobs_by_id.values())
+
+    def get_analysis_job_or_404(job_id: str) -> AnalysisJob:
+        for stored_project in project_store.list_projects():
+            for job in stored_project.analysis_jobs:
+                if job.id == job_id:
+                    return job
+        job = standalone_job_store.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        return job
+
+    def store_analysis_job(job: AnalysisJob) -> None:
+        stored_project = project_store.get_project(job.project_id) if job.project_id else None
+        if stored_project is None:
+            standalone_job_store[job.id] = job
+            return
+        jobs_by_id = {existing.id: existing for existing in stored_project.analysis_jobs}
+        jobs_by_id[job.id] = job
+        project_store.upsert_project(
+            stored_project.id,
+            stored_project.model_copy(update={"analysis_jobs": list(jobs_by_id.values())}),
+        )
+        standalone_job_store.pop(job.id, None)
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:
@@ -263,23 +288,23 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.post(f"{settings.api_prefix}/projects", response_model=Project, status_code=201, tags=["projects"])
     def create_project(project: Project) -> Project:
         try:
-            return project_store.create_project(project)
+            stored = project_store.create_project(project)
+            for job in stored.analysis_jobs:
+                standalone_job_store.pop(job.id, None)
+            return stored
         except ProjectAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="project already exists") from exc
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
-        return project_store.upsert_project(project_id, project)
+        stored = project_store.upsert_project(project_id, project)
+        for job in stored.analysis_jobs:
+            standalone_job_store.pop(job.id, None)
+        return stored
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}/panel-data", response_model=ProjectPanelData, tags=["projects"])
     def project_panel_data(project_id: str) -> ProjectPanelData:
-        project = get_project_or_404(project_id)
-        runtime_jobs = [job for job in job_store.values() if job.project_id == project_id]
-        if runtime_jobs:
-            jobs_by_id = {job.id: job for job in project.analysis_jobs}
-            jobs_by_id.update({job.id: job for job in runtime_jobs})
-            project = project.model_copy(update={"analysis_jobs": list(jobs_by_id.values())})
-        return build_project_panel_data(project)
+        return build_project_panel_data(get_project_or_404(project_id))
 
     @app.get(
         f"{settings.api_prefix}/projects/{{project_id}}/task-requirements",
@@ -333,7 +358,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
     def analysis_jobs(project_id: str | None = None) -> list[AnalysisJob]:
-        jobs = list(job_store.values())
+        jobs = list_analysis_jobs()
         if project_id is not None:
             jobs = [job for job in jobs if job.project_id == project_id]
         return jobs
@@ -360,21 +385,16 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             created_at=now,
             updated_at=now,
         )
-        job_store[job.id] = job
+        store_analysis_job(job)
         return job
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}", response_model=AnalysisJob, tags=["jobs"])
     def analysis_job(job_id: str) -> AnalysisJob:
-        job = job_store.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="analysis job not found")
-        return job
+        return get_analysis_job_or_404(job_id)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/plan", response_model=AnalysisJobPlan, tags=["jobs"])
     def analysis_job_plan(job_id: str) -> AnalysisJobPlan:
-        job = job_store.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="analysis job not found")
+        job = get_analysis_job_or_404(job_id)
         adapter = choose_adapter(
             AnalysisJobRequest(
                 job_type=job.job_type,
@@ -398,9 +418,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])
     def run_analysis_job_stub(job_id: str) -> AnalysisJob:
-        job = job_store.get(job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail="analysis job not found")
+        job = get_analysis_job_or_404(job_id)
         request = AnalysisJobRequest(
             job_type=job.job_type,
             target_id=job.target_id,
@@ -412,7 +430,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         now = datetime.now(timezone.utc)
         if adapter is None:
             job = job.model_copy(update={"status": AnalysisJobStatus.blocked_missing_adapter, "updated_at": now})
-            job_store[job.id] = job
+            store_analysis_job(job)
             return job
         artifact = adapter.run_stub(job)
         job = job.model_copy(
@@ -428,7 +446,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 "updated_at": now,
             }
         )
-        job_store[job.id] = job
+        store_analysis_job(job)
         return job
 
     return app

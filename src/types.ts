@@ -32,8 +32,8 @@ export interface BackendConnectionSummary {
 export interface TaskRequirement {
   label: string;
   targetPayloadLb: number;
-  cycleTimeSeconds: number;
-  reachMeters: number;
+  cycleTimeSeconds: number | null;
+  reachMeters: number | null;
   serviceGoal: string;
   safetyFactorMin?: number;
   validationMethod?: string;
@@ -41,7 +41,7 @@ export interface TaskRequirement {
 
 export interface Assembly {
   name: string;
-  explodedProgress: number;
+  explodedProgress: number | null;
   parts: Part[];
 }
 

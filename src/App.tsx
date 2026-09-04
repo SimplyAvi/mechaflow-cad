@@ -79,7 +79,9 @@ function App() {
           <span>Preserved task</span>
           <strong>{design.task.label}</strong>
           <small>
-            Target: {design.task.targetPayloadLb} lb, {design.task.cycleTimeSeconds}s cycle, {design.task.reachMeters}m reach
+            Target: {design.task.targetPayloadLb} lb,{' '}
+            {design.task.cycleTimeSeconds == null ? 'cycle unknown' : `${design.task.cycleTimeSeconds}s cycle`},{' '}
+            {design.task.reachMeters == null ? 'reach unknown' : `${design.task.reachMeters}m reach`}
           </small>
           <small>
             Data source: {design.backend.source.replaceAll('-', ' ')} via {design.backend.endpoint}
@@ -149,7 +151,10 @@ function App() {
             ))}
           </div>
           <div className="viewer-footer">
-            <span>Explode progress: {isExploded ? design.assembly.explodedProgress : 0}%</span>
+            <span>
+              Exploded-view progress:{' '}
+              {design.assembly.explodedProgress == null ? 'review required' : `${design.assembly.explodedProgress}%`}
+            </span>
             <span>Blue lines show wiring routes and service-loop review state.</span>
           </div>
         </section>

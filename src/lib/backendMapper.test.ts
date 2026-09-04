@@ -14,4 +14,15 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
 
     expect(design.wiringRoutes.every((route) => route.serviceLoop === null)).toBe(true);
   });
+
+  it('maps only explicit task, hierarchy, and analysis values', () => {
+    const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
+    const finger = design.assembly.parts.find((part) => part.id === 'part-finger-link');
+
+    expect(design.task.cycleTimeSeconds).toBeNull();
+    expect(design.task.reachMeters).toBeNull();
+    expect(design.assembly.explodedProgress).toBe(100);
+    expect(finger?.subassembly).toBe('Finger subassembly');
+    expect(finger?.visual.explodeX).toBe(20);
+  });
 });

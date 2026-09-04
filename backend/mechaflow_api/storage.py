@@ -40,11 +40,23 @@ class ProjectAlreadyExistsError(ValueError):
     """Raised when a project create request reuses an existing id."""
 
 
+def normalize_project_references(project_id: str, project: Project) -> Project:
+    analysis_jobs = [
+        job.model_copy(update={"project_id": project_id}, deep=True)
+        for job in project.analysis_jobs
+    ]
+    reports = [report.model_copy(update={"project_id": project_id}, deep=True) for report in project.reports]
+    return project.model_copy(
+        update={"id": project_id, "analysis_jobs": analysis_jobs, "reports": reports},
+        deep=True,
+    )
+
+
 class InMemoryProjectStore:
     def __init__(self, seed_projects: list[Project] | None = None) -> None:
         self._projects: dict[str, Project] = {}
         for project in seed_projects or []:
-            self._projects[project.id] = project.model_copy(deep=True)
+            self._projects[project.id] = normalize_project_references(project.id, project)
 
     def list_projects(self) -> list[Project]:
         return [project.model_copy(deep=True) for project in self._projects.values()]
@@ -56,11 +68,12 @@ class InMemoryProjectStore:
     def create_project(self, project: Project) -> Project:
         if project.id in self._projects:
             raise ProjectAlreadyExistsError(project.id)
-        self._projects[project.id] = project.model_copy(deep=True)
-        return project.model_copy(deep=True)
+        stored = normalize_project_references(project.id, project)
+        self._projects[project.id] = stored
+        return stored.model_copy(deep=True)
 
     def upsert_project(self, project_id: str, project: Project) -> Project:
-        stored = project.model_copy(update={"id": project_id}, deep=True)
+        stored = normalize_project_references(project_id, project)
         self._projects[project_id] = stored
         return stored.model_copy(deep=True)
 

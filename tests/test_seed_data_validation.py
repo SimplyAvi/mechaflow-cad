@@ -89,7 +89,14 @@ class SeedDataValidationTest(unittest.TestCase):
                 "stub_class": "MalformedAdapter",
                 "required_tools": [],
                 "dependency_policy": {},
-                "capabilities": [None],
+                "capabilities": [
+                    None,
+                    {
+                        "id": "malformed-capability",
+                        "backend_job_types": None,
+                        "expected_artifacts": None,
+                    },
+                ],
             },
         ]
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -101,6 +108,8 @@ class SeedDataValidationTest(unittest.TestCase):
 
         self.assertIn("integration-adapters[0] must be an object", errors)
         self.assertIn("malformed-adapter capability must be an object", errors)
+        self.assertIn("malformed-adapter:malformed-capability backend_job_types must be a list", errors)
+        self.assertIn("malformed-adapter:malformed-capability expected_artifacts must be a list", errors)
 
     def test_handoff_aliases_match_backend_runtime_contract(self) -> None:
         sys.path.insert(0, str(ROOT / "backend"))

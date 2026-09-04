@@ -192,14 +192,28 @@ def validate_integration_adapters(errors: list[str]) -> set[str]:
                 ensure(False, f"{adapter_id} capability must be an object", errors)
                 continue
             capability_id = capability.get("id", "<unknown>")
-            for job_type in capability.get("backend_job_types", []):
-                ensure(job_type in BACKEND_JOB_TYPES, f"{adapter_id}:{capability_id} has unknown job type {job_type}", errors)
-            for artifact_kind in capability.get("expected_artifacts", []):
-                ensure(
-                    artifact_kind in BACKEND_ARTIFACT_KINDS,
-                    f"{adapter_id}:{capability_id} has unknown artifact kind {artifact_kind}",
-                    errors,
-                )
+            job_types = capability.get("backend_job_types", [])
+            ensure(isinstance(job_types, list), f"{adapter_id}:{capability_id} backend_job_types must be a list", errors)
+            if isinstance(job_types, list):
+                for job_type in job_types:
+                    ensure(
+                        job_type in BACKEND_JOB_TYPES,
+                        f"{adapter_id}:{capability_id} has unknown job type {job_type}",
+                        errors,
+                    )
+            artifact_kinds = capability.get("expected_artifacts", [])
+            ensure(
+                isinstance(artifact_kinds, list),
+                f"{adapter_id}:{capability_id} expected_artifacts must be a list",
+                errors,
+            )
+            if isinstance(artifact_kinds, list):
+                for artifact_kind in artifact_kinds:
+                    ensure(
+                        artifact_kind in BACKEND_ARTIFACT_KINDS,
+                        f"{adapter_id}:{capability_id} has unknown artifact kind {artifact_kind}",
+                        errors,
+                    )
     return adapter_ids
 
 

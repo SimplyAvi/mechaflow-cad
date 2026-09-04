@@ -125,6 +125,20 @@ const activeTaskFrom = (tasks: BackendTaskRequirement[], projectTask?: BackendTa
     assumptions: [],
   };
 
+const taskValue = (tasks: BackendTaskRequirement[], kind: string, unit: string): number | null => {
+  const task = tasks.find((candidate) => candidate.kind === kind && candidate.unit === unit);
+  return typeof task?.target_value === 'number' ? task.target_value : null;
+};
+
+const explodedViewProgress = (jobs: BackendAnalysisJob[], assemblyId: string): number | null => {
+  const job = jobs.find(
+    (candidate) => candidate.job_type === 'generate_exploded_view' && candidate.target_id === assemblyId,
+  );
+  const progress = job?.result_summary.progress;
+  if (typeof progress === 'number') return Math.max(0, Math.min(100, progress));
+  return job?.status === 'completed' ? 100 : null;
+};
+
 const selectedAssembly = (panelData: BackendProjectPanelData): BackendAssembly =>
   panelData.project.assemblies[0] ?? {
     id: 'empty-assembly',
@@ -336,15 +350,15 @@ export function mapProjectPanelDataToReferenceDesign(
     task: {
       label: task.description,
       targetPayloadLb: taskPayload,
-      cycleTimeSeconds: 2,
-      reachMeters: 0.65,
+      cycleTimeSeconds: taskValue(panelData.task_requirements, 'cycle_time', 's'),
+      reachMeters: taskValue(panelData.task_requirements, 'reach', 'm'),
       serviceGoal: 'Preserve serviceability and wiring clearance while editing parts.',
       safetyFactorMin: task.safety_factor_min ?? undefined,
       validationMethod: task.validation_method,
     },
     assembly: {
       name: assembly.name,
-      explodedProgress: 76,
+      explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
       parts,
     },
     materialOptions: mapMaterialOptions(assembly.parts, project.materials, taskPayload, project.id),

@@ -135,6 +135,8 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
 
     assert response.status_code == 201
     assert response.json()["id"] == "project-test"
+    assert {job["project_id"] for job in response.json()["analysis_jobs"]} == {"project-test"}
+    assert {report["project_id"] for report in response.json()["reports"]} == {"project-test"}
 
     duplicate = client.post("/api/projects", json=sample)
     assert duplicate.status_code == 409
@@ -153,6 +155,8 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
     assert updated.status_code == 200
     assert updated.json()["id"] == "project-test"
     assert updated.json()["name"] == "Updated local project"
+    assert {job["project_id"] for job in updated.json()["analysis_jobs"]} == {"project-test"}
+    assert {report["project_id"] for report in updated.json()["reports"]} == {"project-test"}
 
 
 def test_project_modification_endpoint_updates_part_and_returns_report() -> None:
@@ -255,6 +259,40 @@ def test_panel_data_deduplicates_a_roundtripped_runtime_job() -> None:
     second_panel = local_client.get("/api/projects/project-job-roundtrip/panel-data").json()
 
     assert [item["id"] for item in second_panel["project"]["analysis_jobs"]].count(job["id"]) == 1
+
+
+def test_project_updates_are_the_effective_owner_of_job_state() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    for job in project["analysis_jobs"]:
+        if job["id"] == "job-rerate-payload":
+            job["status"] = "failed"
+
+    updated = local_client.put(f"/api/projects/{project['id']}", json=project)
+    assert updated.status_code == 200
+
+    stored_job = next(
+        job
+        for job in local_client.get(f"/api/projects/{project['id']}").json()["analysis_jobs"]
+        if job["id"] == "job-rerate-payload"
+    )
+    panel_job = next(
+        job
+        for job in local_client.get(f"/api/projects/{project['id']}/panel-data").json()["project"]["analysis_jobs"]
+        if job["id"] == "job-rerate-payload"
+    )
+    listed_job = next(
+        job
+        for job in local_client.get("/api/analysis-jobs", params={"project_id": project["id"]}).json()
+        if job["id"] == "job-rerate-payload"
+    )
+
+    assert {stored_job["status"], panel_job["status"], listed_job["status"]} == {"failed"}
+    completed = local_client.post("/api/analysis-jobs/job-rerate-payload/run-stub")
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "completed"
+    refreshed = local_client.get(f"/api/projects/{project['id']}").json()
+    assert next(job for job in refreshed["analysis_jobs"] if job["id"] == "job-rerate-payload")["status"] == "completed"
 
 
 def test_overlapping_job_types_have_explicit_adapter_owners() -> None:

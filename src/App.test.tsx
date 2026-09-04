@@ -18,7 +18,10 @@ describe('MechaFlow cockpit', () => {
 
     expect(await screen.findByRole('heading', { name: /Robot CAD orchestration cockpit/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('50 lb');
+    expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('cycle unknown');
+    expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('reach unknown');
     expect(screen.getByRole('img', { name: /Mock exploded view/i })).toBeInTheDocument();
+    expect(screen.getByText(/Exploded-view progress/i)).toHaveTextContent('100%');
     expect(screen.getByText(/Background analysis status/i)).toBeInTheDocument();
     expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
     expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
