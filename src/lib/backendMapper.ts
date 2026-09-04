@@ -191,7 +191,8 @@ const projectAssemblies = (panelData: BackendProjectPanelData): BackendAssembly[
 const activeManufacturingOption = (part: BackendPart): BackendManufacturingOption | undefined => {
   const preferredProcess = part.metadata.preferred_manufacturing_process;
   if (typeof preferredProcess === 'string') {
-    return part.manufacturing_options.find((option) => option.process === preferredProcess);
+    return part.manufacturing_options.find((option) => option.process === preferredProcess)
+      ?? part.manufacturing_options[0];
   }
   return part.manufacturing_options[0];
 };

@@ -345,7 +345,7 @@ function App() {
               <dd>{selectedPart.costRangeUsd == null ? 'Review required' : formatUsdRange(selectedPart.costRangeUsd)}</dd>
             </div>
             <div>
-              <dt>Stress risk</dt>
+              <dt>Stress risk (demo heuristic)</dt>
               <dd>{riskLabel[selectedPart.stressRisk]}</dd>
             </div>
           </dl>
