@@ -11,7 +11,7 @@
       "target_value": 50,
       "unit": "lb",
       "safety_factor_min": 2,
-      "validation_method": "heuristic_demo_estimate",
+      "validation_method": "heuristic",
       "assumptions": [
         "Static payload approximation until FEA, actuator torque, and motion workers are wired."
       ]
@@ -808,7 +808,7 @@
           }
         ],
         "wiring_routes": [],
-        "assembly_structure_confidence": "demo_seeded_hierarchy"
+        "assembly_structure_confidence": "unknown_or_needs_review"
       }
     ],
     "materials": [
@@ -839,7 +839,7 @@
           "label": "Seeded handbook range",
           "url": null
         },
-        "confidence": "seeded_material_guidance",
+        "confidence": "unknown_or_needs_review",
         "notes": [
           "Common robot arm prototype material. Values are generic seeds, not supplier-certified data."
         ]
@@ -871,7 +871,7 @@
           "label": "Seeded manufacturer-like range",
           "url": null
         },
-        "confidence": "seeded_material_guidance",
+        "confidence": "unknown_or_needs_review",
         "notes": [
           "Layer direction and print settings dominate real strength. Use as demo material guidance only."
         ]
@@ -903,7 +903,7 @@
           "label": "Seeded handbook range",
           "url": null
         },
-        "confidence": "seeded_material_guidance",
+        "confidence": "unknown_or_needs_review",
         "notes": [
           "Strong and stiff but heavier; payload and motor torque need review after substitution."
         ]
@@ -934,7 +934,7 @@
           "label": "Seeded hobby material range",
           "url": null
         },
-        "confidence": "seeded_material_guidance",
+        "confidence": "unknown_or_needs_review",
         "notes": [
           "Fit-check material only for load-bearing arm parts in this demo."
         ]
@@ -965,7 +965,7 @@
           "label": "Seeded hobby material range",
           "url": null
         },
-        "confidence": "seeded_material_guidance",
+        "confidence": "unknown_or_needs_review",
         "notes": [
           "Useful for covers and cable guides, not trusted for the 50 lb arm task without review."
         ]
@@ -996,7 +996,7 @@
           "label": "Seeded PCB material guidance",
           "url": null
         },
-        "confidence": "seeded_material_guidance",
+        "confidence": "unknown_or_needs_review",
         "notes": [
           "PCB values are not load ratings; board mounting and connectors need review."
         ]
@@ -1192,7 +1192,7 @@
       "target_value": 50,
       "unit": "lb",
       "safety_factor_min": 2,
-      "validation_method": "heuristic_demo_estimate",
+      "validation_method": "heuristic",
       "assumptions": [
         "Static payload approximation until FEA, actuator torque, and motion workers are wired."
       ]
@@ -1204,7 +1204,7 @@
       "target_value": 0.65,
       "unit": "m",
       "safety_factor_min": null,
-      "validation_method": "demo_estimate",
+      "validation_method": "heuristic",
       "assumptions": [
         "Shown as a visual reach envelope only."
       ]
