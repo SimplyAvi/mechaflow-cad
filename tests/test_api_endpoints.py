@@ -180,6 +180,27 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
     assert {report["project_id"] for report in updated.json()["reports"]} == {"project-test"}
 
 
+def test_project_writes_reject_unknown_fields_without_erasing_state() -> None:
+    local_client = TestClient(main_module.create_app())
+    original = local_client.get("/api/projects/sample").json()
+    project_id = original["id"]
+    misspelled_project = deepcopy(original)
+    misspelled_project["assemblie"] = misspelled_project.pop("assemblies")
+
+    project_response = local_client.put(f"/api/projects/{project_id}", json=misspelled_project)
+
+    assert project_response.status_code == 422
+    assert local_client.get(f"/api/projects/{project_id}").json() == original
+
+    misspelled_part = deepcopy(original)
+    misspelled_part["assemblies"][0]["parts"][0]["purpoze"] = "Misspelled nested field"
+
+    part_response = local_client.put(f"/api/projects/{project_id}", json=misspelled_part)
+
+    assert part_response.status_code == 422
+    assert local_client.get(f"/api/projects/{project_id}").json() == original
+
+
 def test_project_rejects_duplicate_part_ids_across_assemblies() -> None:
     local_client = TestClient(main_module.create_app())
     project = local_client.get("/api/projects/sample").json()
@@ -788,6 +809,26 @@ def test_persisted_adapter_owner_controls_job_planning_and_execution() -> None:
 
     assert rejected.status_code == 422
     assert local_client.get("/api/projects/project-invalid-adapter-owner").status_code == 404
+
+
+def test_persisted_job_artifacts_must_match_their_job_type() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-invalid-artifact-kind"
+    project["reports"] = []
+    project["analysis_jobs"] = [project["analysis_jobs"][0]]
+    job = project["analysis_jobs"][0]
+    job["id"] = "job-invalid-artifact-kind"
+    job["job_type"] = AnalysisJobType.run_fea.value
+    job["adapter_name"] = "calculix-fea-worker"
+    job["artifacts"][0]["job_id"] = job["id"]
+    job["artifacts"][0]["kind"] = "bom"
+
+    response = local_client.post("/api/projects", json=project)
+
+    assert response.status_code == 422
+    assert "requires artifact kind 'fea_summary', not 'bom'" in response.json()["detail"]
+    assert local_client.get("/api/projects/project-invalid-artifact-kind").status_code == 404
 
 
 def test_analysis_job_contract_supports_planning_and_local_stub_execution() -> None:

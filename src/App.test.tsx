@@ -50,9 +50,15 @@ describe('MechaFlow cockpit', () => {
 
     await user.selectOptions(optionSelector, 'part-finger-link-mat-carbon-fiber-nylon');
 
-    expect(screen.getAllByText(/Fails the preserved 50 lb task/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Combined material-and-geometry preview at 8 mm thickness is rated at 40\.7 lb/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText('40.7 lb projected rating')).toBeInTheDocument();
     expect(screen.getByText(/Process cost:/i)).toHaveTextContent('$3-$12');
-    expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('/api/projects/project-open-gripper-demo/modifications');
+    expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent(
+      '/api/projects/project-open-gripper-demo/modifications',
+    );
+    expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('"thickness_mm": 8');
     expect(screen.getByText(/mat-carbon-fiber-nylon/i)).toBeInTheDocument();
   });
 
@@ -142,6 +148,7 @@ describe('MechaFlow cockpit', () => {
 
   it('renders near-threshold safety estimates without contradicting watch status', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
     const panelData = structuredClone(mockProjectPanelData);
     panelData.project.active_task!.target_value = 50;
     panelData.project.active_task!.safety_factor_min = 2;
@@ -158,7 +165,13 @@ describe('MechaFlow cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByText(/Safety factor < 2\.0/i)).toBeInTheDocument();
+    await user.selectOptions(
+      await screen.findByLabelText(/Preview option/i),
+      'part-finger-link-mat-low-carbon-steel',
+    );
+    const ratingLine = await screen.findByText(/Safety factor < 2\.0/i);
+    expect(ratingLine).toHaveTextContent('+49.5 lb against preserved task');
+    expect(screen.getByText('99.5 lb projected rating')).toBeInTheDocument();
     expect(screen.queryByText(/2\.0 safety factor below the preserved 2\.0 minimum/i)).not.toBeInTheDocument();
   });
 

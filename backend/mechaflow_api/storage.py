@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from threading import RLock
 from typing import Protocol
 
-from .adapters import get_adapter_for_job
+from .adapters import artifact_kind_for_job, get_adapter_for_job
 from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
 from .models import (
     AnalysisArtifact,
@@ -71,6 +71,10 @@ class InvalidAnalysisJobAdapterError(ValueError):
     """Raised when a persisted analysis job names an unsupported adapter."""
 
 
+class InvalidAnalysisJobArtifactError(ValueError):
+    """Raised when a persisted analysis artifact does not match its job type."""
+
+
 class InvalidWiringEndpointError(ValueError):
     """Raised when a wiring endpoint names a part outside the project."""
 
@@ -96,6 +100,13 @@ def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None
         raise InvalidAnalysisJobAdapterError(
             f"adapter {job.adapter_name!r} does not support analysis job type {job.job_type.value!r}"
         )
+    expected_artifact_kind = artifact_kind_for_job(job.job_type)
+    for artifact in job.artifacts:
+        if artifact.kind != expected_artifact_kind:
+            raise InvalidAnalysisJobArtifactError(
+                f"analysis job type {job.job_type.value!r} requires artifact kind {expected_artifact_kind.value!r}, "
+                f"not {artifact.kind.value!r}"
+            )
     normalized_job_id = job.id if job_id is None else job_id
     artifacts = [artifact.model_copy(update={"job_id": normalized_job_id}, deep=True) for artifact in job.artifacts]
     return job.model_copy(

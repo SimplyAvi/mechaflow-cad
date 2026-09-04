@@ -203,7 +203,7 @@ const mapPart = (
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
   const rawPayloadLb = estimatePayload(part, material, taskPayload);
-  const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 0);
+  const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 1);
   const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
     ? rawPayloadLb / taskPayload
     : null;
@@ -264,8 +264,28 @@ const mapMaterialOptions = (
         (process) => process !== 'unknown' && partProcesses.has(process),
       );
       if (material.id === currentMaterialId || compatibleProcesses.length === 0) return [];
-      const rawPayloadLb = estimatePayload(part, material, taskPayload);
-      const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 0);
+      const materialOnlyPayloadLb = estimatePayload(part, material, taskPayload);
+      const materialOnlySafetyFactor = materialOnlyPayloadLb != null && taskPayload != null && taskPayload > 0
+        ? materialOnlyPayloadLb / taskPayload
+        : null;
+      const materialOnlyStatus = ratingStatus(
+        materialOnlyPayloadLb,
+        taskPayload,
+        materialOnlySafetyFactor,
+        taskSafetyFactorMin,
+      );
+      const currentThicknessMm = part.dimensions.thickness_mm;
+      const nextThicknessMm = materialOnlyStatus === 'fails' && currentThicknessMm != null
+        ? currentThicknessMm + 2
+        : null;
+      const dimensionChanges: Record<string, number> = nextThicknessMm == null
+        ? {}
+        : { thickness_mm: nextThicknessMm };
+      const previewPart = nextThicknessMm == null
+        ? part
+        : { ...part, dimensions: { ...part.dimensions, ...dimensionChanges } };
+      const rawPayloadLb = estimatePayload(previewPart, material, taskPayload);
+      const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 1);
       const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
         ? rawPayloadLb / taskPayload
         : null;
@@ -280,9 +300,9 @@ const mapMaterialOptions = (
       const manufacturingOption = part.manufacturing_options.find(
         (option) => option.process === manufacturingProcess,
       );
-      const needsGeometryChange = status === 'fails';
-      const dimensionChanges: Record<string, number> =
-        needsGeometryChange && part.dimensions.thickness_mm ? { thickness_mm: part.dimensions.thickness_mm + 2 } : {};
+      const previewScope = nextThicknessMm == null
+        ? 'Material-only preview'
+        : `Combined material-and-geometry preview at ${nextThicknessMm} mm thickness`;
       return {
         id: `${part.id}-${material.id}`,
         partId: part.id,
@@ -295,16 +315,16 @@ const mapMaterialOptions = (
         taskImpact: taskPayload == null || payloadLb == null || safetyFactor == null
           ? 'Payload target or rating is unknown; engineering review is required.'
           : status === 'fails'
-            ? `Fails the preserved ${taskPayload} lb task unless geometry or process constraints change.`
+            ? `${previewScope} is rated at ${payloadLb} lb and remains below the preserved ${taskPayload} lb task.`
             : taskSafetyFactorMin == null
-              ? 'The active safety-factor minimum is unknown; engineering review is required.'
+              ? `${previewScope}: the active safety-factor minimum is unknown; engineering review is required.`
               : status === 'watch'
-                ? `The estimated safety factor is below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
-                : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
+                ? `${previewScope} has an estimated safety factor below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
+                : `${previewScope} keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
         wiringImpact: part.wiring_route_ids.length > 0
           ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
           : 'No linked wiring route is known for this part in the sample project.',
-        manufacturingImpact: `${toTitle(manufacturingProcess)} preview is advisory until supplier and manufacturing workers run.`,
+        manufacturingImpact: `${previewScope} uses ${toTitle(manufacturingProcess)} and remains advisory until supplier and manufacturing workers run.`,
         status,
         backendModification: {
           endpoint: `/api/projects/${projectId}/modifications`,
@@ -312,13 +332,13 @@ const mapMaterialOptions = (
           payload: {
             id: `mod-${part.id}-${material.id}`,
             target_part_id: part.id,
-            description: `Preview changing ${part.name} to ${material.name} while preserving the active task.`,
+            description: `${previewScope} for ${part.name} using ${material.name} while preserving the active task.`,
             material_id: material.id,
             dimension_changes: dimensionChanges,
             manufacturing_process: manufacturingProcess,
           },
           reportTitle: `Advisory edit report for ${part.name}`,
-          reportSummary: needsGeometryChange
+          reportSummary: nextThicknessMm != null
             ? 'Local preview would return requires_review because payload, fatigue, wiring, and manufacturability need real workers.'
             : 'Local preview would update project metadata and attach an advisory report before real CAD geometry changes exist.',
           reportStatus: 'requires_review',

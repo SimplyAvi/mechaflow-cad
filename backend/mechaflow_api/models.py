@@ -109,25 +109,29 @@ class ReportStatus(str, Enum):
     superseded = "superseded"
 
 
-class Vector3(BaseModel):
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class Vector3(StrictModel):
     x: float = 0.0
     y: float = 0.0
     z: float = 0.0
 
 
-class Transform(BaseModel):
+class Transform(StrictModel):
     translation_mm: Vector3 = Field(default_factory=Vector3)
     rotation_deg: Vector3 = Field(default_factory=Vector3)
 
 
-class SourceAttribution(BaseModel):
+class SourceAttribution(StrictModel):
     label: str
     url: HttpUrl | None = None
     retrieved_at: datetime | None = None
     license: str | None = None
 
 
-class MoneyRange(BaseModel):
+class MoneyRange(StrictModel):
     currency: str = "USD"
     min: NonNegativeFloat | None = None
     max: NonNegativeFloat | None = None
@@ -140,7 +144,7 @@ class MoneyRange(BaseModel):
         return self
 
 
-class MaterialProperties(BaseModel):
+class MaterialProperties(StrictModel):
     density_kg_m3: PositiveFloat | None = None
     elastic_modulus_gpa: PositiveFloat | None = None
     yield_strength_mpa: PositiveFloat | None = None
@@ -149,7 +153,7 @@ class MaterialProperties(BaseModel):
     thermal_conductivity_w_mk: PositiveFloat | None = None
 
 
-class Material(BaseModel):
+class Material(StrictModel):
     id: str
     name: str
     family: str
@@ -161,7 +165,7 @@ class Material(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class ManufacturingOption(BaseModel):
+class ManufacturingOption(StrictModel):
     id: str
     process: ManufacturingProcess
     description: str
@@ -183,14 +187,14 @@ class ManufacturingOption(BaseModel):
         return self
 
 
-class Connector(BaseModel):
+class Connector(StrictModel):
     id: str
     name: str
     pin_count: int | None = Field(default=None, ge=0)
     part_id: str | None = None
 
 
-class WiringRoute(BaseModel):
+class WiringRoute(StrictModel):
     id: str
     name: str
     from_connector: Connector
@@ -213,7 +217,7 @@ def _reject_nonfinite_number(value: Any) -> Any:
 PositiveFiniteFloat = Annotated[float, BeforeValidator(_reject_nonfinite_number), Field(gt=0)]
 
 
-class PartDimensions(BaseModel):
+class PartDimensions(StrictModel):
     length_mm: PositiveFiniteFloat | None = None
     width_mm: PositiveFiniteFloat | None = None
     height_mm: PositiveFiniteFloat | None = None
@@ -221,7 +225,7 @@ class PartDimensions(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class Part(BaseModel):
+class Part(StrictModel):
     id: str
     name: str
     category: str
@@ -236,7 +240,7 @@ class Part(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-class AssemblyNode(BaseModel):
+class AssemblyNode(StrictModel):
     id: str
     name: str
     part_ids: list[str] = Field(default_factory=list)
@@ -244,7 +248,7 @@ class AssemblyNode(BaseModel):
     exploded_transform: Transform = Field(default_factory=Transform)
 
 
-class Assembly(BaseModel):
+class Assembly(StrictModel):
     id: str
     name: str
     root_node_id: str
@@ -254,7 +258,7 @@ class Assembly(BaseModel):
     assembly_structure_confidence: RecommendationConfidence = RecommendationConfidence.unknown
 
 
-class BOMItem(BaseModel):
+class BOMItem(StrictModel):
     id: str
     part_id: str | None = None
     name: str
@@ -267,7 +271,7 @@ class BOMItem(BaseModel):
     license_or_terms: str | None = None
 
 
-class TaskRequirement(BaseModel):
+class TaskRequirement(StrictModel):
     id: str
     kind: TaskKind
     description: str
@@ -278,7 +282,7 @@ class TaskRequirement(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
 
 
-class ReferenceDesign(BaseModel):
+class ReferenceDesign(StrictModel):
     id: str
     name: str
     source_url: HttpUrl
@@ -295,7 +299,7 @@ class ReferenceDesign(BaseModel):
     source: SourceAttribution | None = None
 
 
-class Modification(BaseModel):
+class Modification(StrictModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
@@ -314,7 +318,7 @@ class Modification(BaseModel):
         return value
 
 
-class AnalysisJobRequest(BaseModel):
+class AnalysisJobRequest(StrictModel):
     job_type: AnalysisJobType
     target_id: str
     project_id: str
@@ -322,7 +326,7 @@ class AnalysisJobRequest(BaseModel):
     input_summary: dict[str, Any] = Field(default_factory=dict)
 
 
-class AnalysisArtifact(BaseModel):
+class AnalysisArtifact(StrictModel):
     id: str
     job_id: str
     kind: AnalysisArtifactKind
@@ -334,7 +338,7 @@ class AnalysisArtifact(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class AnalysisJob(BaseModel):
+class AnalysisJob(StrictModel):
     id: str
     job_type: AnalysisJobType
     status: AnalysisJobStatus
@@ -349,7 +353,7 @@ class AnalysisJob(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class AnalysisJobPlan(BaseModel):
+class AnalysisJobPlan(StrictModel):
     adapter_name: str
     job_type: AnalysisJobType
     queue_name: str
@@ -361,7 +365,7 @@ class AnalysisJobPlan(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
-class AnalysisReport(BaseModel):
+class AnalysisReport(StrictModel):
     id: str
     project_id: str
     title: str
@@ -400,7 +404,7 @@ def _duplicate_ids(values: list[str]) -> set[str]:
     return duplicates
 
 
-class Project(BaseModel):
+class Project(StrictModel):
     model_config = ConfigDict(json_schema_extra={"description": "A user workspace that keeps task requirements active while a design changes."})
 
     id: str
@@ -448,26 +452,26 @@ class Project(BaseModel):
         return self
 
 
-class ProjectModificationResponse(BaseModel):
+class ProjectModificationResponse(StrictModel):
     project: Project
     report: AnalysisReport
 
 
-class CatalogSeedResponse(BaseModel):
+class CatalogSeedResponse(StrictModel):
     reference_designs: list[ReferenceDesign] = Field(default_factory=list)
     materials: list[Material] = Field(default_factory=list)
     task_requirements: list[TaskRequirement] = Field(default_factory=list)
     sample_project: Project
 
 
-class PartManufacturingOptions(BaseModel):
+class PartManufacturingOptions(StrictModel):
     part_id: str
     part_name: str
     material_id: str | None = None
     options: list[ManufacturingOption] = Field(default_factory=list)
 
 
-class ProjectPanelData(BaseModel):
+class ProjectPanelData(StrictModel):
     project: Project
     task_requirements: list[TaskRequirement] = Field(default_factory=list)
     bom_items: list[BOMItem] = Field(default_factory=list)

@@ -22,6 +22,10 @@ const formatUsdRange = (range: UsdRange): string => {
   return `Up to ${formatCurrency(range.max ?? 0)}`;
 };
 
+const formatMeasurement = (value: number): string => new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 2,
+}).format(value);
+
 const totalBomCost = (items: ReferenceDesign['bom']): UsdRange | null => {
   if (items.length === 0 || items.some((item) => item.unitCostRangeUsd == null)) return null;
   const hasMin = items.every((item) => item.unitCostRangeUsd?.min != null);
@@ -355,7 +359,7 @@ function CapabilityCard({
       {hasRating && delta != null ? (
         <small>
           Safety factor {safetyFactorDisplay} - {delta >= 0 ? '+' : ''}
-          {delta} lb against preserved task
+          {formatMeasurement(delta)} lb against preserved task
         </small>
       ) : <small>Safety factor and payload delta are unknown.</small>}
       <p>{rating.summary}</p>

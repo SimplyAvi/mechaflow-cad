@@ -62,13 +62,13 @@ class StubAdapter:
             target_id=request.target_id,
             local_execution=self.status.local_execution,
             required_capabilities=[self.status.open_source_candidate] if self.status.open_source_candidate else [],
-            expected_artifacts=[_artifact_kind_for_job(request.job_type)],
+            expected_artifacts=[artifact_kind_for_job(request.job_type)],
             command_hint=self.command_hint,
             notes=self.status.notes,
         )
 
     def run_stub(self, job: AnalysisJob) -> AnalysisArtifact:
-        kind = _artifact_kind_for_job(job.job_type)
+        kind = artifact_kind_for_job(job.job_type)
         return AnalysisArtifact(
             id=f"artifact-{uuid4()}",
             job_id=job.id,
@@ -86,7 +86,7 @@ class StubAdapter:
         )
 
 
-def _artifact_kind_for_job(job_type: AnalysisJobType) -> AnalysisArtifactKind:
+def artifact_kind_for_job(job_type: AnalysisJobType) -> AnalysisArtifactKind:
     return {
         AnalysisJobType.import_design: AnalysisArtifactKind.cad_metadata,
         AnalysisJobType.generate_exploded_view: AnalysisArtifactKind.exploded_view,
