@@ -40,6 +40,10 @@ class ProjectAlreadyExistsError(ValueError):
     """Raised when a project create request reuses an existing id."""
 
 
+class AnalysisJobAlreadyExistsError(ValueError):
+    """Raised when an analysis job id has more than one project owner."""
+
+
 def normalize_project_references(project_id: str, project: Project) -> Project:
     analysis_jobs = [
         job.model_copy(update={"project_id": project_id}, deep=True)
@@ -56,7 +60,21 @@ class InMemoryProjectStore:
     def __init__(self, seed_projects: list[Project] | None = None) -> None:
         self._projects: dict[str, Project] = {}
         for project in seed_projects or []:
-            self._projects[project.id] = normalize_project_references(project.id, project)
+            self.create_project(project)
+
+    def _ensure_job_ids_available(self, project_id: str, project: Project) -> None:
+        incoming_ids: set[str] = set()
+        for job in project.analysis_jobs:
+            if job.id in incoming_ids:
+                raise AnalysisJobAlreadyExistsError(job.id)
+            incoming_ids.add(job.id)
+        for existing_project_id, existing_project in self._projects.items():
+            if existing_project_id == project_id:
+                continue
+            existing_ids = {job.id for job in existing_project.analysis_jobs}
+            conflict = incoming_ids & existing_ids
+            if conflict:
+                raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
     def list_projects(self) -> list[Project]:
         return [project.model_copy(deep=True) for project in self._projects.values()]
@@ -68,11 +86,13 @@ class InMemoryProjectStore:
     def create_project(self, project: Project) -> Project:
         if project.id in self._projects:
             raise ProjectAlreadyExistsError(project.id)
+        self._ensure_job_ids_available(project.id, project)
         stored = normalize_project_references(project.id, project)
         self._projects[project.id] = stored
         return stored.model_copy(deep=True)
 
     def upsert_project(self, project_id: str, project: Project) -> Project:
+        self._ensure_job_ids_available(project_id, project)
         stored = normalize_project_references(project_id, project)
         self._projects[project_id] = stored
         return stored.model_copy(deep=True)

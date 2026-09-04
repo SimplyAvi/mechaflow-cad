@@ -54,6 +54,22 @@ def test_manufacturing_option_carries_cost_lead_time_and_confidence() -> None:
     assert option.confidence is RecommendationConfidence.heuristic
 
 
+def test_money_range_rejects_inverted_bounds() -> None:
+    with pytest.raises(ValidationError):
+        MoneyRange(min=100, max=10)
+
+
+def test_manufacturing_option_rejects_inverted_lead_time() -> None:
+    with pytest.raises(ValidationError):
+        ManufacturingOption(
+            id="mfg-inverted-lead-time",
+            process=ManufacturingProcess.cnc_machining,
+            description="Invalid lead-time range",
+            lead_time_days_min=10,
+            lead_time_days_max=2,
+        )
+
+
 def test_task_and_part_schema_model_task_preserving_edits() -> None:
     task = TaskRequirement(
         id="task-fit-envelope",

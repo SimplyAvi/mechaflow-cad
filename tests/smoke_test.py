@@ -108,7 +108,7 @@ def main() -> int:
         assert any(item["id"] == "freecad" for item in adapters["items"])
 
         handoff = json.loads(fetch(f"{base_url}/api/data/backend-frontend-handoff"))
-        assert handoff["items"]["mvp_seed_project"]["reference_design_id"] == "gaiahand"
+        assert handoff["items"]["mvp_seed_project"]["reference_design_id"] == "open-gripper-demo"
 
         runtime_status, runtime_body, runtime_content_type = request_path(base_url, "/runtime-config.js")
         assert runtime_status == 200

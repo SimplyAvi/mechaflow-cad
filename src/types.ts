@@ -31,7 +31,7 @@ export interface BackendConnectionSummary {
 
 export interface TaskRequirement {
   label: string;
-  targetPayloadLb: number;
+  targetPayloadLb: number | null;
   cycleTimeSeconds: number | null;
   reachMeters: number | null;
   serviceGoal: string;
@@ -74,8 +74,8 @@ export interface PartVisual {
 
 export interface CapabilityRating {
   status: RatingStatus;
-  payloadLb: number;
-  safetyFactor: number;
+  payloadLb: number | null;
+  safetyFactor: number | null;
   summary: string;
   warning?: string;
 }
@@ -85,8 +85,8 @@ export interface MaterialOption {
   partId: string;
   material: string;
   process: string;
-  payloadLb: number;
-  safetyFactor: number;
+  payloadLb: number | null;
+  safetyFactor: number | null;
   weightDeltaLb: number;
   costDeltaUsd: number;
   taskImpact: string;
@@ -110,7 +110,7 @@ export interface AnalysisJob {
   name: string;
   worker: string;
   status: JobStatus;
-  progress: number;
+  progress: number | null;
   summary: string;
   expectedArtifact?: string;
 }
@@ -120,8 +120,8 @@ export interface BOMItem {
   item: string;
   quantity: number;
   source: 'open design' | 'off the shelf' | 'fabricate' | 'wire harness';
-  unitCostUsd: number;
-  leadTimeDays: number;
+  unitCostUsd: number | null;
+  leadTimeDays: number | null;
 }
 
 export interface ManufacturingOption {

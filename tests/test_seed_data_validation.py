@@ -125,8 +125,20 @@ class SeedDataValidationTest(unittest.TestCase):
         backend_task_ids = {task.id for design in DEFAULT_REFERENCE_DESIGNS for task in design.example_tasks}
 
         self.assertEqual(handoff["mvp_seed_project"]["id"], sample_project.id)
-        reference_alias = next(item for item in aliases["reference_designs"] if item["catalog_id"] == "gaiahand")
+        reference_alias = next(
+            item
+            for item in aliases["reference_designs"]
+            if item["catalog_id"] == handoff["mvp_seed_project"]["reference_design_id"]
+        )
         self.assertEqual(reference_alias["backend_id"], sample_project.reference_design_id)
+        catalog_design = next(
+            item
+            for item in self.load_json("catalog/reference-designs/reference-designs.seed.json")
+            if item["id"] == reference_alias["catalog_id"]
+        )
+        backend_design = next(item for item in DEFAULT_REFERENCE_DESIGNS if item.id == reference_alias["backend_id"])
+        self.assertEqual(catalog_design["source"]["url"].rstrip("/"), str(backend_design.source_url).rstrip("/"))
+        self.assertEqual(catalog_design["license"]["spdx"], backend_design.license)
         self.assertTrue(
             {item["backend_id"] for item in aliases["materials"]}.issubset({item.id for item in DEFAULT_MATERIALS})
         )
@@ -144,6 +156,34 @@ class SeedDataValidationTest(unittest.TestCase):
         for route in handoff["mvp_seed_project"]["sample_wiring_routes"]:
             self.assertIn(route["id"], handoff_parts[route["from_part_id"]]["wiring_route_ids"])
             self.assertIn(route["id"], handoff_parts[route["to_part_id"]]["wiring_route_ids"])
+
+    def test_malformed_handoff_entries_report_errors_without_crashing(self) -> None:
+        sys.path.insert(0, str(ROOT))
+        from scripts import validate_catalog
+
+        malformed_handoffs = [
+            {"schema_version": "backend-frontend-handoff.v1", "id_aliases": None, "mvp_seed_project": {}},
+            {"schema_version": "backend-frontend-handoff.v1", "id_aliases": {}, "mvp_seed_project": None},
+            {
+                "schema_version": "backend-frontend-handoff.v1",
+                "id_aliases": {"reference_designs": [None]},
+                "mvp_seed_project": {
+                    "sample_parts": [None],
+                    "sample_wiring_routes": [None],
+                    "analysis_job_sequence": [None],
+                },
+            },
+        ]
+
+        for handoff in malformed_handoffs:
+            with self.subTest(handoff=handoff), tempfile.TemporaryDirectory() as temporary_directory:
+                invalid_handoff = Path(temporary_directory) / "backend-frontend-handoff.json"
+                invalid_handoff.write_text(json.dumps(handoff), encoding="utf-8")
+                errors: list[str] = []
+                with patch.object(validate_catalog, "BACKEND_FRONTEND_HANDOFF", invalid_handoff):
+                    validate_catalog.validate_handoff(errors, {}, set(), set())
+
+                self.assertTrue(errors)
 
 
 if __name__ == "__main__":

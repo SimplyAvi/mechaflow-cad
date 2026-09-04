@@ -61,7 +61,12 @@ const materialCost = (material: BackendMaterial): number => {
   return (low + high) / 2;
 };
 
-const estimatePayload = (part: BackendPart, material: BackendMaterial | undefined, taskPayload: number): number => {
+const estimatePayload = (
+  part: BackendPart,
+  material: BackendMaterial | undefined,
+  taskPayload: number | null,
+): number | null => {
+  if (taskPayload == null) return null;
   const thickness = part.dimensions.thickness_mm ?? part.dimensions.height_mm ?? 5;
   const base = taskPayload + thickness * 3;
   if (!material) return base;
@@ -71,7 +76,12 @@ const estimatePayload = (part: BackendPart, material: BackendMaterial | undefine
   return round(base, 0);
 };
 
-const ratingStatus = (payloadLb: number, taskPayload: number, safetyFactor: number): RatingStatus => {
+const ratingStatus = (
+  payloadLb: number | null,
+  taskPayload: number | null,
+  safetyFactor: number | null,
+): RatingStatus => {
+  if (payloadLb == null || taskPayload == null || safetyFactor == null) return 'watch';
   if (payloadLb < taskPayload) return 'fails';
   if (safetyFactor < 2) return 'watch';
   return 'passes';
@@ -118,9 +128,9 @@ const activeTaskFrom = (tasks: BackendTaskRequirement[], projectTask?: BackendTa
     id: 'task-unspecified',
     kind: 'custom',
     description: 'No active task supplied by the backend yet.',
-    target_value: 0,
-    unit: 'lb',
-    safety_factor_min: 1,
+    target_value: null,
+    unit: null,
+    safety_factor_min: null,
     validation_method: 'unknown',
     assumptions: [],
   };
@@ -161,11 +171,13 @@ const mapPart = (
   index: number,
   assembly: BackendAssembly,
   materialsById: Map<string, BackendMaterial>,
-  taskPayload: number,
+  taskPayload: number | null,
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
   const payloadLb = estimatePayload(part, material, taskPayload);
-  const safetyFactor = taskPayload > 0 ? round(payloadLb / taskPayload, 1) : 1;
+  const safetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
+    ? round(payloadLb / taskPayload, 1)
+    : null;
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
   return {
     id: part.id,
@@ -184,7 +196,9 @@ const mapPart = (
       status: ratingStatus(payloadLb, taskPayload, safetyFactor),
       payloadLb,
       safetyFactor,
-      summary: `${part.name} is heuristically rated against the preserved ${taskPayload} lb task until real workers run.`,
+      summary: taskPayload == null
+        ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
+        : `${part.name} is heuristically rated against the preserved ${taskPayload} lb task until real workers run.`,
       warning: part.wiring_route_ids.length > 0 ? 'Linked wiring routes require clearance checks after geometry edits.' : undefined,
     },
     visual: visualFor(part, index, node?.exploded_transform.translation_mm),
@@ -194,7 +208,7 @@ const mapPart = (
 const mapMaterialOptions = (
   parts: BackendPart[],
   materials: BackendMaterial[],
-  taskPayload: number,
+  taskPayload: number | null,
   projectId: string,
 ): MaterialOption[] =>
   parts.flatMap((part) => {
@@ -203,7 +217,9 @@ const mapMaterialOptions = (
       .filter((material) => material.id !== currentMaterialId)
       .map((material) => {
         const payloadLb = estimatePayload(part, material, taskPayload);
-        const safetyFactor = taskPayload > 0 ? round(payloadLb / taskPayload, 1) : 1;
+        const safetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
+          ? round(payloadLb / taskPayload, 1)
+          : null;
         const status = ratingStatus(payloadLb, taskPayload, safetyFactor);
         const manufacturingProcess = material.compatible_processes[0] ?? 'unknown';
         const currentDensity = materials.find((candidate) => candidate.id === currentMaterialId)?.properties.density_kg_m3 ?? 2700;
@@ -222,9 +238,11 @@ const mapMaterialOptions = (
           safetyFactor,
           weightDeltaLb,
           costDeltaUsd,
-          taskImpact: needsGeometryChange
-            ? `Fails the preserved ${taskPayload} lb task unless geometry or process constraints change.`
-            : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
+          taskImpact: taskPayload == null || payloadLb == null || safetyFactor == null
+            ? 'Payload target or rating is unknown; engineering review is required.'
+            : needsGeometryChange
+              ? `Fails the preserved ${taskPayload} lb task unless geometry or process constraints change.`
+              : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
           wiringImpact: part.wiring_route_ids.length > 0
             ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
             : 'No linked wiring route is known for this part in the sample project.',
@@ -252,14 +270,14 @@ const mapMaterialOptions = (
   });
 
 const mapJob = (job: BackendAnalysisJob): AnalysisJob => {
-  const progressFromStatus: Record<JobStatus, number> = { complete: 100, running: 62, queued: 18, blocked: 0 };
   const status = jobStatus(job.status);
+  const progress = job.result_summary.progress;
   return {
     id: job.id,
     name: toTitle(job.job_type),
     worker: job.adapter_name,
     status,
-    progress: typeof job.result_summary.progress === 'number' ? job.result_summary.progress : progressFromStatus[status],
+    progress: typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : null,
     summary:
       typeof job.result_summary.message === 'string'
         ? job.result_summary.message
@@ -275,21 +293,20 @@ const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
       item: part.name,
       quantity: 1,
       source: part.relatedWires.length > 0 ? 'wire harness' : 'fabricate',
-      unitCostUsd: part.estimatedCostUsd,
-      leadTimeDays: 7,
+      unitCostUsd: null,
+      leadTimeDays: null,
     }));
   }
 
   return items.map((item) => {
-    const part = item.part_id ? parts.find((candidate) => candidate.id === item.part_id) : undefined;
-    const unitCostUsd = item.price?.min ?? item.price?.max ?? part?.estimatedCostUsd ?? 8;
+    const unitCostUsd = item.price?.min ?? item.price?.max ?? null;
     return {
       id: item.id,
       item: item.name,
       quantity: item.quantity,
       source: item.name.toLowerCase().includes('harness') ? 'wire harness' : item.part_id ? 'fabricate' : 'off the shelf',
       unitCostUsd,
-      leadTimeDays: 7,
+      leadTimeDays: null,
     };
   });
 };
@@ -336,7 +353,7 @@ export function mapProjectPanelDataToReferenceDesign(
   const project = panelData.project;
   const assembly = selectedAssembly(panelData);
   const task = activeTaskFrom(panelData.task_requirements, project.active_task);
-  const taskPayload = task.unit === 'lb' && typeof task.target_value === 'number' ? task.target_value : 50;
+  const taskPayload = task.unit === 'lb' && typeof task.target_value === 'number' ? task.target_value : null;
   const materialsById = new Map(project.materials.map((material) => [material.id, material]));
   const parts = assembly.parts.map((part, index) => mapPart(part, index, assembly, materialsById, taskPayload));
   const reports = (panelData.reports.length > 0 ? panelData.reports : project.reports).map(mapReport);
@@ -344,8 +361,8 @@ export function mapProjectPanelDataToReferenceDesign(
   return {
     id: project.reference_design_id ?? project.id,
     name: project.name,
-    sourceUrl: 'https://github.com/mechaflow-cad/example-open-gripper',
-    license: 'MIT placeholder for demo metadata',
+    sourceUrl: 'https://github.com/SimplyAvi/mechaflow-cad',
+    license: 'MIT',
     formats: ['STEP', 'FreeCAD', 'glTF', 'KiCad', 'WireViz'],
     task: {
       label: task.description,

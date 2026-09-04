@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, NonNegativeFloat, PositiveFloat
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, NonNegativeFloat, PositiveFloat, model_validator
 
 
 class CADFileFormat(str, Enum):
@@ -121,6 +121,12 @@ class MoneyRange(BaseModel):
     max: NonNegativeFloat | None = None
     confidence: RecommendationConfidence = RecommendationConfidence.unknown
 
+    @model_validator(mode="after")
+    def validate_bounds(self) -> MoneyRange:
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError("min must be less than or equal to max")
+        return self
+
 
 class MaterialProperties(BaseModel):
     density_kg_m3: PositiveFloat | None = None
@@ -153,6 +159,16 @@ class ManufacturingOption(BaseModel):
     supplier_url: HttpUrl | None = None
     risk_notes: list[str] = Field(default_factory=list)
     confidence: RecommendationConfidence = RecommendationConfidence.heuristic
+
+    @model_validator(mode="after")
+    def validate_lead_time_bounds(self) -> ManufacturingOption:
+        if (
+            self.lead_time_days_min is not None
+            and self.lead_time_days_max is not None
+            and self.lead_time_days_min > self.lead_time_days_max
+        ):
+            raise ValueError("lead_time_days_min must be less than or equal to lead_time_days_max")
+        return self
 
 
 class Connector(BaseModel):

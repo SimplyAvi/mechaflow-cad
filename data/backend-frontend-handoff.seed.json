@@ -25,7 +25,7 @@
   "id_aliases": {
     "reference_designs": [
       {
-        "catalog_id": "gaiahand",
+        "catalog_id": "open-gripper-demo",
         "backend_id": "ref-open-gripper-demo"
       }
     ],
@@ -178,8 +178,8 @@
   },
   "mvp_seed_project": {
     "id": "project-open-gripper-demo",
-    "reference_design_id": "gaiahand",
-    "license_gate": "appears-compatible metadata only; per-file import review is still required before mirroring assets",
+    "reference_design_id": "open-gripper-demo",
+    "license_gate": "MIT-licensed fictional demo metadata only; review any real replacement assets before import",
     "active_task_id": "lift-static-payload",
     "sample_parts": [
       {

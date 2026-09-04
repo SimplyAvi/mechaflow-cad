@@ -312,9 +312,9 @@ DEFAULT_ASSEMBLY = Assembly(
 DEFAULT_REFERENCE_DESIGNS = [
     ReferenceDesign(
         id="ref-open-gripper-demo",
-        name="Open robotics gripper starter",
-        source_url="https://github.com/mechaflow-cad/example-open-gripper",
-        license="MIT placeholder for demo metadata",
+        name="MechaFlow open gripper demo",
+        source_url="https://github.com/SimplyAvi/mechaflow-cad",
+        license="MIT",
         supported_file_formats=[CADFileFormat.step, CADFileFormat.freecad, CADFileFormat.gltf],
         cad_files=["gripper.step", "gripper.FCStd"],
         assembly_files=["assembly.json"],
@@ -327,6 +327,10 @@ DEFAULT_REFERENCE_DESIGNS = [
         manufacturing_notes=["Use as an API shape example until a real permissively licensed design is imported."],
         known_limitations=["No geometry file is bundled in this repository yet.", "Analysis results are advisory stub data."],
         example_tasks=DEFAULT_TASKS,
-        source=SourceAttribution(label="MechaFlow CAD seed data", license="MIT"),
+        source=SourceAttribution(
+            label="MechaFlow CAD repository",
+            url="https://github.com/SimplyAvi/mechaflow-cad",
+            license="MIT",
+        ),
     )
 ]

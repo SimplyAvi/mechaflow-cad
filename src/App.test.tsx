@@ -26,6 +26,11 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
     expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
     expect(screen.getByText(/Backend handoff mirrored/i)).toBeInTheDocument();
+    expect(screen.getByText(/^MIT$/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open catalog entry/i })).toHaveAttribute(
+      'href',
+      'https://github.com/SimplyAvi/mechaflow-cad',
+    );
     expect(screen.getAllByText(/Advisory edit report/i).length).toBeGreaterThan(0);
   });
 
@@ -82,5 +87,40 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/http:\/\/api.test\/api\/projects\/project-open-gripper-demo\/panel-data/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
+  });
+
+  it('renders missing backend engineering values as review-required', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelData = structuredClone(mockProjectPanelData);
+    const nonPayloadTask = {
+      ...panelData.project.active_task!,
+      kind: 'reach',
+      target_value: 0.6,
+      unit: 'm',
+    };
+    panelData.project.active_task = nonPayloadTask;
+    panelData.task_requirements = [nonPayloadTask];
+    panelData.project.analysis_jobs = [
+      {
+        ...panelData.project.analysis_jobs[0]!,
+        status: 'queued',
+        result_summary: { message: 'Waiting for an adapter.' },
+      },
+    ];
+    panelData.bom_items = [{ ...panelData.bom_items[0]!, price: null }];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      return new Response('Not found', { status: 404 });
+    }));
+
+    render(<App />);
+
+    expect(await screen.findByLabelText(/Preserved task/i)).toHaveTextContent('payload unknown');
+    expect(screen.getByLabelText(/Import Design progress unknown/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/cost review required/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/lead time review required/i)).toBeInTheDocument();
+    expect(screen.getByText(/Payload rating review required/i)).toBeInTheDocument();
   });
 });

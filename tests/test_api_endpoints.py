@@ -65,6 +65,7 @@ def test_catalog_and_sample_project_are_structured() -> None:
     catalog_designs = client.get("/api/catalog/reference-designs")
     assert catalog_designs.status_code == 200
     assert any(design["id"] == "gaiahand" for design in catalog_designs.json()["items"])
+    assert any(design["id"] == "open-gripper-demo" for design in catalog_designs.json()["items"])
 
     catalog_tasks = client.get("/api/catalog/tasks")
     assert catalog_tasks.status_code == 200
@@ -130,6 +131,10 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-test"
     sample["name"] = "Schema validation project"
+    for job in sample["analysis_jobs"]:
+        job["id"] = f"{job['id']}-project-test"
+        for artifact in job["artifacts"]:
+            artifact["job_id"] = job["id"]
 
     response = client.post("/api/projects", json=sample)
 
@@ -162,6 +167,7 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
 def test_project_modification_endpoint_updates_part_and_returns_report() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-modification-flow"
+    sample["analysis_jobs"] = []
     sample["reports"] = []
     client.put("/api/projects/project-modification-flow", json=sample)
 
@@ -194,6 +200,7 @@ def test_project_modification_endpoint_updates_part_and_returns_report() -> None
 def test_project_modification_rejects_unknown_material_and_dimension() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-invalid-modification-flow"
+    sample["analysis_jobs"] = []
     client.put("/api/projects/project-invalid-modification-flow", json=sample)
 
     bad_material = client.post(
@@ -240,10 +247,49 @@ def test_create_analysis_job_selects_matching_stub_adapter() -> None:
     assert any(job["id"] == payload["id"] for job in panel_jobs)
 
 
+def test_analysis_job_requires_an_existing_project() -> None:
+    local_client = TestClient(main_module.create_app())
+
+    response = local_client.post(
+        "/api/analysis-jobs",
+        json={
+            "job_type": AnalysisJobType.extract_part_list.value,
+            "target_id": "assembly-later",
+            "project_id": "project-later",
+        },
+    )
+
+    assert response.status_code == 404
+    assert local_client.get("/api/analysis-jobs", params={"project_id": "project-later"}).json() == []
+
+
+def test_analysis_job_ids_have_one_global_project_owner() -> None:
+    local_client = TestClient(main_module.create_app())
+    job = local_client.get("/api/projects/sample").json()["analysis_jobs"][0]
+    job["id"] = "job-shared-client-id"
+    job["artifacts"] = []
+
+    first = local_client.post(
+        "/api/projects",
+        json={"id": "project-first-owner", "name": "First owner", "analysis_jobs": [job]},
+    )
+    second = local_client.post(
+        "/api/projects",
+        json={"id": "project-second-owner", "name": "Second owner", "analysis_jobs": [job]},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 409
+    listed = local_client.get("/api/analysis-jobs/job-shared-client-id").json()
+    assert listed["project_id"] == "project-first-owner"
+
+
 def test_panel_data_deduplicates_a_roundtripped_runtime_job() -> None:
     local_client = TestClient(main_module.create_app())
     sample = local_client.get("/api/projects/sample").json()
     sample["id"] = "project-job-roundtrip"
+    sample["analysis_jobs"] = []
+    sample["reports"] = []
     local_client.put("/api/projects/project-job-roundtrip", json=sample)
     job = local_client.post(
         "/api/analysis-jobs",

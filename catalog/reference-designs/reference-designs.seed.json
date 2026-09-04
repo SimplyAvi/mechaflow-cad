@@ -534,8 +534,8 @@
         "material substitution",
         "wire harness pass"
       ],
-      "sample_project_id": "project-open-gripper-demo",
-      "backend_reference_design_id": "ref-open-gripper-demo",
+      "sample_project_id": "project-gaiahand-metadata-demo",
+      "backend_reference_design_id": "ref-gaiahand",
       "frontend_panel_tags": [
         "robot-hand",
         "pcb",
@@ -559,6 +559,152 @@
         "generate_manufacturing_report"
       ],
       "license_gate": "appears-compatible metadata only; per-file hardware, PCB, and docs review required before mirroring assets"
+    }
+  },
+  {
+    "schema_version": "reference-design.v1",
+    "id": "open-gripper-demo",
+    "name": "MechaFlow open gripper demo",
+    "summary": "Fictional MIT-licensed gripper metadata used to exercise the local backend, frontend cockpit, catalog handoff, and worker stubs without importing third-party design assets.",
+    "source": {
+      "url": "https://github.com/SimplyAvi/mechaflow-cad",
+      "repository": "SimplyAvi/mechaflow-cad",
+      "retrieved_at": "2026-09-03",
+      "upstream_license_url": "https://github.com/SimplyAvi/mechaflow-cad/blob/main/LICENSE",
+      "upstream_docs_url": "https://github.com/SimplyAvi/mechaflow-cad/tree/main/docs"
+    },
+    "license": {
+      "declared": "MIT License for MechaFlow CAD source and fictional seed metadata",
+      "spdx": "MIT",
+      "compatibility": "appears-compatible",
+      "evidence": [
+        "The MechaFlow CAD repository contains an MIT LICENSE file.",
+        "This entry describes fictional local seed metadata and does not copy third-party CAD, PCB, BOM, image, or documentation assets."
+      ],
+      "cautions": [
+        "Any real CAD, PCB, BOM, image, or documentation assets that replace the fictional metadata require their own source and license review."
+      ],
+      "review_required_before_import": true
+    },
+    "openness": {
+      "design_files_available": false,
+      "commercial_use_known": "yes",
+      "redistribution_known": "yes",
+      "notes": [
+        "The committed MVP contains structured metadata only; named geometry and electronics files are illustrative placeholders."
+      ]
+    },
+    "assets": {
+      "cad": [],
+      "electronics": [],
+      "bom": [],
+      "documentation": [
+        {
+          "kind": "local MVP documentation",
+          "format": "Markdown",
+          "path_or_url": "https://github.com/SimplyAvi/mechaflow-cad/tree/main/docs",
+          "availability": "referenced",
+          "license_inherits": true,
+          "notes": "Documents the fictional local seed and its integration boundaries."
+        }
+      ]
+    },
+    "assembly": {
+      "structure_confidence": "low",
+      "known_subassemblies": [
+        "palm plate",
+        "finger subassembly",
+        "actuator bracket",
+        "controller PCB placeholder"
+      ],
+      "exploded_view_seed": {
+        "strategy": "manual",
+        "notes": [
+          "Use the committed fictional transforms only for local cockpit behavior checks."
+        ]
+      }
+    },
+    "engineering_intent": {
+      "example_task_ids": [
+        "lift-static-payload",
+        "reach-envelope",
+        "wire-clearance-check",
+        "manufacturing-substitution"
+      ],
+      "capability_rating_ids": [
+        "payload-static",
+        "deflection-limit",
+        "wire-clearance",
+        "manufacturability"
+      ],
+      "primary_material_ids": [
+        "aluminum-6061-t6",
+        "carbon-fiber-nylon-generic",
+        "fr4-generic"
+      ],
+      "manufacturing_method_ids": [
+        "cnc-milling",
+        "fdm-3d-printing",
+        "pcb-fabrication",
+        "wire-harness"
+      ],
+      "electronics_awareness": "pcb"
+    },
+    "integration_notes": {
+      "freecad": [
+        "Exercise metadata normalization and exploded transforms without claiming that placeholder geometry exists."
+      ],
+      "fea": [
+        "Keep payload and stress results advisory until a real reviewed model is supplied."
+      ],
+      "kicad_wireviz": [
+        "Exercise connector and route contracts with fictional PCB and harness metadata."
+      ],
+      "manufacturing": [
+        "Exercise quote packet shapes without presenting fictional prices or lead times as supplier data."
+      ]
+    },
+    "review": {
+      "status": "needs-license-review",
+      "reviewed_by": "firstmate-catalog-seed",
+      "reviewed_at": "2026-09-03",
+      "next_actions": [
+        "Keep the entry metadata-only until a real design is selected and reviewed.",
+        "Replace illustrative file names only after the replacement assets pass the dependency license checklist."
+      ]
+    },
+    "handoff": {
+      "preferred_mvp_roles": [
+        "local gripper demo",
+        "task-preserving material preview",
+        "wiring awareness",
+        "manufacturing handoff"
+      ],
+      "sample_project_id": "project-open-gripper-demo",
+      "backend_reference_design_id": "ref-open-gripper-demo",
+      "frontend_panel_tags": [
+        "fictional-demo",
+        "gripper",
+        "wiring",
+        "metadata-only"
+      ],
+      "required_adapter_ids": [
+        "freecad",
+        "calculix-gmsh",
+        "kicad-stepup",
+        "wireviz",
+        "manufacturing-quote-packets"
+      ],
+      "recommended_job_types": [
+        "import_design",
+        "generate_exploded_view",
+        "extract_part_list",
+        "rerate_payload_capability",
+        "check_wire_routing",
+        "generate_bom",
+        "generate_manufacturing_report"
+      ],
+      "license_gate": "MIT-licensed fictional demo metadata only; review any real replacement assets before import"
     }
   }
 ]

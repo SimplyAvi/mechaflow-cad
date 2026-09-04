@@ -47,7 +47,7 @@ from .services import (
     collect_project_wiring_routes,
 )
 from .settings import Settings, get_settings
-from .storage import ProjectAlreadyExistsError, ProjectStore, build_default_project_store
+from .storage import AnalysisJobAlreadyExistsError, ProjectAlreadyExistsError, ProjectStore, build_default_project_store
 
 
 class HealthResponse(BaseModel):
@@ -150,10 +150,18 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         return stored_project
 
     def list_analysis_jobs() -> list[AnalysisJob]:
-        jobs_by_id = dict(standalone_job_store)
+        jobs = list(standalone_job_store.values())
         for stored_project in project_store.list_projects():
-            jobs_by_id.update({job.id: job for job in stored_project.analysis_jobs})
-        return list(jobs_by_id.values())
+            jobs.extend(stored_project.analysis_jobs)
+        return jobs
+
+    def analysis_job_id_exists(job_id: str) -> bool:
+        return job_id in standalone_job_store or any(job.id == job_id for job in list_analysis_jobs())
+
+    def ensure_no_standalone_job_conflicts(project: Project) -> None:
+        conflict = {job.id for job in project.analysis_jobs} & standalone_job_store.keys()
+        if conflict:
+            raise HTTPException(status_code=409, detail="analysis job id already exists")
 
     def get_analysis_job_or_404(job_id: str) -> AnalysisJob:
         for stored_project in project_store.list_projects():
@@ -166,17 +174,20 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         return job
 
     def store_analysis_job(job: AnalysisJob) -> None:
-        stored_project = project_store.get_project(job.project_id) if job.project_id else None
-        if stored_project is None:
+        if job.project_id is None:
+            if any(job.id == existing.id for project in project_store.list_projects() for existing in project.analysis_jobs):
+                raise HTTPException(status_code=409, detail="analysis job id already exists")
             standalone_job_store[job.id] = job
             return
+        stored_project = project_store.get_project(job.project_id)
+        if stored_project is None:
+            raise HTTPException(status_code=404, detail="project not found")
         jobs_by_id = {existing.id: existing for existing in stored_project.analysis_jobs}
         jobs_by_id[job.id] = job
         project_store.upsert_project(
             stored_project.id,
             stored_project.model_copy(update={"analysis_jobs": list(jobs_by_id.values())}),
         )
-        standalone_job_store.pop(job.id, None)
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:
@@ -288,19 +299,20 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.post(f"{settings.api_prefix}/projects", response_model=Project, status_code=201, tags=["projects"])
     def create_project(project: Project) -> Project:
         try:
-            stored = project_store.create_project(project)
-            for job in stored.analysis_jobs:
-                standalone_job_store.pop(job.id, None)
-            return stored
+            ensure_no_standalone_job_conflicts(project)
+            return project_store.create_project(project)
         except ProjectAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="project already exists") from exc
+        except AnalysisJobAlreadyExistsError as exc:
+            raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
-        stored = project_store.upsert_project(project_id, project)
-        for job in stored.analysis_jobs:
-            standalone_job_store.pop(job.id, None)
-        return stored
+        ensure_no_standalone_job_conflicts(project)
+        try:
+            return project_store.upsert_project(project_id, project)
+        except AnalysisJobAlreadyExistsError as exc:
+            raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}/panel-data", response_model=ProjectPanelData, tags=["projects"])
     def project_panel_data(project_id: str) -> ProjectPanelData:
@@ -365,11 +377,16 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.post(f"{settings.api_prefix}/analysis-jobs", response_model=AnalysisJob, status_code=202, tags=["jobs"])
     def create_analysis_job(request: AnalysisJobRequest) -> AnalysisJob:
+        if request.project_id is not None:
+            get_project_or_404(request.project_id)
         adapter = choose_adapter(request)
         now = datetime.now(timezone.utc)
         plan = adapter.plan(request) if adapter else None
+        job_id = f"job-{uuid4()}"
+        while analysis_job_id_exists(job_id):
+            job_id = f"job-{uuid4()}"
         job = AnalysisJob(
-            id=f"job-{uuid4()}",
+            id=job_id,
             job_type=request.job_type,
             status=AnalysisJobStatus.queued if adapter else AnalysisJobStatus.blocked_missing_adapter,
             target_id=request.target_id,

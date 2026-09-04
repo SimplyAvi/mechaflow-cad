@@ -54,7 +54,9 @@ function App() {
     return <main className="loading-shell">Loading MechaFlow cockpit...</main>;
   }
 
-  const bomTotal = design.bom.reduce((sum, item) => sum + item.quantity * item.unitCostUsd, 0);
+  const bomTotal = design.bom.length > 0 && design.bom.every((item) => item.unitCostUsd != null)
+    ? design.bom.reduce((sum, item) => sum + item.quantity * (item.unitCostUsd ?? 0), 0)
+    : null;
   const activeRating = selectedOption
     ? {
         payloadLb: selectedOption.payloadLb,
@@ -79,7 +81,7 @@ function App() {
           <span>Preserved task</span>
           <strong>{design.task.label}</strong>
           <small>
-            Target: {design.task.targetPayloadLb} lb,{' '}
+            Target: {design.task.targetPayloadLb == null ? 'payload unknown' : `${design.task.targetPayloadLb} lb`},{' '}
             {design.task.cycleTimeSeconds == null ? 'cycle unknown' : `${design.task.cycleTimeSeconds}s cycle`},{' '}
             {design.task.reachMeters == null ? 'reach unknown' : `${design.task.reachMeters}m reach`}
           </small>
@@ -230,18 +232,21 @@ function CapabilityCard({
   rating,
   targetPayloadLb,
 }: {
-  rating: { status: 'passes' | 'watch' | 'fails'; payloadLb: number; safetyFactor: number; summary: string; warning?: string };
-  targetPayloadLb: number;
+  rating: { status: 'passes' | 'watch' | 'fails'; payloadLb: number | null; safetyFactor: number | null; summary: string; warning?: string };
+  targetPayloadLb: number | null;
 }) {
-  const delta = rating.payloadLb - targetPayloadLb;
+  const hasRating = rating.payloadLb != null && rating.safetyFactor != null && targetPayloadLb != null;
+  const delta = hasRating ? rating.payloadLb! - targetPayloadLb! : null;
   return (
     <div className={`capability-card status-${rating.status}`}>
       <span>{statusLabel[rating.status]}</span>
-      <strong>{rating.payloadLb} lb projected rating</strong>
-      <small>
-        Safety factor {rating.safetyFactor.toFixed(1)} - {delta >= 0 ? '+' : ''}
-        {delta} lb against preserved task
-      </small>
+      <strong>{hasRating ? `${rating.payloadLb} lb projected rating` : 'Payload rating review required'}</strong>
+      {hasRating && delta != null ? (
+        <small>
+          Safety factor {rating.safetyFactor!.toFixed(1)} - {delta >= 0 ? '+' : ''}
+          {delta} lb against preserved task
+        </small>
+      ) : <small>Safety factor and payload delta are unknown.</small>}
       <p>{rating.summary}</p>
       {rating.warning ? <p className="warning">{rating.warning}</p> : null}
     </div>
@@ -316,8 +321,11 @@ function AnalysisPanel({ design }: { design: ReferenceDesign }) {
               <strong>{job.name}</strong>
               <small>{job.worker}</small>
             </div>
-            <div className="progress-track" aria-label={`${job.name} ${job.progress}%`}>
-              <span style={{ width: `${job.progress}%` }} />
+            <div
+              className="progress-track"
+              aria-label={`${job.name} ${job.progress == null ? 'progress unknown' : `${job.progress}%`}`}
+            >
+              <span style={{ width: `${job.progress ?? 0}%` }} />
             </div>
             <span className={`job-status ${job.status}`}>{job.status}</span>
             <p>{job.summary}</p>
@@ -328,16 +336,19 @@ function AnalysisPanel({ design }: { design: ReferenceDesign }) {
   );
 }
 
-function BomPanel({ design, total }: { design: ReferenceDesign; total: number }) {
+function BomPanel({ design, total }: { design: ReferenceDesign; total: number | null }) {
   return (
     <article className="panel">
       <p className="eyebrow">BOM and cost</p>
-      <h2>{formatCurrency(total)} open estimate</h2>
+      <h2>{total == null ? 'Cost review required' : `${formatCurrency(total)} open estimate`}</h2>
       <div className="bom-list">
         {design.bom.map((item) => (
           <div key={item.id}>
             <strong>{item.quantity}x {item.item}</strong>
-            <small>{item.source} - {formatCurrency(item.unitCostUsd)} each - {item.leadTimeDays} day lead</small>
+            <small>
+              {item.source} - {item.unitCostUsd == null ? 'cost review required' : `${formatCurrency(item.unitCostUsd)} each`} -{' '}
+              {item.leadTimeDays == null ? 'lead time review required' : `${item.leadTimeDays} day lead`}
+            </small>
           </div>
         ))}
       </div>
