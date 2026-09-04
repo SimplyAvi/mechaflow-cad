@@ -72,9 +72,9 @@ export const mockTaskRequirements = [
 export const mockReferenceDesigns = [
   {
     id: 'ref-open-gripper-demo',
-    name: 'Open robotics gripper starter',
-    source_url: 'https://github.com/mechaflow-cad/example-open-gripper',
-    license: 'MIT placeholder for demo metadata',
+    name: 'MechaFlow open gripper demo',
+    source_url: 'https://github.com/SimplyAvi/mechaflow-cad',
+    license: 'MIT',
     supported_file_formats: ['step', 'freecad', 'gltf'],
     cad_files: ['gripper.step', 'gripper.FCStd'],
     assembly_files: ['assembly.json'],
@@ -84,6 +84,11 @@ export const mockReferenceDesigns = [
     manufacturing_notes: ['Use as an API shape example until a real permissively licensed design is imported.'],
     known_limitations: ['No geometry file is bundled in this repository yet.', 'Analysis results are advisory stub data.'],
     example_tasks: mockTaskRequirements,
+    source: {
+      label: 'MechaFlow CAD repository',
+      url: 'https://github.com/SimplyAvi/mechaflow-cad',
+      license: 'MIT',
+    },
   },
 ];
 

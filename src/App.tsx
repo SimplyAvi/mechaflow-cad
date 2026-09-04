@@ -102,12 +102,12 @@ function App() {
             </div>
             <div>
               <dt>Formats</dt>
-              <dd>{design.formats.join(', ')}</dd>
+              <dd>{design.formats.length > 0 ? design.formats.join(', ') : 'Review required'}</dd>
             </div>
             <div>
               <dt>Source</dt>
               <dd>
-                <a href={design.sourceUrl}>Open catalog entry</a>
+                {design.sourceUrl ? <a href={design.sourceUrl}>Open catalog entry</a> : 'Review required'}
               </dd>
             </div>
           </dl>
@@ -176,11 +176,11 @@ function App() {
             </div>
             <div>
               <dt>Weight</dt>
-              <dd>{selectedPart.weightLb.toFixed(2)} lb</dd>
+              <dd>{selectedPart.weightLb == null ? 'Review required' : `${selectedPart.weightLb.toFixed(2)} lb`}</dd>
             </div>
             <div>
               <dt>Cost</dt>
-              <dd>{formatCurrency(selectedPart.estimatedCostUsd)}</dd>
+              <dd>{selectedPart.estimatedCostUsd == null ? 'Review required' : formatCurrency(selectedPart.estimatedCostUsd)}</dd>
             </div>
           </dl>
           <CapabilityCard rating={activeRating} targetPayloadLb={design.task.targetPayloadLb} />
@@ -263,7 +263,7 @@ function MaterialSubstitution({
   onSelect: (id: string) => void;
 }) {
   if (options.length === 0) {
-    return <p className="muted">No substitution options are mocked for this part yet.</p>;
+    return <p className="muted">No compatible substitution options are available; material and process compatibility review is required.</p>;
   }
 
   return (
@@ -281,8 +281,16 @@ function MaterialSubstitution({
         <div className="option-impact">
           <p>{selectedOption.taskImpact}</p>
           <ul>
-            <li>Weight change: {selectedOption.weightDeltaLb > 0 ? '+' : ''}{selectedOption.weightDeltaLb.toFixed(2)} lb</li>
-            <li>Cost change: {selectedOption.costDeltaUsd > 0 ? '+' : ''}{formatCurrency(selectedOption.costDeltaUsd)}</li>
+            <li>
+              Weight change: {selectedOption.weightDeltaLb == null
+                ? 'review required'
+                : `${selectedOption.weightDeltaLb > 0 ? '+' : ''}${selectedOption.weightDeltaLb.toFixed(2)} lb`}
+            </li>
+            <li>
+              Cost change: {selectedOption.costDeltaUsd == null
+                ? 'review required'
+                : `${selectedOption.costDeltaUsd > 0 ? '+' : ''}${formatCurrency(selectedOption.costDeltaUsd)}`}
+            </li>
             <li>{selectedOption.manufacturingImpact}</li>
             <li>{selectedOption.wiringImpact}</li>
           </ul>
@@ -454,7 +462,7 @@ function WiringPanel({ design, selectedPart }: { design: ReferenceDesign; select
             <div className={`wiring-card status-${route.clearanceStatus}`} key={route.id}>
               <strong>{route.name}</strong>
               <small>
-                Bend radius {route.bendRadiusMm} mm - service loop{' '}
+                {route.bendRadiusMm == null ? 'Bend radius review required' : `Bend radius ${route.bendRadiusMm} mm`} - service loop{' '}
                 {route.serviceLoop == null ? 'review required' : route.serviceLoop ? 'planned' : 'missing'}
               </small>
               <p>{route.note}</p>

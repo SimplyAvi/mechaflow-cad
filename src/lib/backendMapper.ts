@@ -52,12 +52,12 @@ const leadTime = (option: BackendManufacturingOption): string => {
   return `${option.lead_time_days_min ?? option.lead_time_days_max} days`;
 };
 
-const materialProcess = (material: BackendMaterial, fallback?: string): string =>
-  toTitle(material.compatible_processes[0] ?? fallback ?? 'unknown');
-
-const materialCost = (material: BackendMaterial): number => {
-  const low = material.cost?.min ?? 2;
-  const high = material.cost?.max ?? low;
+const materialCost = (material: BackendMaterial): number | null => {
+  const low = material.cost?.min;
+  const high = material.cost?.max;
+  if (low == null && high == null) return null;
+  if (low == null) return high ?? null;
+  if (high == null) return low;
   return (low + high) / 2;
 };
 
@@ -66,10 +66,9 @@ const estimatePayload = (
   material: BackendMaterial | undefined,
   taskPayload: number | null,
 ): number | null => {
-  if (taskPayload == null) return null;
-  const thickness = part.dimensions.thickness_mm ?? part.dimensions.height_mm ?? 5;
+  const thickness = part.dimensions.thickness_mm ?? part.dimensions.height_mm;
+  if (taskPayload == null || thickness == null || !material) return null;
   const base = taskPayload + thickness * 3;
-  if (!material) return base;
   if (material.family.includes('polymer')) return round(base * 0.55, 0);
   if (material.family.includes('steel')) return round(base * 1.85, 0);
   if (material.family.includes('aluminum')) return round(base * 1.25, 0);
@@ -89,7 +88,8 @@ const ratingStatus = (
 
 const jobStatus = (status: string): JobStatus => {
   if (status === 'completed' || status === 'complete') return 'complete';
-  if (status === 'blocked_missing_adapter' || status === 'failed' || status === 'blocked') return 'blocked';
+  if (status === 'failed') return 'failed';
+  if (status === 'blocked_missing_adapter' || status === 'blocked') return 'blocked';
   if (status === 'running') return 'running';
   return 'queued';
 };
@@ -159,9 +159,12 @@ const selectedAssembly = (panelData: BackendProjectPanelData): BackendAssembly =
     wiring_routes: [],
   };
 
-const costForPart = (part: BackendPart, material?: BackendMaterial): number => {
-  const massLb = (part.mass_kg ?? 0.1) * 2.20462;
-  const materialBase = material ? materialCost(material) * Math.max(0.2, massLb) : 12;
+const costForPart = (part: BackendPart, material?: BackendMaterial): number | null => {
+  if (part.mass_kg == null || !material) return null;
+  const unitMaterialCost = materialCost(material);
+  if (unitMaterialCost == null) return null;
+  const massLb = part.mass_kg * 2.20462;
+  const materialBase = unitMaterialCost * Math.max(0.2, massLb);
   const machiningFactor = part.manufacturing_options.some((option) => option.process.includes('cnc')) ? 3 : 1.4;
   return round(Math.max(6, materialBase * machiningFactor + part.related_fasteners.length * 2), 0);
 };
@@ -186,7 +189,7 @@ const mapPart = (
     purpose: part.purpose ?? 'Purpose metadata has not been extracted yet.',
     material: material?.name ?? part.material_id ?? 'Unknown material',
     manufacturingProcess: toTitle(String(part.metadata.preferred_manufacturing_process ?? part.manufacturing_options[0]?.process ?? 'unknown')),
-    weightLb: round((part.mass_kg ?? 0) * 2.20462, 2),
+    weightLb: part.mass_kg == null ? null : round(part.mass_kg * 2.20462, 2),
     estimatedCostUsd: costForPart(part, material),
     stressRisk: riskFromPart(part),
     replacementDifficulty: replacementRisk(part),
@@ -213,60 +216,70 @@ const mapMaterialOptions = (
 ): MaterialOption[] =>
   parts.flatMap((part) => {
     const currentMaterialId = part.material_id;
-    return materials
-      .filter((material) => material.id !== currentMaterialId)
-      .map((material) => {
-        const payloadLb = estimatePayload(part, material, taskPayload);
-        const safetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
-          ? round(payloadLb / taskPayload, 1)
-          : null;
-        const status = ratingStatus(payloadLb, taskPayload, safetyFactor);
-        const manufacturingProcess = material.compatible_processes[0] ?? 'unknown';
-        const currentDensity = materials.find((candidate) => candidate.id === currentMaterialId)?.properties.density_kg_m3 ?? 2700;
-        const nextDensity = material.properties.density_kg_m3 ?? currentDensity;
-        const weightDeltaLb = round((part.mass_kg ?? 0.1) * (nextDensity / currentDensity - 1) * 2.20462, 2);
-        const costDeltaUsd = round(materialCost(material) - materialCost(materials.find((candidate) => candidate.id === currentMaterialId) ?? material), 0);
-        const needsGeometryChange = status === 'fails';
-        const dimensionChanges: Record<string, number> =
-          needsGeometryChange && part.dimensions.thickness_mm ? { thickness_mm: part.dimensions.thickness_mm + 2 } : {};
-        return {
-          id: `${part.id}-${material.id}`,
-          partId: part.id,
-          material: material.name,
-          process: materialProcess(material, manufacturingProcess),
-          payloadLb,
-          safetyFactor,
-          weightDeltaLb,
-          costDeltaUsd,
-          taskImpact: taskPayload == null || payloadLb == null || safetyFactor == null
-            ? 'Payload target or rating is unknown; engineering review is required.'
-            : needsGeometryChange
-              ? `Fails the preserved ${taskPayload} lb task unless geometry or process constraints change.`
-              : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
-          wiringImpact: part.wiring_route_ids.length > 0
-            ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
-            : 'No linked wiring route is known for this part in the sample project.',
-          manufacturingImpact: `${toTitle(manufacturingProcess)} preview is advisory until supplier and manufacturing workers run.`,
-          status,
-          backendModification: {
-            endpoint: `/api/projects/${projectId}/modifications`,
-            method: 'POST',
-            payload: {
-              id: `mod-${part.id}-${material.id}`,
-              target_part_id: part.id,
-              description: `Preview changing ${part.name} to ${material.name} while preserving the active task.`,
-              material_id: material.id,
-              dimension_changes: dimensionChanges,
-              manufacturing_process: manufacturingProcess,
-            },
-            reportTitle: `Advisory edit report for ${part.name}`,
-            reportSummary: needsGeometryChange
-              ? 'Local preview would return requires_review because payload, fatigue, wiring, and manufacturability need real workers.'
-              : 'Local preview would update project metadata and attach an advisory report before real CAD geometry changes exist.',
-            reportStatus: 'requires_review',
+    const currentMaterial = materials.find((candidate) => candidate.id === currentMaterialId);
+    const partProcesses = new Set(
+      part.manufacturing_options.map((option) => option.process).filter((process) => process !== 'unknown'),
+    );
+    return materials.flatMap((material) => {
+      const compatibleProcesses = material.compatible_processes.filter(
+        (process) => process !== 'unknown' && partProcesses.has(process),
+      );
+      if (material.id === currentMaterialId || compatibleProcesses.length === 0) return [];
+      const payloadLb = estimatePayload(part, material, taskPayload);
+      const safetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
+        ? round(payloadLb / taskPayload, 1)
+        : null;
+      const status = ratingStatus(payloadLb, taskPayload, safetyFactor);
+      const manufacturingProcess = compatibleProcesses[0];
+      const currentDensity = currentMaterial?.properties.density_kg_m3;
+      const nextDensity = material.properties.density_kg_m3;
+      const weightDeltaLb = part.mass_kg != null && currentDensity != null && currentDensity > 0 && nextDensity != null
+        ? round(part.mass_kg * (nextDensity / currentDensity - 1) * 2.20462, 2)
+        : null;
+      const currentCost = currentMaterial ? materialCost(currentMaterial) : null;
+      const nextCost = materialCost(material);
+      const costDeltaUsd = currentCost != null && nextCost != null ? round(nextCost - currentCost, 0) : null;
+      const needsGeometryChange = status === 'fails';
+      const dimensionChanges: Record<string, number> =
+        needsGeometryChange && part.dimensions.thickness_mm ? { thickness_mm: part.dimensions.thickness_mm + 2 } : {};
+      return {
+        id: `${part.id}-${material.id}`,
+        partId: part.id,
+        material: material.name,
+        process: toTitle(manufacturingProcess),
+        payloadLb,
+        safetyFactor,
+        weightDeltaLb,
+        costDeltaUsd,
+        taskImpact: taskPayload == null || payloadLb == null || safetyFactor == null
+          ? 'Payload target or rating is unknown; engineering review is required.'
+          : needsGeometryChange
+            ? `Fails the preserved ${taskPayload} lb task unless geometry or process constraints change.`
+            : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
+        wiringImpact: part.wiring_route_ids.length > 0
+          ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
+          : 'No linked wiring route is known for this part in the sample project.',
+        manufacturingImpact: `${toTitle(manufacturingProcess)} preview is advisory until supplier and manufacturing workers run.`,
+        status,
+        backendModification: {
+          endpoint: `/api/projects/${projectId}/modifications`,
+          method: 'POST',
+          payload: {
+            id: `mod-${part.id}-${material.id}`,
+            target_part_id: part.id,
+            description: `Preview changing ${part.name} to ${material.name} while preserving the active task.`,
+            material_id: material.id,
+            dimension_changes: dimensionChanges,
+            manufacturing_process: manufacturingProcess,
           },
-        };
-      });
+          reportTitle: `Advisory edit report for ${part.name}`,
+          reportSummary: needsGeometryChange
+            ? 'Local preview would return requires_review because payload, fatigue, wiring, and manufacturability need real workers.'
+            : 'Local preview would update project metadata and attach an advisory report before real CAD geometry changes exist.',
+          reportStatus: 'requires_review',
+        },
+      };
+    });
   });
 
 const mapJob = (job: BackendAnalysisJob): AnalysisJob => {
@@ -330,7 +343,7 @@ const mapWiring = (routes: BackendWiringRoute[]): WiringRoute[] =>
     name: route.name,
     connectedParts: [route.from_connector.part_id, route.to_connector.part_id].filter((value): value is string => Boolean(value)),
     clearanceStatus: route.clearance_min_mm == null ? 'watch' : route.clearance_min_mm < 3 ? 'watch' : 'passes',
-    bendRadiusMm: route.bend_radius_min_mm ?? 0,
+    bendRadiusMm: route.bend_radius_min_mm ?? null,
     serviceLoop: null,
     note: route.risk_notes[0] ?? `Connects ${route.from_connector.name} to ${route.to_connector.name}.`,
   }));
@@ -357,13 +370,14 @@ export function mapProjectPanelDataToReferenceDesign(
   const materialsById = new Map(project.materials.map((material) => [material.id, material]));
   const parts = assembly.parts.map((part, index) => mapPart(part, index, assembly, materialsById, taskPayload));
   const reports = (panelData.reports.length > 0 ? panelData.reports : project.reports).map(mapReport);
+  const isDemoReference = project.reference_design_id === 'ref-open-gripper-demo';
 
   return {
     id: project.reference_design_id ?? project.id,
     name: project.name,
-    sourceUrl: 'https://github.com/SimplyAvi/mechaflow-cad',
-    license: 'MIT',
-    formats: ['STEP', 'FreeCAD', 'glTF', 'KiCad', 'WireViz'],
+    sourceUrl: isDemoReference ? 'https://github.com/SimplyAvi/mechaflow-cad' : null,
+    license: isDemoReference ? 'MIT' : 'Review required',
+    formats: isDemoReference ? ['STEP', 'FreeCAD', 'glTF', 'KiCad', 'WireViz'] : [],
     task: {
       label: task.description,
       targetPayloadLb: taskPayload,

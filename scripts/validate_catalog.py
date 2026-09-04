@@ -85,6 +85,21 @@ def object_list(value: Any, label: str, errors: list[str]) -> list[dict[str, Any
     return objects
 
 
+def string_value(value: Any, label: str, errors: list[str]) -> str | None:
+    ensure(isinstance(value, str), f"{label} must be a string", errors)
+    return value if isinstance(value, str) else None
+
+
+def string_list(value: Any, label: str, errors: list[str]) -> list[str]:
+    items = list_value(value, label, errors)
+    strings: list[str] = []
+    for index, item in enumerate(items):
+        parsed = string_value(item, f"{label}[{index}]", errors)
+        if parsed is not None:
+            strings.append(parsed)
+    return strings
+
+
 def validate_unique_ids(name: str, items: list[Any], errors: list[str]) -> set[str]:
     seen: set[str] = set()
     for index, item in enumerate(items):
@@ -208,32 +223,37 @@ def validate_integration_adapters(errors: list[str]) -> set[str]:
                 ensure(False, f"{adapter_id} capability must be an object", errors)
                 continue
             capability_id = capability.get("id", "<unknown>")
-            job_types = capability.get("backend_job_types", [])
-            ensure(isinstance(job_types, list), f"{adapter_id}:{capability_id} backend_job_types must be a list", errors)
-            if isinstance(job_types, list):
-                for job_type in job_types:
-                    ensure(
-                        job_type in BACKEND_JOB_TYPES,
-                        f"{adapter_id}:{capability_id} has unknown job type {job_type}",
-                        errors,
-                    )
-            artifact_kinds = capability.get("expected_artifacts", [])
-            ensure(
-                isinstance(artifact_kinds, list),
-                f"{adapter_id}:{capability_id} expected_artifacts must be a list",
+            job_types = string_list(
+                capability.get("backend_job_types", []),
+                f"{adapter_id}:{capability_id} backend_job_types",
                 errors,
             )
-            if isinstance(artifact_kinds, list):
-                for artifact_kind in artifact_kinds:
-                    ensure(
-                        artifact_kind in BACKEND_ARTIFACT_KINDS,
-                        f"{adapter_id}:{capability_id} has unknown artifact kind {artifact_kind}",
-                        errors,
-                    )
+            for job_type in job_types:
+                ensure(
+                    job_type in BACKEND_JOB_TYPES,
+                    f"{adapter_id}:{capability_id} has unknown job type {job_type}",
+                    errors,
+                )
+            artifact_kinds = string_list(
+                capability.get("expected_artifacts", []),
+                f"{adapter_id}:{capability_id} expected_artifacts",
+                errors,
+            )
+            for artifact_kind in artifact_kinds:
+                ensure(
+                    artifact_kind in BACKEND_ARTIFACT_KINDS,
+                    f"{adapter_id}:{capability_id} has unknown artifact kind {artifact_kind}",
+                    errors,
+                )
     return adapter_ids
 
 
-def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design_ids: set[str], adapter_ids: set[str]) -> None:
+def validate_handoff(
+    errors: list[str],
+    ids_by_name: dict[str, set[str]],
+    design_ids: set[str],
+    adapter_ids: set[str],
+) -> None:
     handoff = load_json(BACKEND_FRONTEND_HANDOFF)
     ensure(isinstance(handoff, dict), "backend frontend handoff root must be an object", errors)
     if not isinstance(handoff, dict):
@@ -254,31 +274,67 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
     rating_aliases = object_list(aliases.get("capability_ratings", []), "handoff capability rating aliases", errors)
     adapter_aliases = object_list(aliases.get("adapters", []), "handoff adapter aliases", errors)
     for item in reference_aliases:
-        catalog_id = item.get("catalog_id")
-        ensure(catalog_id in design_ids, f"handoff aliases unknown reference design {catalog_id}", errors)
+        catalog_id = string_value(item.get("catalog_id"), "handoff reference alias catalog_id", errors)
+        ensure(
+            catalog_id is not None and catalog_id in design_ids,
+            f"handoff aliases unknown reference design {catalog_id}",
+            errors,
+        )
     for item in material_aliases:
-        catalog_id = item.get("catalog_id")
-        ensure(catalog_id in ids_by_name.get("materials", set()), f"handoff aliases unknown material {catalog_id}", errors)
+        catalog_id = string_value(item.get("catalog_id"), "handoff material alias catalog_id", errors)
+        ensure(
+            catalog_id is not None and catalog_id in ids_by_name.get("materials", set()),
+            f"handoff aliases unknown material {catalog_id}",
+            errors,
+        )
     for item in manufacturing_aliases:
-        catalog_id = item.get("catalog_id")
-        ensure(catalog_id in ids_by_name.get("manufacturing-methods", set()), f"handoff aliases unknown manufacturing method {catalog_id}", errors)
+        catalog_id = string_value(item.get("catalog_id"), "handoff manufacturing alias catalog_id", errors)
+        ensure(
+            catalog_id is not None and catalog_id in ids_by_name.get("manufacturing-methods", set()),
+            f"handoff aliases unknown manufacturing method {catalog_id}",
+            errors,
+        )
     for item in task_aliases:
-        catalog_id = item.get("catalog_id")
-        ensure(catalog_id in ids_by_name.get("tasks", set()), f"handoff aliases unknown task {catalog_id}", errors)
+        catalog_id = string_value(item.get("catalog_id"), "handoff task alias catalog_id", errors)
+        ensure(
+            catalog_id is not None and catalog_id in ids_by_name.get("tasks", set()),
+            f"handoff aliases unknown task {catalog_id}",
+            errors,
+        )
     for item in rating_aliases:
-        catalog_id = item.get("catalog_id")
-        artifact_kind = item.get("backend_artifact_kind")
-        ensure(catalog_id in ids_by_name.get("capability-ratings", set()), f"handoff aliases unknown rating {catalog_id}", errors)
-        ensure(artifact_kind in BACKEND_ARTIFACT_KINDS, f"handoff aliases unknown artifact kind {artifact_kind}", errors)
+        catalog_id = string_value(item.get("catalog_id"), "handoff rating alias catalog_id", errors)
+        artifact_kind = string_value(
+            item.get("backend_artifact_kind"),
+            "handoff rating alias backend_artifact_kind",
+            errors,
+        )
+        ensure(
+            catalog_id is not None and catalog_id in ids_by_name.get("capability-ratings", set()),
+            f"handoff aliases unknown rating {catalog_id}",
+            errors,
+        )
+        ensure(
+            artifact_kind is not None and artifact_kind in BACKEND_ARTIFACT_KINDS,
+            f"handoff aliases unknown artifact kind {artifact_kind}",
+            errors,
+        )
     for item in adapter_aliases:
-        catalog_id = item.get("catalog_id")
-        ensure(catalog_id in adapter_ids, f"handoff aliases unknown adapter {catalog_id}", errors)
+        catalog_id = string_value(item.get("catalog_id"), "handoff adapter alias catalog_id", errors)
+        ensure(catalog_id is not None and catalog_id in adapter_ids, f"handoff aliases unknown adapter {catalog_id}", errors)
 
     project_value = handoff.get("mvp_seed_project", {})
     ensure(isinstance(project_value, dict), "handoff mvp_seed_project must be an object", errors)
     project = project_value if isinstance(project_value, dict) else {}
-    reference_design_id = project.get("reference_design_id")
-    ensure(reference_design_id in design_ids, f"handoff mvp_seed_project references unknown design {reference_design_id}", errors)
+    reference_design_id = string_value(
+        project.get("reference_design_id"),
+        "handoff mvp_seed_project reference_design_id",
+        errors,
+    )
+    ensure(
+        reference_design_id is not None and reference_design_id in design_ids,
+        f"handoff mvp_seed_project references unknown design {reference_design_id}",
+        errors,
+    )
     ensure(bool(project.get("license_gate")), "handoff mvp_seed_project must keep license_gate visible", errors)
     sample_parts = object_list(project.get("sample_parts", []), "handoff sample_parts", errors)
     parts_by_id = {
@@ -293,38 +349,55 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
         if isinstance(route, dict) and isinstance(route.get("id"), str)
     }
     for part in sample_parts:
-        part_id = part.get("id", "<unknown>")
-        ensure(part.get("material_id") in ids_by_name.get("materials", set()), f"{part_id} references unknown material", errors)
+        part_id = string_value(part.get("id"), "handoff sample part id", errors) or "<unknown>"
+        material_id = string_value(part.get("material_id"), f"{part_id} material_id", errors)
+        manufacturing_method_id = string_value(
+            part.get("manufacturing_method_id"),
+            f"{part_id} manufacturing_method_id",
+            errors,
+        )
         ensure(
-            part.get("manufacturing_method_id") in ids_by_name.get("manufacturing-methods", set()),
+            material_id is not None and material_id in ids_by_name.get("materials", set()),
+            f"{part_id} references unknown material",
+            errors,
+        )
+        ensure(
+            manufacturing_method_id is not None
+            and manufacturing_method_id in ids_by_name.get("manufacturing-methods", set()),
             f"{part_id} references unknown manufacturing method",
             errors,
         )
-        for rating_id in list_value(
+        for rating_id in string_list(
             part.get("capability_rating_ids", []),
             f"{part_id} capability_rating_ids",
             errors,
         ):
-            ensure(rating_id in ids_by_name.get("capability-ratings", set()), f"{part_id} references unknown rating {rating_id}", errors)
-        for route_id in list_value(part.get("wiring_route_ids", []), f"{part_id} wiring_route_ids", errors):
+            ensure(
+                rating_id in ids_by_name.get("capability-ratings", set()),
+                f"{part_id} references unknown rating {rating_id}",
+                errors,
+            )
+        for route_id in string_list(part.get("wiring_route_ids", []), f"{part_id} wiring_route_ids", errors):
             route = routes_by_id.get(route_id)
             ensure(route is not None, f"{part_id} references unknown wiring route {route_id}", errors)
             if route is not None:
+                from_part_id = string_value(route.get("from_part_id"), f"{route_id} from_part_id", errors)
+                to_part_id = string_value(route.get("to_part_id"), f"{route_id} to_part_id", errors)
                 ensure(
-                    part_id in {route.get("from_part_id"), route.get("to_part_id")},
+                    part_id in {from_part_id, to_part_id},
                     f"{part_id} lists unrelated wiring route {route_id}",
                     errors,
                 )
     for route in sample_routes:
-        route_id = route.get("id", "<unknown>")
+        route_id = string_value(route.get("id"), "handoff sample route id", errors) or "<unknown>"
         for endpoint_field in ("from_part_id", "to_part_id"):
-            endpoint_id = route.get(endpoint_field)
-            endpoint = parts_by_id.get(endpoint_id)
+            endpoint_id = string_value(route.get(endpoint_field), f"{route_id} {endpoint_field}", errors)
+            endpoint = parts_by_id.get(endpoint_id) if endpoint_id is not None else None
             ensure(endpoint is not None, f"{route_id} references unknown endpoint part {endpoint_id}", errors)
             if endpoint is not None:
                 ensure(
                     route_id
-                    in list_value(
+                    in string_list(
                         endpoint.get("wiring_route_ids", []),
                         f"{endpoint_id} wiring_route_ids",
                         errors,
@@ -332,16 +405,31 @@ def validate_handoff(errors: list[str], ids_by_name: dict[str, set[str]], design
                     f"{endpoint_id} does not list endpoint wiring route {route_id}",
                     errors,
                 )
-        for adapter_id in list_value(route.get("adapter_ids", []), f"{route_id} adapter_ids", errors):
+        for adapter_id in string_list(route.get("adapter_ids", []), f"{route_id} adapter_ids", errors):
             ensure(adapter_id in adapter_ids, f"{route_id} references unknown adapter {adapter_id}", errors)
     analysis_jobs = object_list(project.get("analysis_job_sequence", []), "handoff analysis_job_sequence", errors)
     for job in analysis_jobs:
-        ensure(job.get("job_type") in BACKEND_JOB_TYPES, f"handoff job has unknown job_type {job.get('job_type')}", errors)
-        ensure(job.get("adapter_id") in adapter_ids, f"handoff job references unknown adapter {job.get('adapter_id')}", errors)
-        ensure(job.get("artifact_kind") in BACKEND_ARTIFACT_KINDS, f"handoff job has unknown artifact {job.get('artifact_kind')}", errors)
+        job_type = string_value(job.get("job_type"), "handoff job_type", errors)
+        adapter_id = string_value(job.get("adapter_id"), "handoff job adapter_id", errors)
+        artifact_kind = string_value(job.get("artifact_kind"), "handoff job artifact_kind", errors)
         ensure(
-            any(alias.get("catalog_id") == job.get("adapter_id") for alias in adapter_aliases),
-            f"handoff job adapter {job.get('adapter_id')} has no backend alias",
+            job_type is not None and job_type in BACKEND_JOB_TYPES,
+            f"handoff job has unknown job_type {job_type}",
+            errors,
+        )
+        ensure(
+            adapter_id is not None and adapter_id in adapter_ids,
+            f"handoff job references unknown adapter {adapter_id}",
+            errors,
+        )
+        ensure(
+            artifact_kind is not None and artifact_kind in BACKEND_ARTIFACT_KINDS,
+            f"handoff job has unknown artifact {artifact_kind}",
+            errors,
+        )
+        ensure(
+            adapter_id is not None and any(alias.get("catalog_id") == adapter_id for alias in adapter_aliases),
+            f"handoff job adapter {adapter_id} has no backend alias",
             errors,
         )
 

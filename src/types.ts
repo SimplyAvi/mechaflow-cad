@@ -1,11 +1,11 @@
-export type JobStatus = 'queued' | 'running' | 'blocked' | 'complete';
+export type JobStatus = 'queued' | 'running' | 'blocked' | 'failed' | 'complete';
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type RatingStatus = 'passes' | 'watch' | 'fails';
 
 export interface ReferenceDesign {
   id: string;
   name: string;
-  sourceUrl: string;
+  sourceUrl: string | null;
   license: string;
   formats: string[];
   task: TaskRequirement;
@@ -52,8 +52,8 @@ export interface Part {
   purpose: string;
   material: string;
   manufacturingProcess: string;
-  weightLb: number;
-  estimatedCostUsd: number;
+  weightLb: number | null;
+  estimatedCostUsd: number | null;
   stressRisk: RiskLevel;
   replacementDifficulty: RiskLevel;
   fasteners: string[];
@@ -87,8 +87,8 @@ export interface MaterialOption {
   process: string;
   payloadLb: number | null;
   safetyFactor: number | null;
-  weightDeltaLb: number;
-  costDeltaUsd: number;
+  weightDeltaLb: number | null;
+  costDeltaUsd: number | null;
   taskImpact: string;
   wiringImpact: string;
   manufacturingImpact: string;
@@ -139,7 +139,7 @@ export interface WiringRoute {
   name: string;
   connectedParts: string[];
   clearanceStatus: RatingStatus;
-  bendRadiusMm: number;
+  bendRadiusMm: number | null;
   serviceLoop: boolean | null;
   note: string;
 }

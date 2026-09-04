@@ -142,6 +142,36 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'POST' && isProjectPath(url.pathname, '/modifications')) {
       const modification = await readJsonBody(request);
+      const parts = mockBackendPanelData.project.assemblies.flatMap((assembly) => assembly.parts);
+      const part = parts.find((candidate) => candidate.id === modification.target_part_id);
+      if (!part) {
+        sendJson(response, 404, { error: 'target part not found' });
+        return;
+      }
+      if (modification.material_id || modification.manufacturing_process) {
+        const materialId = modification.material_id || part.material_id;
+        const material = mockBackendPanelData.project.materials.find((candidate) => candidate.id === materialId);
+        const partProcesses = new Set(
+          part.manufacturing_options.map((option) => option.process).filter((process) => process !== 'unknown'),
+        );
+        const materialProcesses = material?.compatible_processes.filter((process) => process !== 'unknown') ?? [];
+        const compatibleProcesses = materialProcesses.filter((process) => partProcesses.has(process));
+        if (!material) {
+          sendJson(response, 422, { error: 'material not found' });
+          return;
+        }
+        if (partProcesses.size === 0 || materialProcesses.length === 0) {
+          sendJson(response, 422, { error: 'material and process compatibility requires review' });
+          return;
+        }
+        if (
+          compatibleProcesses.length === 0
+          || (modification.manufacturing_process && !compatibleProcesses.includes(modification.manufacturing_process))
+        ) {
+          sendJson(response, 422, { error: 'material and process are incompatible for this part' });
+          return;
+        }
+      }
       const report = {
         id: `report-${modification.id ?? 'mock-modification'}`,
         project_id: projectId,

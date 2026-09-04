@@ -90,6 +90,28 @@ try {
   if (panelData.wiring_routes[0].id !== 'route-finger-sensor') {
     throw new Error('Mock backend did not return wiring panel data.');
   }
+  const referenceDesigns = await waitForJson(`${apiBaseUrl}/api/reference-designs`);
+  const demoReference = referenceDesigns.find((design) => design.id === 'ref-open-gripper-demo');
+  if (
+    demoReference?.source_url !== 'https://github.com/SimplyAvi/mechaflow-cad'
+    || demoReference.license !== 'MIT'
+  ) {
+    throw new Error('Mock backend did not return the canonical demo reference identity.');
+  }
+  const incompatibleModification = await fetch(`${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      id: 'smoke-incompatible-material',
+      target_part_id: 'part-controller-pcb',
+      description: 'Reject an incompatible local material preview.',
+      material_id: 'mat-aluminum-6061-t6',
+      manufacturing_process: 'cnc_machining',
+    }),
+  });
+  if (incompatibleModification.status !== 422) {
+    throw new Error('Mock backend accepted an incompatible part material and process.');
+  }
 
   await new Promise((resolve, reject) => {
     const build = spawn('npm', ['run', 'build'], {

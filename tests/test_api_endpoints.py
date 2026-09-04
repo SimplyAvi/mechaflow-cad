@@ -1,11 +1,14 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier, local
 
 from fastapi.testclient import TestClient
 
 import mechaflow_api.main as main_module
 from mechaflow_api.main import app
 from mechaflow_api.models import AnalysisJobType, ManufacturingProcess
+from mechaflow_api.storage import InMemoryProjectStore, build_sample_project
 
 
 client = TestClient(app)
@@ -226,6 +229,66 @@ def test_project_modification_rejects_unknown_material_and_dimension() -> None:
     assert bad_dimension.status_code == 422
 
 
+def test_project_modification_enforces_part_material_process_compatibility() -> None:
+    local_client = TestClient(main_module.create_app())
+    sample = local_client.get("/api/projects/sample").json()
+    sample["id"] = "project-compatibility-flow"
+    sample["analysis_jobs"] = []
+    sample["reports"] = []
+    assert local_client.put("/api/projects/project-compatibility-flow", json=sample).status_code == 200
+
+    incompatible = local_client.post(
+        "/api/projects/project-compatibility-flow/modifications",
+        json={
+            "id": "mod-controller-aluminum",
+            "target_part_id": "part-controller-pcb",
+            "description": "Attempt to machine the controller from aluminum.",
+            "material_id": "mat-aluminum-6061-t6",
+            "manufacturing_process": ManufacturingProcess.cnc_machining.value,
+        },
+    )
+
+    assert incompatible.status_code == 422
+    stored = local_client.get("/api/projects/project-compatibility-flow").json()
+    controller = next(
+        part
+        for assembly in stored["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-controller-pcb"
+    )
+    assert controller["material_id"] == "mat-fr4-generic"
+
+
+def test_project_modification_requires_explicit_compatibility_data() -> None:
+    local_client = TestClient(main_module.create_app())
+    sample = local_client.get("/api/projects/sample").json()
+    sample["id"] = "project-compatibility-review"
+    sample["analysis_jobs"] = []
+    sample["reports"] = []
+    finger = next(
+        part
+        for assembly in sample["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-finger-link"
+    )
+    finger["manufacturing_options"] = []
+    assert local_client.put("/api/projects/project-compatibility-review", json=sample).status_code == 200
+
+    response = local_client.post(
+        "/api/projects/project-compatibility-review/modifications",
+        json={
+            "id": "mod-missing-compatibility",
+            "target_part_id": "part-finger-link",
+            "description": "Require review when compatibility metadata is missing.",
+            "material_id": "mat-carbon-fiber-nylon",
+            "manufacturing_process": ManufacturingProcess.additive_fdm.value,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "requires review" in response.json()["detail"]
+
+
 def test_create_analysis_job_selects_matching_stub_adapter() -> None:
     response = client.post(
         "/api/analysis-jobs",
@@ -245,6 +308,49 @@ def test_create_analysis_job_selects_matching_stub_adapter() -> None:
 
     panel_jobs = client.get("/api/projects/project-open-gripper-demo/panel-data").json()["project"]["analysis_jobs"]
     assert any(job["id"] == payload["id"] for job in panel_jobs)
+
+
+def test_concurrent_analysis_job_creates_do_not_lose_accepted_jobs() -> None:
+    class CoordinatedProjectStore(InMemoryProjectStore):
+        def __init__(self) -> None:
+            super().__init__(seed_projects=[build_sample_project()])
+            self._request_reads = local()
+            self._second_read_barrier = Barrier(2)
+
+        def get_project(self, project_id: str):
+            project = super().get_project(project_id)
+            if project_id != "project-open-gripper-demo":
+                return project
+            read_count = getattr(self._request_reads, "count", 0) + 1
+            self._request_reads.count = read_count
+            if read_count == 2:
+                self._second_read_barrier.wait(timeout=2)
+            return project
+
+    concurrent_app = main_module.create_app(project_store=CoordinatedProjectStore())
+
+    def create_job(target_id: str):
+        with TestClient(concurrent_app) as concurrent_client:
+            return concurrent_client.post(
+                "/api/analysis-jobs",
+                json={
+                    "job_type": AnalysisJobType.run_fea.value,
+                    "target_id": target_id,
+                    "project_id": "project-open-gripper-demo",
+                },
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(create_job, ["part-finger-link", "part-palm-plate"]))
+
+    assert [response.status_code for response in responses] == [202, 202]
+    created_ids = {response.json()["id"] for response in responses}
+    with TestClient(concurrent_app) as concurrent_client:
+        stored_jobs = concurrent_client.get(
+            "/api/analysis-jobs",
+            params={"project_id": "project-open-gripper-demo"},
+        ).json()
+    assert created_ids.issubset({job["id"] for job in stored_jobs})
 
 
 def test_analysis_job_requires_an_existing_project() -> None:

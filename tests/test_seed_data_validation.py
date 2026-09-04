@@ -96,6 +96,11 @@ class SeedDataValidationTest(unittest.TestCase):
                         "backend_job_types": None,
                         "expected_artifacts": None,
                     },
+                    {
+                        "id": "unhashable-capability",
+                        "backend_job_types": [{}],
+                        "expected_artifacts": [[]],
+                    },
                 ],
             },
         ]
@@ -110,6 +115,8 @@ class SeedDataValidationTest(unittest.TestCase):
         self.assertIn("malformed-adapter capability must be an object", errors)
         self.assertIn("malformed-adapter:malformed-capability backend_job_types must be a list", errors)
         self.assertIn("malformed-adapter:malformed-capability expected_artifacts must be a list", errors)
+        self.assertIn("malformed-adapter:unhashable-capability backend_job_types[0] must be a string", errors)
+        self.assertIn("malformed-adapter:unhashable-capability expected_artifacts[0] must be a string", errors)
 
     def test_handoff_aliases_match_backend_runtime_contract(self) -> None:
         sys.path.insert(0, str(ROOT / "backend"))
@@ -166,11 +173,35 @@ class SeedDataValidationTest(unittest.TestCase):
             {"schema_version": "backend-frontend-handoff.v1", "id_aliases": {}, "mvp_seed_project": None},
             {
                 "schema_version": "backend-frontend-handoff.v1",
-                "id_aliases": {"reference_designs": [None]},
+                "id_aliases": {
+                    "reference_designs": [None, {"catalog_id": []}],
+                    "capability_ratings": [{"catalog_id": {}, "backend_artifact_kind": []}],
+                },
                 "mvp_seed_project": {
-                    "sample_parts": [None],
-                    "sample_wiring_routes": [None],
-                    "analysis_job_sequence": [None],
+                    "reference_design_id": [],
+                    "sample_parts": [
+                        None,
+                        {
+                            "id": "part-malformed",
+                            "material_id": [],
+                            "manufacturing_method_id": {},
+                            "capability_rating_ids": [{}],
+                            "wiring_route_ids": [[]],
+                        },
+                    ],
+                    "sample_wiring_routes": [
+                        None,
+                        {
+                            "id": "route-malformed",
+                            "from_part_id": [],
+                            "to_part_id": {},
+                            "adapter_ids": [[]],
+                        },
+                    ],
+                    "analysis_job_sequence": [
+                        None,
+                        {"job_type": {}, "adapter_id": [], "artifact_kind": {}},
+                    ],
                 },
             },
         ]

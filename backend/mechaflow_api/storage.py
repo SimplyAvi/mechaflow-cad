@@ -7,7 +7,9 @@ hosted deployments.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
+from threading import RLock
 from typing import Protocol
 
 from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
@@ -35,6 +37,20 @@ class ProjectStore(Protocol):
 
     def upsert_project(self, project_id: str, project: Project) -> Project: ...
 
+    def update_project(self, project_id: str, update: Callable[[Project], Project]) -> Project | None: ...
+
+    def list_analysis_jobs(self, project_id: str | None = None) -> list[AnalysisJob]: ...
+
+    def get_analysis_job(self, job_id: str) -> AnalysisJob | None: ...
+
+    def add_analysis_job(self, job: AnalysisJob) -> AnalysisJob: ...
+
+    def update_analysis_job(
+        self,
+        job_id: str,
+        update: Callable[[AnalysisJob], AnalysisJob],
+    ) -> AnalysisJob | None: ...
+
 
 class ProjectAlreadyExistsError(ValueError):
     """Raised when a project create request reuses an existing id."""
@@ -42,6 +58,10 @@ class ProjectAlreadyExistsError(ValueError):
 
 class AnalysisJobAlreadyExistsError(ValueError):
     """Raised when an analysis job id has more than one project owner."""
+
+
+class ProjectNotFoundError(ValueError):
+    """Raised when a project-owned mutation targets a missing project."""
 
 
 def normalize_project_references(project_id: str, project: Project) -> Project:
@@ -58,7 +78,9 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
 
 class InMemoryProjectStore:
     def __init__(self, seed_projects: list[Project] | None = None) -> None:
+        self._lock = RLock()
         self._projects: dict[str, Project] = {}
+        self._standalone_jobs: dict[str, AnalysisJob] = {}
         for project in seed_projects or []:
             self.create_project(project)
 
@@ -68,6 +90,9 @@ class InMemoryProjectStore:
             if job.id in incoming_ids:
                 raise AnalysisJobAlreadyExistsError(job.id)
             incoming_ids.add(job.id)
+        conflict = incoming_ids & self._standalone_jobs.keys()
+        if conflict:
+            raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
         for existing_project_id, existing_project in self._projects.items():
             if existing_project_id == project_id:
                 continue
@@ -76,26 +101,112 @@ class InMemoryProjectStore:
             if conflict:
                 raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
+    def _analysis_job_exists(self, job_id: str) -> bool:
+        if job_id in self._standalone_jobs:
+            return True
+        return any(job.id == job_id for project in self._projects.values() for job in project.analysis_jobs)
+
     def list_projects(self) -> list[Project]:
-        return [project.model_copy(deep=True) for project in self._projects.values()]
+        with self._lock:
+            return [project.model_copy(deep=True) for project in self._projects.values()]
 
     def get_project(self, project_id: str) -> Project | None:
-        project = self._projects.get(project_id)
-        return project.model_copy(deep=True) if project else None
+        with self._lock:
+            project = self._projects.get(project_id)
+            return project.model_copy(deep=True) if project else None
 
     def create_project(self, project: Project) -> Project:
-        if project.id in self._projects:
-            raise ProjectAlreadyExistsError(project.id)
-        self._ensure_job_ids_available(project.id, project)
-        stored = normalize_project_references(project.id, project)
-        self._projects[project.id] = stored
-        return stored.model_copy(deep=True)
+        with self._lock:
+            if project.id in self._projects:
+                raise ProjectAlreadyExistsError(project.id)
+            self._ensure_job_ids_available(project.id, project)
+            stored = normalize_project_references(project.id, project)
+            self._projects[project.id] = stored
+            return stored.model_copy(deep=True)
 
     def upsert_project(self, project_id: str, project: Project) -> Project:
-        self._ensure_job_ids_available(project_id, project)
-        stored = normalize_project_references(project_id, project)
-        self._projects[project_id] = stored
-        return stored.model_copy(deep=True)
+        with self._lock:
+            self._ensure_job_ids_available(project_id, project)
+            stored = normalize_project_references(project_id, project)
+            self._projects[project_id] = stored
+            return stored.model_copy(deep=True)
+
+    def update_project(self, project_id: str, update: Callable[[Project], Project]) -> Project | None:
+        with self._lock:
+            project = self._projects.get(project_id)
+            if project is None:
+                return None
+            updated = update(project.model_copy(deep=True))
+            self._ensure_job_ids_available(project_id, updated)
+            stored = normalize_project_references(project_id, updated)
+            self._projects[project_id] = stored
+            return stored.model_copy(deep=True)
+
+    def list_analysis_jobs(self, project_id: str | None = None) -> list[AnalysisJob]:
+        with self._lock:
+            jobs = list(self._standalone_jobs.values())
+            for project in self._projects.values():
+                jobs.extend(project.analysis_jobs)
+            if project_id is not None:
+                jobs = [job for job in jobs if job.project_id == project_id]
+            return [job.model_copy(deep=True) for job in jobs]
+
+    def get_analysis_job(self, job_id: str) -> AnalysisJob | None:
+        with self._lock:
+            standalone = self._standalone_jobs.get(job_id)
+            if standalone is not None:
+                return standalone.model_copy(deep=True)
+            for project in self._projects.values():
+                for job in project.analysis_jobs:
+                    if job.id == job_id:
+                        return job.model_copy(deep=True)
+            return None
+
+    def add_analysis_job(self, job: AnalysisJob) -> AnalysisJob:
+        with self._lock:
+            if self._analysis_job_exists(job.id):
+                raise AnalysisJobAlreadyExistsError(job.id)
+            if job.project_id is None:
+                stored = job.model_copy(deep=True)
+                self._standalone_jobs[stored.id] = stored
+                return stored.model_copy(deep=True)
+            project = self._projects.get(job.project_id)
+            if project is None:
+                raise ProjectNotFoundError(job.project_id)
+            stored = job.model_copy(update={"project_id": project.id}, deep=True)
+            self._projects[project.id] = project.model_copy(
+                update={"analysis_jobs": [*project.analysis_jobs, stored]},
+                deep=True,
+            )
+            return stored.model_copy(deep=True)
+
+    def update_analysis_job(
+        self,
+        job_id: str,
+        update: Callable[[AnalysisJob], AnalysisJob],
+    ) -> AnalysisJob | None:
+        with self._lock:
+            standalone = self._standalone_jobs.get(job_id)
+            if standalone is not None:
+                stored = update(standalone.model_copy(deep=True)).model_copy(
+                    update={"id": job_id, "project_id": None},
+                    deep=True,
+                )
+                self._standalone_jobs[job_id] = stored
+                return stored.model_copy(deep=True)
+            for project_id, project in self._projects.items():
+                for index, job in enumerate(project.analysis_jobs):
+                    if job.id != job_id:
+                        continue
+                    stored = update(job.model_copy(deep=True)).model_copy(
+                        update={"id": job_id, "project_id": project_id},
+                        deep=True,
+                    )
+                    jobs = list(project.analysis_jobs)
+                    jobs[index] = stored
+                    self._projects[project_id] = project.model_copy(update={"analysis_jobs": jobs}, deep=True)
+                    return stored.model_copy(deep=True)
+            return None
 
 
 def build_sample_analysis_jobs() -> list[AnalysisJob]:

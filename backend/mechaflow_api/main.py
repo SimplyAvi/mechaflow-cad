@@ -37,6 +37,7 @@ from .models import (
 )
 from .services import (
     InvalidDimensionChangeError,
+    MaterialProcessCompatibilityError,
     MaterialNotFoundError,
     PartNotFoundError,
     apply_project_modification,
@@ -47,7 +48,13 @@ from .services import (
     collect_project_wiring_routes,
 )
 from .settings import Settings, get_settings
-from .storage import AnalysisJobAlreadyExistsError, ProjectAlreadyExistsError, ProjectStore, build_default_project_store
+from .storage import (
+    AnalysisJobAlreadyExistsError,
+    ProjectAlreadyExistsError,
+    ProjectNotFoundError,
+    ProjectStore,
+    build_default_project_store,
+)
 
 
 class HealthResponse(BaseModel):
@@ -121,7 +128,6 @@ CATALOG_TASKS_PATH = Path(__file__).resolve().parents[2] / "data" / "tasks.seed.
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
     project_store = project_store or build_default_project_store()
-    standalone_job_store: dict[str, AnalysisJob] = {}
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -149,45 +155,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=404, detail="project not found")
         return stored_project
 
-    def list_analysis_jobs() -> list[AnalysisJob]:
-        jobs = list(standalone_job_store.values())
-        for stored_project in project_store.list_projects():
-            jobs.extend(stored_project.analysis_jobs)
-        return jobs
-
-    def analysis_job_id_exists(job_id: str) -> bool:
-        return job_id in standalone_job_store or any(job.id == job_id for job in list_analysis_jobs())
-
-    def ensure_no_standalone_job_conflicts(project: Project) -> None:
-        conflict = {job.id for job in project.analysis_jobs} & standalone_job_store.keys()
-        if conflict:
-            raise HTTPException(status_code=409, detail="analysis job id already exists")
-
     def get_analysis_job_or_404(job_id: str) -> AnalysisJob:
-        for stored_project in project_store.list_projects():
-            for job in stored_project.analysis_jobs:
-                if job.id == job_id:
-                    return job
-        job = standalone_job_store.get(job_id)
+        job = project_store.get_analysis_job(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return job
-
-    def store_analysis_job(job: AnalysisJob) -> None:
-        if job.project_id is None:
-            if any(job.id == existing.id for project in project_store.list_projects() for existing in project.analysis_jobs):
-                raise HTTPException(status_code=409, detail="analysis job id already exists")
-            standalone_job_store[job.id] = job
-            return
-        stored_project = project_store.get_project(job.project_id)
-        if stored_project is None:
-            raise HTTPException(status_code=404, detail="project not found")
-        jobs_by_id = {existing.id: existing for existing in stored_project.analysis_jobs}
-        jobs_by_id[job.id] = job
-        project_store.upsert_project(
-            stored_project.id,
-            stored_project.model_copy(update={"analysis_jobs": list(jobs_by_id.values())}),
-        )
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:
@@ -299,7 +271,6 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.post(f"{settings.api_prefix}/projects", response_model=Project, status_code=201, tags=["projects"])
     def create_project(project: Project) -> Project:
         try:
-            ensure_no_standalone_job_conflicts(project)
             return project_store.create_project(project)
         except ProjectAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="project already exists") from exc
@@ -308,7 +279,6 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
-        ensure_no_standalone_job_conflicts(project)
         try:
             return project_store.upsert_project(project_id, project)
         except AnalysisJobAlreadyExistsError as exc:
@@ -356,54 +326,56 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         tags=["projects"],
     )
     def modify_project(project_id: str, modification: Modification) -> ProjectModificationResponse:
-        stored_project = project_store.get_project(project_id)
-        if stored_project is None:
-            raise HTTPException(status_code=404, detail="project not found")
-        try:
+        result: ProjectModificationResponse | None = None
+
+        def apply_modification(stored_project: Project) -> Project:
+            nonlocal result
             result = apply_project_modification(stored_project, modification)
+            return result.project
+
+        try:
+            stored_project = project_store.update_project(project_id, apply_modification)
         except PartNotFoundError as exc:
             raise HTTPException(status_code=404, detail="target part not found") from exc
-        except (MaterialNotFoundError, InvalidDimensionChangeError) as exc:
+        except (MaterialNotFoundError, MaterialProcessCompatibilityError, InvalidDimensionChangeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        project_store.upsert_project(project_id, result.project)
-        return result
+        if stored_project is None or result is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        return result.model_copy(update={"project": stored_project}, deep=True)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
     def analysis_jobs(project_id: str | None = None) -> list[AnalysisJob]:
-        jobs = list_analysis_jobs()
-        if project_id is not None:
-            jobs = [job for job in jobs if job.project_id == project_id]
-        return jobs
+        return project_store.list_analysis_jobs(project_id)
 
     @app.post(f"{settings.api_prefix}/analysis-jobs", response_model=AnalysisJob, status_code=202, tags=["jobs"])
     def create_analysis_job(request: AnalysisJobRequest) -> AnalysisJob:
-        if request.project_id is not None:
-            get_project_or_404(request.project_id)
         adapter = choose_adapter(request)
         now = datetime.now(timezone.utc)
         plan = adapter.plan(request) if adapter else None
-        job_id = f"job-{uuid4()}"
-        while analysis_job_id_exists(job_id):
-            job_id = f"job-{uuid4()}"
-        job = AnalysisJob(
-            id=job_id,
-            job_type=request.job_type,
-            status=AnalysisJobStatus.queued if adapter else AnalysisJobStatus.blocked_missing_adapter,
-            target_id=request.target_id,
-            project_id=request.project_id,
-            adapter_name=adapter.status.name if adapter else "unassigned",
-            local_compute_preferred=request.local_compute_preferred,
-            input_summary=request.input_summary,
-            result_summary={
-                "message": "Job accepted as orchestration metadata only; no heavy CAD or simulation tool was invoked.",
-                "queue_name": plan.queue_name if plan else None,
-                "expected_artifacts": [artifact.value for artifact in plan.expected_artifacts] if plan else [],
-            },
-            created_at=now,
-            updated_at=now,
-        )
-        store_analysis_job(job)
-        return job
+        while True:
+            job = AnalysisJob(
+                id=f"job-{uuid4()}",
+                job_type=request.job_type,
+                status=AnalysisJobStatus.queued if adapter else AnalysisJobStatus.blocked_missing_adapter,
+                target_id=request.target_id,
+                project_id=request.project_id,
+                adapter_name=adapter.status.name if adapter else "unassigned",
+                local_compute_preferred=request.local_compute_preferred,
+                input_summary=request.input_summary,
+                result_summary={
+                    "message": "Job accepted as orchestration metadata only; no heavy CAD or simulation tool was invoked.",
+                    "queue_name": plan.queue_name if plan else None,
+                    "expected_artifacts": [artifact.value for artifact in plan.expected_artifacts] if plan else [],
+                },
+                created_at=now,
+                updated_at=now,
+            )
+            try:
+                return project_store.add_analysis_job(job)
+            except AnalysisJobAlreadyExistsError:
+                continue
+            except ProjectNotFoundError as exc:
+                raise HTTPException(status_code=404, detail="project not found") from exc
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}", response_model=AnalysisJob, tags=["jobs"])
     def analysis_job(job_id: str) -> AnalysisJob:
@@ -435,35 +407,36 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])
     def run_analysis_job_stub(job_id: str) -> AnalysisJob:
-        job = get_analysis_job_or_404(job_id)
-        request = AnalysisJobRequest(
-            job_type=job.job_type,
-            target_id=job.target_id,
-            project_id=job.project_id,
-            local_compute_preferred=job.local_compute_preferred,
-            input_summary=job.input_summary,
-        )
-        adapter = choose_adapter(request)
-        now = datetime.now(timezone.utc)
-        if adapter is None:
-            job = job.model_copy(update={"status": AnalysisJobStatus.blocked_missing_adapter, "updated_at": now})
-            store_analysis_job(job)
-            return job
-        artifact = adapter.run_stub(job)
-        job = job.model_copy(
-            update={
-                "status": AnalysisJobStatus.completed,
-                "artifacts": [*job.artifacts, artifact],
-                "result_summary": {
-                    **job.result_summary,
-                    "message": "Local stub completed without invoking heavy tools.",
-                    "artifact_id": artifact.id,
-                    "artifact_kind": artifact.kind.value,
-                },
-                "updated_at": now,
-            }
-        )
-        store_analysis_job(job)
+        def run_stub(job: AnalysisJob) -> AnalysisJob:
+            request = AnalysisJobRequest(
+                job_type=job.job_type,
+                target_id=job.target_id,
+                project_id=job.project_id,
+                local_compute_preferred=job.local_compute_preferred,
+                input_summary=job.input_summary,
+            )
+            adapter = choose_adapter(request)
+            now = datetime.now(timezone.utc)
+            if adapter is None:
+                return job.model_copy(update={"status": AnalysisJobStatus.blocked_missing_adapter, "updated_at": now})
+            artifact = adapter.run_stub(job)
+            return job.model_copy(
+                update={
+                    "status": AnalysisJobStatus.completed,
+                    "artifacts": [*job.artifacts, artifact],
+                    "result_summary": {
+                        **job.result_summary,
+                        "message": "Local stub completed without invoking heavy tools.",
+                        "artifact_id": artifact.id,
+                        "artifact_kind": artifact.kind.value,
+                    },
+                    "updated_at": now,
+                }
+            )
+
+        job = project_store.update_analysis_job(job_id, run_stub)
+        if job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
         return job
 
     return app

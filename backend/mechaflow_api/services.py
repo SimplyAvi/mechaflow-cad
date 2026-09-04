@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from .models import (
     AnalysisReport,
     BOMItem,
+    ManufacturingProcess,
     Modification,
     Part,
     PartDimensions,
@@ -35,6 +36,10 @@ class MaterialNotFoundError(ProjectModificationError):
     """Raised when a modification references a material missing from the project."""
 
 
+class MaterialProcessCompatibilityError(ProjectModificationError):
+    """Raised when a requested material and process are not valid for a part."""
+
+
 class InvalidDimensionChangeError(ProjectModificationError):
     """Raised when dimension change keys or values cannot be applied."""
 
@@ -49,10 +54,11 @@ def apply_project_modification(project: Project, modification: Modification) -> 
     tests. It does not invoke CAD, FEA, wiring, or supplier integrations.
     """
 
-    _validate_material(project, modification)
+    target_part = _find_part(project, modification.target_part_id)
+    _validate_material_process(project, target_part, modification)
     changed_keys = _validate_dimension_keys(modification)
     now = datetime.now(timezone.utc)
-    edited_part: Part | None = None
+    edited_part = _apply_part_update(target_part, modification)
     updated_assemblies = []
 
     for assembly in project.assemblies:
@@ -61,12 +67,8 @@ def apply_project_modification(project: Project, modification: Modification) -> 
             if part.id != modification.target_part_id:
                 updated_parts.append(part)
                 continue
-            edited_part = _apply_part_update(part, modification)
             updated_parts.append(edited_part)
         updated_assemblies.append(assembly.model_copy(update={"parts": updated_parts}))
-
-    if edited_part is None:
-        raise PartNotFoundError(modification.target_part_id)
 
     report = _build_modification_report(project, edited_part, modification, changed_keys, now)
     updated_project = project.model_copy(
@@ -80,12 +82,37 @@ def apply_project_modification(project: Project, modification: Modification) -> 
     return ProjectModificationResponse(project=updated_project, report=report)
 
 
-def _validate_material(project: Project, modification: Modification) -> None:
-    if modification.material_id is None:
+def _find_part(project: Project, part_id: str) -> Part:
+    for assembly in project.assemblies:
+        for part in assembly.parts:
+            if part.id == part_id:
+                return part
+    raise PartNotFoundError(part_id)
+
+
+def _validate_material_process(project: Project, part: Part, modification: Modification) -> None:
+    if modification.material_id is None and modification.manufacturing_process is None:
         return
-    material_ids = {material.id for material in project.materials}
-    if modification.material_id not in material_ids:
-        raise MaterialNotFoundError(modification.material_id)
+    material_id = modification.material_id or part.material_id
+    material = next((candidate for candidate in project.materials if candidate.id == material_id), None)
+    if material is None:
+        if modification.material_id is not None:
+            raise MaterialNotFoundError(modification.material_id)
+        raise MaterialProcessCompatibilityError("material and process compatibility requires review")
+    part_processes = {option.process for option in part.manufacturing_options}
+    material_processes = set(material.compatible_processes)
+    part_processes.discard(ManufacturingProcess.unknown)
+    material_processes.discard(ManufacturingProcess.unknown)
+    if not part_processes or not material_processes:
+        raise MaterialProcessCompatibilityError("material and process compatibility requires review")
+    compatible_processes = part_processes & material_processes
+    requested_process = modification.manufacturing_process
+    if requested_process is not None and requested_process not in compatible_processes:
+        raise MaterialProcessCompatibilityError(
+            f"{material.id} is incompatible with {requested_process.value} for {part.id}"
+        )
+    if not compatible_processes:
+        raise MaterialProcessCompatibilityError(f"{material.id} has no compatible process for {part.id}")
 
 
 def _validate_dimension_keys(modification: Modification) -> list[str]:

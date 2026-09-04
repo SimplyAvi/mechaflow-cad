@@ -500,6 +500,10 @@ small,
   background: #fca5a5;
 }
 
+.job-status.failed {
+  background: #fb7185;
+}
+
 .report-card ul {
   color: #cbd5e1;
   margin: 10px 0 0;

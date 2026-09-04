@@ -42,7 +42,10 @@ describe('MechaFlow cockpit', () => {
 
     expect(await screen.findByRole('heading', { name: /^Finger link$/i })).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText(/Preview option/i), 'part-finger-link-mat-carbon-fiber-nylon');
+    const optionSelector = screen.getByLabelText(/Preview option/i);
+    expect(within(optionSelector).queryByRole('option', { name: /FR-4/i })).not.toBeInTheDocument();
+
+    await user.selectOptions(optionSelector, 'part-finger-link-mat-carbon-fiber-nylon');
 
     expect(screen.getAllByText(/Fails the preserved 50 lb task/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('/api/projects/project-open-gripper-demo/modifications');
@@ -65,6 +68,25 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/Main palm harness/i)).toBeInTheDocument();
     expect(screen.queryByText(/Finger force sensor lead/i)).not.toBeInTheDocument();
     expect(screen.getByText(/service loop review required/i)).toBeInTheDocument();
+  });
+
+  it('requires compatibility review when a part has no explicit substitution', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const partTree = await screen.findByText('Selectable parts');
+    const treeContainer = partTree.closest('.part-tree');
+    expect(treeContainer).not.toBeNull();
+
+    await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Controller PCB placeholder/i }));
+
+    expect(screen.getByRole('heading', { name: /Controller PCB placeholder/i })).toBeInTheDocument();
+    expect(screen.getByText(/No compatible substitution options are available/i)).toHaveTextContent(
+      /compatibility review is required/i,
+    );
+    expect(screen.queryByLabelText(/Preview option/i)).not.toBeInTheDocument();
   });
 
   it('loads the backend project panel endpoint when an API base URL is configured', async () => {
@@ -99,11 +121,17 @@ describe('MechaFlow cockpit', () => {
       unit: 'm',
     };
     panelData.project.active_task = nonPayloadTask;
+    panelData.project.reference_design_id = 'ref-custom-design';
     panelData.task_requirements = [nonPayloadTask];
+    const firstPart = panelData.project.assemblies[0]!.parts[0]!;
+    firstPart.mass_kg = null;
+    const currentMaterial = panelData.project.materials.find((material) => material.id === firstPart.material_id)!;
+    currentMaterial.cost = null;
+    panelData.wiring_routes[0]!.bend_radius_min_mm = null;
     panelData.project.analysis_jobs = [
       {
         ...panelData.project.analysis_jobs[0]!,
-        status: 'queued',
+        status: 'failed',
         result_summary: { message: 'Waiting for an adapter.' },
       },
     ];
@@ -118,9 +146,18 @@ describe('MechaFlow cockpit', () => {
     render(<App />);
 
     expect(await screen.findByLabelText(/Preserved task/i)).toHaveTextContent('payload unknown');
+    const referencePanel = screen.getByText('Reference design').closest('aside');
+    expect(referencePanel).not.toBeNull();
+    expect(within(referencePanel as HTMLElement).getAllByText('Review required')).toHaveLength(3);
+    expect(within(referencePanel as HTMLElement).queryByRole('link', { name: /Open catalog entry/i })).not.toBeInTheDocument();
+    const inspectorPanel = screen.getByText('Part inspector').closest('aside');
+    expect(inspectorPanel).not.toBeNull();
+    expect(within(inspectorPanel as HTMLElement).getAllByText('Review required').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByLabelText(/Import Design progress unknown/i)).toBeInTheDocument();
+    expect(screen.getByText(/^failed$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/cost review required/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/lead time review required/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bend radius review required/i)).toBeInTheDocument();
     expect(screen.getByText(/Payload rating review required/i)).toBeInTheDocument();
   });
 });
