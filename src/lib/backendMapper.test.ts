@@ -213,15 +213,64 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.backend.integrationStubs).toContain('kicad-electronics-worker');
   });
 
-  it('keeps missing mass risk and invalid currency unknown', () => {
+  it('uses the active safety-factor requirement for part and substitution ratings', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.project.active_task!.safety_factor_min = 1.5;
+    const designWithLowerMinimum = mapProjectPanelDataToReferenceDesign(
+      panelData,
+      mockBackendMetadata,
+      'http://api.test',
+    );
+    const finger = designWithLowerMinimum.assembly.parts.find((part) => part.id === 'part-finger-link');
+    expect(finger?.rating.safetyFactor).toBe(1.7);
+    expect(finger?.rating.status).toBe('passes');
+
+    panelData.project.active_task!.safety_factor_min = 3;
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+    const steelOption = design.materialOptions.find(
+      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
+    );
+
+    expect(steelOption?.safetyFactor).toBe(2.5);
+    expect(steelOption?.status).toBe('watch');
+    expect(steelOption?.taskImpact).toMatch(/below the preserved 3\.0 minimum/i);
+
+    panelData.project.active_task!.safety_factor_min = null;
+    const designWithoutMinimum = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+    const optionWithoutMinimum = designWithoutMinimum.materialOptions.find(
+      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
+    );
+
+    expect(optionWithoutMinimum?.status).toBe('watch');
+    expect(optionWithoutMinimum?.taskImpact).toMatch(/minimum is unknown.*review is required/i);
+  });
+
+  it('keeps missing values and non-USD costs unknown', () => {
     const panelData = structuredClone(mockProjectPanelData);
     const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
     finger.mass_kg = null;
+    const aluminum = panelData.project.materials.find((material) => material.id === 'mat-aluminum-6061-t6')!;
+    aluminum.cost!.currency = 'EUR';
+    panelData.bom_items[0]!.price = {
+      currency: 'EUR',
+      min: 14,
+      max: 20,
+      confidence: 'estimated_from_heuristic',
+    };
     panelData.manufacturing_options[0]!.options[0]!.cost!.currency = 'credits';
 
     const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
 
-    expect(design.assembly.parts.find((part) => part.id === finger.id)?.stressRisk).toBe('unknown');
+    const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
+    const mappedPalm = design.assembly.parts.find((part) => part.id === 'part-palm-plate');
+    const steelOption = design.materialOptions.find(
+      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
+    );
+    expect(mappedFinger?.stressRisk).toBe('unknown');
+    expect(mappedPalm?.estimatedCostUsd).toBeNull();
+    expect(steelOption?.costDeltaUsd).toBeNull();
+    expect(design.bom[0]?.unitCostUsd).toBeNull();
     expect(design.manufacturingOptions[0]?.estimatedCostUsd).toBe('Cost review required');
     expect(design.backend.source).toBe('backend-panel-data');
   });
