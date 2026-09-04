@@ -71,6 +71,10 @@ class InvalidAnalysisJobAdapterError(ValueError):
     """Raised when a persisted analysis job names an unsupported adapter."""
 
 
+class InvalidWiringEndpointError(ValueError):
+    """Raised when a wiring endpoint names a part outside the project."""
+
+
 class NonFiniteStorageValueError(ValueError):
     """Raised when persisted state contains a non-finite JSON number."""
 
@@ -103,11 +107,16 @@ def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None
 def normalize_project_references(project_id: str, project: Project) -> Project:
     project_id = validate_project_id(project_id)
     _ensure_json_finite(project.model_dump(mode="python"), "project")
+    part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
     route_ids_by_part: dict[str, list[str]] = {}
     for assembly in project.assemblies:
         for route in assembly.wiring_routes:
             for connector in (route.from_connector, route.to_connector):
                 if connector.part_id is not None:
+                    if connector.part_id not in part_ids:
+                        raise InvalidWiringEndpointError(
+                            f"wiring route {route.id!r} references unknown part {connector.part_id!r}"
+                        )
                     route_ids = route_ids_by_part.setdefault(connector.part_id, [])
                     if route.id not in route_ids:
                         route_ids.append(route.id)

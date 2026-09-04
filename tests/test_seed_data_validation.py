@@ -45,10 +45,20 @@ class SeedDataValidationTest(unittest.TestCase):
 
     def test_adapter_seed_matches_stub_registry(self) -> None:
         sys.path.insert(0, str(ROOT / "src"))
-        from mechaflow_cad.integrations import adapter_ids
+        from mechaflow_cad.integrations import adapter_ids, build_stub_adapters
 
         adapter_seed = self.load_json("data/integration-adapters.seed.json")
         self.assertEqual({item["id"] for item in adapter_seed}, set(adapter_ids()))
+        runtime_adapters = {adapter.adapter_id: adapter for adapter in build_stub_adapters()}
+        for seeded_adapter in adapter_seed:
+            runtime_capabilities = {
+                capability.name: capability for capability in runtime_adapters[seeded_adapter["id"]].capabilities
+            }
+            for seeded_capability in seeded_adapter["capabilities"]:
+                self.assertEqual(
+                    set(seeded_capability["output_formats"]),
+                    set(runtime_capabilities[seeded_capability["id"]].output_formats),
+                )
 
     def test_committed_schema_rejects_missing_handoff(self) -> None:
         sys.path.insert(0, str(ROOT))
@@ -244,9 +254,37 @@ class SeedDataValidationTest(unittest.TestCase):
                 invalid_handoff.write_text(json.dumps(handoff), encoding="utf-8")
                 errors: list[str] = []
                 with patch.object(validate_catalog, "BACKEND_FRONTEND_HANDOFF", invalid_handoff):
-                    validate_catalog.validate_handoff(errors, {}, set(), set())
+                    validate_catalog.validate_handoff(errors, {}, set(), set(), {})
 
                 self.assertTrue(errors)
+
+    def test_handoff_rejects_invalid_adapter_job_artifact_pairs(self) -> None:
+        sys.path.insert(0, str(ROOT))
+        from scripts import validate_catalog
+
+        errors: list[str] = []
+        ids_by_name = validate_catalog.validate_datasets(errors)
+        adapter_ids, adapter_contracts = validate_catalog.validate_integration_adapters(errors)
+        design_ids = validate_catalog.validate_reference_designs(errors, adapter_ids, ids_by_name)
+        handoff = copy.deepcopy(self.load_json("data/backend-frontend-handoff.seed.json"))
+        handoff["mvp_seed_project"]["analysis_job_sequence"][0].update(
+            job_type="run_fea",
+            adapter_id="freecad",
+            artifact_kind="bom",
+        )
+
+        with patch.object(validate_catalog, "load_json", return_value=handoff):
+            validate_catalog.validate_handoff(
+                errors,
+                ids_by_name,
+                design_ids,
+                adapter_ids,
+                adapter_contracts,
+            )
+
+        self.assertIn("handoff adapter freecad does not support job type run_fea", errors)
+        self.assertIn("handoff adapter freecad does not produce artifact bom", errors)
+        self.assertIn("handoff job type run_fea must produce artifact fea_summary, not bom", errors)
 
 
 if __name__ == "__main__":

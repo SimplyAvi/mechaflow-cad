@@ -220,7 +220,7 @@ const mapPart = (
         : taskSafetyFactorMin == null
           ? `${part.name} has no active safety-factor minimum; engineering review is required.`
           : rawSafetyFactor != null && rawSafetyFactor < taskSafetyFactorMin
-            ? `${part.name} estimates a ${safetyFactor.toFixed(1)} safety factor below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
+            ? `${part.name}'s estimated safety factor is below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
             : `${part.name} is heuristically rated against the preserved ${taskPayload} lb task and ${taskSafetyFactorMin.toFixed(1)} safety-factor minimum until real workers run.`;
   return {
     id: part.id,
@@ -299,7 +299,7 @@ const mapMaterialOptions = (
             : taskSafetyFactorMin == null
               ? 'The active safety-factor minimum is unknown; engineering review is required.'
               : status === 'watch'
-                ? `The ${safetyFactor.toFixed(1)} safety factor estimate is below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
+                ? `The estimated safety factor is below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
                 : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
         wiringImpact: part.wiring_route_ids.length > 0
           ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'

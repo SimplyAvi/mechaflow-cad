@@ -36,7 +36,7 @@ class FreeCADAdapter(StubAdapter):
         AdapterCapability(
             name="import-assembly-and-explode",
             input_formats=("FCStd", "STEP", "STL", "OBJ"),
-            output_formats=("glTF", "JSON part tree", "STEP"),
+            output_formats=("glTF", "JSON part tree", "STEP", "mass properties JSON"),
             required_tools=("FreeCAD",),
         ),
     )

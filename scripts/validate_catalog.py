@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -48,12 +49,30 @@ BACKEND_ARTIFACT_KINDS = {
     "bom",
     "manufacturing_report",
 }
+CANONICAL_ARTIFACT_BY_JOB_TYPE = {
+    "import_design": "cad_metadata",
+    "generate_exploded_view": "exploded_view",
+    "extract_part_list": "part_list",
+    "estimate_mass_properties": "mass_properties",
+    "quick_load_heuristic": "load_heuristic",
+    "run_fea": "fea_summary",
+    "rerate_payload_capability": "payload_rerating",
+    "check_wire_routing": "wiring_check",
+    "generate_bom": "bom",
+    "generate_manufacturing_report": "manufacturing_report",
+}
 CROSS_REFERENCES = (
     ("example_task_ids", "tasks", "task"),
     ("primary_material_ids", "materials", "material"),
     ("manufacturing_method_ids", "manufacturing-methods", "manufacturing method"),
     ("capability_rating_ids", "capability-ratings", "capability rating"),
 )
+
+
+@dataclass(frozen=True)
+class AdapterContract:
+    job_types: frozenset[str]
+    artifact_kinds: frozenset[str]
 
 
 def load_json(path: Path) -> Any:
@@ -199,12 +218,13 @@ def validate_datasets(errors: list[str]) -> dict[str, set[str]]:
     return ids_by_name
 
 
-def validate_integration_adapters(errors: list[str]) -> set[str]:
+def validate_integration_adapters(errors: list[str]) -> tuple[set[str], dict[str, AdapterContract]]:
     adapters = load_json(INTEGRATION_ADAPTERS)
     ensure(isinstance(adapters, list), "integration adapters root must be a list", errors)
     if not isinstance(adapters, list):
-        return set()
+        return set(), {}
     adapter_ids = validate_unique_ids("integration-adapters", adapters, errors)
+    adapter_contracts: dict[str, AdapterContract] = {}
     for adapter in adapters:
         if not isinstance(adapter, dict):
             continue
@@ -218,6 +238,8 @@ def validate_integration_adapters(errors: list[str]) -> set[str]:
         ensure(isinstance(capabilities, list), f"{adapter_id} capabilities must be a list", errors)
         if not isinstance(capabilities, list):
             continue
+        supported_job_types: set[str] = set()
+        expected_artifact_kinds: set[str] = set()
         for capability in capabilities:
             if not isinstance(capability, dict):
                 ensure(False, f"{adapter_id} capability must be an object", errors)
@@ -234,6 +256,7 @@ def validate_integration_adapters(errors: list[str]) -> set[str]:
                     f"{adapter_id}:{capability_id} has unknown job type {job_type}",
                     errors,
                 )
+                supported_job_types.add(job_type)
             artifact_kinds = string_list(
                 capability.get("expected_artifacts", []),
                 f"{adapter_id}:{capability_id} expected_artifacts",
@@ -245,7 +268,13 @@ def validate_integration_adapters(errors: list[str]) -> set[str]:
                     f"{adapter_id}:{capability_id} has unknown artifact kind {artifact_kind}",
                     errors,
                 )
-    return adapter_ids
+                expected_artifact_kinds.add(artifact_kind)
+        if isinstance(adapter_id, str):
+            adapter_contracts[adapter_id] = AdapterContract(
+                job_types=frozenset(supported_job_types),
+                artifact_kinds=frozenset(expected_artifact_kinds),
+            )
+    return adapter_ids, adapter_contracts
 
 
 def validate_handoff(
@@ -253,6 +282,7 @@ def validate_handoff(
     ids_by_name: dict[str, set[str]],
     design_ids: set[str],
     adapter_ids: set[str],
+    adapter_contracts: dict[str, AdapterContract],
 ) -> None:
     handoff = load_json(BACKEND_FRONTEND_HANDOFF)
     ensure(isinstance(handoff, dict), "backend frontend handoff root must be an object", errors)
@@ -427,6 +457,26 @@ def validate_handoff(
             f"handoff job has unknown artifact {artifact_kind}",
             errors,
         )
+        adapter_contract = adapter_contracts.get(adapter_id) if adapter_id is not None else None
+        if adapter_contract is not None and job_type in BACKEND_JOB_TYPES:
+            ensure(
+                job_type in adapter_contract.job_types,
+                f"handoff adapter {adapter_id} does not support job type {job_type}",
+                errors,
+            )
+        if adapter_contract is not None and artifact_kind in BACKEND_ARTIFACT_KINDS:
+            ensure(
+                artifact_kind in adapter_contract.artifact_kinds,
+                f"handoff adapter {adapter_id} does not produce artifact {artifact_kind}",
+                errors,
+            )
+        if job_type in CANONICAL_ARTIFACT_BY_JOB_TYPE and artifact_kind in BACKEND_ARTIFACT_KINDS:
+            expected_artifact = CANONICAL_ARTIFACT_BY_JOB_TYPE[job_type]
+            ensure(
+                artifact_kind == expected_artifact,
+                f"handoff job type {job_type} must produce artifact {expected_artifact}, not {artifact_kind}",
+                errors,
+            )
         ensure(
             adapter_id is not None and any(alias.get("catalog_id") == adapter_id for alias in adapter_aliases),
             f"handoff job adapter {adapter_id} has no backend alias",
@@ -438,9 +488,9 @@ def main() -> int:
     errors: list[str] = []
     try:
         ids_by_name = validate_datasets(errors)
-        adapter_ids = validate_integration_adapters(errors)
+        adapter_ids, adapter_contracts = validate_integration_adapters(errors)
         design_ids = validate_reference_designs(errors, adapter_ids, ids_by_name)
-        validate_handoff(errors, ids_by_name, design_ids, adapter_ids)
+        validate_handoff(errors, ids_by_name, design_ids, adapter_ids, adapter_contracts)
     except ValueError as exc:
         errors.append(str(exc))
 

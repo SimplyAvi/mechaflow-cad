@@ -264,7 +264,11 @@ function App() {
               <dd>{riskLabel[selectedPart.stressRisk]}</dd>
             </div>
           </dl>
-          <CapabilityCard rating={activeRating} targetPayloadLb={design.task.targetPayloadLb} />
+          <CapabilityCard
+            rating={activeRating}
+            safetyFactorMin={design.task.safetyFactorMin ?? null}
+            targetPayloadLb={design.task.targetPayloadLb}
+          />
           <MaterialSubstitution options={materialOptions} selectedOption={selectedOption} onSelect={setSelectedOptionId} />
           <ModificationPreview selectedOption={selectedOption} />
         </aside>
@@ -332,20 +336,25 @@ function PartTree({ parts, selectedPartId, onSelect }: { parts: Part[]; selected
 
 function CapabilityCard({
   rating,
+  safetyFactorMin,
   targetPayloadLb,
 }: {
   rating: { status: 'passes' | 'watch' | 'fails'; payloadLb: number | null; safetyFactor: number | null; summary: string; warning?: string };
+  safetyFactorMin: number | null;
   targetPayloadLb: number | null;
 }) {
   const hasRating = rating.payloadLb != null && rating.safetyFactor != null && targetPayloadLb != null;
   const delta = hasRating ? rating.payloadLb! - targetPayloadLb! : null;
+  const safetyFactorDisplay = rating.status === 'watch' && safetyFactorMin != null
+    ? `< ${safetyFactorMin.toFixed(1)}`
+    : rating.safetyFactor?.toFixed(1);
   return (
     <div className={`capability-card status-${rating.status}`}>
       <span>{statusLabel[rating.status]}</span>
       <strong>{hasRating ? `${rating.payloadLb} lb projected rating` : 'Payload rating review required'}</strong>
       {hasRating && delta != null ? (
         <small>
-          Safety factor {rating.safetyFactor!.toFixed(1)} - {delta >= 0 ? '+' : ''}
+          Safety factor {safetyFactorDisplay} - {delta >= 0 ? '+' : ''}
           {delta} lb against preserved task
         </small>
       ) : <small>Safety factor and payload delta are unknown.</small>}

@@ -84,9 +84,11 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(mappedFinger?.rating.safetyFactor).toBe(2);
     expect(mappedFinger?.rating.status).toBe('watch');
     expect(mappedFinger?.rating.summary).toMatch(/below the preserved 2\.0 minimum/i);
+    expect(mappedFinger?.rating.summary).not.toMatch(/2\.0 safety factor below the preserved 2\.0 minimum/i);
     expect(steelOption?.payloadLb).toBe(100);
     expect(steelOption?.safetyFactor).toBe(2);
     expect(steelOption?.status).toBe('watch');
+    expect(steelOption?.taskImpact).not.toMatch(/2\.0 safety factor.*below the preserved 2\.0 minimum/i);
   });
 
   it('uses explicit BOM processes and preserves one-sided lead-time bounds', () => {

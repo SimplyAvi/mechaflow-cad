@@ -52,6 +52,7 @@ from .settings import Settings, get_settings
 from .storage import (
     AnalysisJobAlreadyExistsError,
     InvalidAnalysisJobAdapterError,
+    InvalidWiringEndpointError,
     NonFiniteStorageValueError,
     ProjectAlreadyExistsError,
     ProjectNotFoundError,
@@ -279,7 +280,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=409, detail="project already exists") from exc
         except AnalysisJobAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
-        except (InvalidAnalysisJobAdapterError, NonFiniteStorageValueError) as exc:
+        except (InvalidAnalysisJobAdapterError, InvalidWiringEndpointError, NonFiniteStorageValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])

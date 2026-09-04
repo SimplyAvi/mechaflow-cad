@@ -275,6 +275,21 @@ def test_project_derives_part_wiring_routes_from_connector_endpoints() -> None:
     ]
 
 
+def test_project_rejects_wiring_endpoints_for_unknown_parts() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-unknown-wiring-endpoint"
+    project["analysis_jobs"] = []
+    project["reports"] = []
+    project["assemblies"][0]["wiring_routes"][0]["to_connector"]["part_id"] = "part-typo"
+
+    response = local_client.post("/api/projects", json=project)
+
+    assert response.status_code == 422
+    assert "references unknown part 'part-typo'" in response.json()["detail"]
+    assert local_client.get("/api/projects/project-unknown-wiring-endpoint").status_code == 404
+
+
 def test_project_rejects_invalid_ids_and_duplicate_material_ids() -> None:
     local_client = TestClient(main_module.create_app())
     sample = local_client.get("/api/projects/sample").json()
