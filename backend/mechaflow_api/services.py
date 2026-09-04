@@ -374,7 +374,11 @@ def _analysis_solver_pipeline() -> list[SolverPipelineStep]:
     ]
 
 
-def build_analysis_readiness_preview(project: Project, target_id: str) -> AnalysisReadinessPreview:
+def build_analysis_readiness_preview(
+    project: Project,
+    target_id: str,
+    include_demo_estimates: bool = True,
+) -> AnalysisReadinessPreview:
     """Build an honest pre-solver preview without running CAD, meshing, or FEA."""
 
     target_part = next((part for assembly in project.assemblies for part in assembly.parts if part.id == target_id), None)
@@ -403,9 +407,23 @@ def build_analysis_readiness_preview(project: Project, target_id: str) -> Analys
         part_ids = [part.id for part in target_assembly.parts]
         target_name = target_assembly.name
         target_kind = "assembly"
-        material = None
-        source_file = None
-        dimensions_ready = bool(part_ids)
+        material_ids = {part.material_id for part in target_assembly.parts}
+        material = (
+            _find_material(project, target_assembly.parts[0])
+            if len(material_ids) == 1 and target_assembly.parts and None not in material_ids
+            else None
+        )
+        source_files = [part.source_file for part in target_assembly.parts]
+        source_file = ", ".join(source_files) if source_files and all(source_files) else None
+        dimensions_ready = bool(part_ids) and all(
+            any(value is not None for value in (
+                part.dimensions.length_mm,
+                part.dimensions.width_mm,
+                part.dimensions.height_mm,
+                part.dimensions.thickness_mm,
+            ))
+            for part in target_assembly.parts
+        )
         fastener_region = "assembly fixtures and contact sets need CAD naming"
         demo_capacity_lb, demo_note = None, None
 
@@ -449,10 +467,18 @@ def build_analysis_readiness_preview(project: Project, target_id: str) -> Analys
     ]
     if not has_payload_task:
         review_required.append("No load-bearing task was available for an explicit structural load case.")
-    if target_part is not None and source_file is None:
-        review_required.append("No source CAD file reference is attached to this part.")
-    if target_part is not None and material is None:
-        review_required.append("No material property set is attached to this part.")
+    if source_file is None:
+        review_required.append(
+            "No source CAD file reference is attached to this part."
+            if target_part is not None
+            else "No source CAD file references are attached to every assembly part."
+        )
+    if material is None:
+        review_required.append(
+            "No material property set is attached to this part."
+            if target_part is not None
+            else "A single aggregate material property set is not attached to this assembly."
+        )
     if not dimensions_ready:
         review_required.append("Geometry dimensions are incomplete for mesh sizing.")
 
@@ -486,7 +512,7 @@ def build_analysis_readiness_preview(project: Project, target_id: str) -> Analys
         )
 
     blocking_inputs_missing = any(
-        message.startswith(("No source CAD", "No material", "Geometry dimensions", "No load-bearing"))
+        message.startswith(("No source CAD", "No material", "A single aggregate", "Geometry dimensions", "No load-bearing"))
         for message in review_required
     )
     state = AnalysisReadinessState.blocked_missing_inputs if blocking_inputs_missing else AnalysisReadinessState.pre_solver_ready
@@ -497,11 +523,11 @@ def build_analysis_readiness_preview(project: Project, target_id: str) -> Analys
         else "Review required before meshing or solving: one or more required analysis inputs are missing. No FEA was run."
     )
     demo_estimates = []
-    if demo_capacity_lb is not None:
+    if include_demo_estimates and demo_capacity_lb is not None:
         demo_estimates.append(
             f"Demo estimate only: seeded capacity {demo_capacity_lb:g} lb. This must be replaced by solver and test evidence."
         )
-    if demo_note:
+    if include_demo_estimates and demo_note:
         demo_estimates.append(demo_note)
 
     criteria = [
@@ -603,6 +629,9 @@ def build_project_panel_data(project: Project) -> ProjectPanelData:
         build_analysis_readiness_preview(project, part.id)
         for assembly in project.assemblies
         for part in assembly.parts
+    ] + [
+        build_analysis_readiness_preview(project, assembly.id)
+        for assembly in project.assemblies
     ]
     return ProjectPanelData(
         project=project,

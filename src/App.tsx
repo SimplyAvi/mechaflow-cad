@@ -380,7 +380,8 @@ function App() {
             targetPayloadLb={design.task.targetPayloadLb}
           />
           <StrengthInfoPanel part={selectedPart} />
-          <PreSolverReadinessPanel part={selectedPart} />
+          <PreSolverReadinessPanel readiness={activeAssembly.analysisReadiness} title="Assembly readiness" />
+          <PreSolverReadinessPanel readiness={selectedPart.analysisReadiness} title="Part readiness" />
           <MaterialSubstitution options={materialOptions} selectedOption={selectedOption} onSelect={setSelectedOptionId} />
           <ModificationPreview selectedOption={selectedOption} />
         </aside>
@@ -519,8 +520,7 @@ function StrengthInfoPanel({ part }: { part: Part }) {
   );
 }
 
-function PreSolverReadinessPanel({ part }: { part: Part }) {
-  const readiness = part.analysisReadiness;
+function PreSolverReadinessPanel({ readiness, title }: { readiness: Part['analysisReadiness']; title: string }) {
   const material = readiness.material_properties;
   const thermal = readiness.thermal_guidance;
   const stateLabel = readiness.state === 'pre_solver_ready'
@@ -536,7 +536,8 @@ function PreSolverReadinessPanel({ part }: { part: Part }) {
   const thermalLimit = thermal?.heat_deflection_temp_c ?? thermal?.max_service_temp_c ?? null;
 
   return (
-    <section className="readiness-panel" aria-label="Pre-solver analysis readiness">
+    <section className="readiness-panel" aria-label={`${title} pre-solver analysis readiness`}>
+      <p className="eyebrow">{title}</p>
       <div className={`readiness-banner state-${readiness.state}`}>
         <span>{stateLabel}</span>
         <strong>{trustLabel} - no FEA claim unless a solver result is present</strong>

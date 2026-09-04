@@ -334,7 +334,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     ) -> AnalysisReadinessPreview:
         project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
         try:
-            return build_analysis_readiness_preview(project, request.target_id)
+            return build_analysis_readiness_preview(
+                project,
+                request.target_id,
+                include_demo_estimates=request.include_demo_estimates,
+            )
         except PartNotFoundError as exc:
             raise HTTPException(status_code=404, detail="analysis target not found") from exc
 

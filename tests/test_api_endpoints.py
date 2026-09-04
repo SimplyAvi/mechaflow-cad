@@ -745,6 +745,27 @@ def test_analysis_readiness_preview_exposes_pre_solver_contract_without_running_
     assert client.get("/api/projects/project-open-gripper-demo/analysis-readiness/part-typo").status_code == 404
 
 
+def test_analysis_readiness_preview_covers_assemblies_and_honors_demo_estimate_flag() -> None:
+    assembly_response = client.get(
+        "/api/projects/project-open-gripper-demo/analysis-readiness/asm-open-gripper-demo"
+    )
+
+    assert assembly_response.status_code == 200
+    assembly = assembly_response.json()
+    assert assembly["target_kind"] == "assembly"
+    assert assembly["state"] == "blocked_missing_inputs"
+    assert assembly["material_properties"] is None
+    assert any("aggregate" in message.lower() for message in assembly["review_required"])
+
+    without_estimates = client.post(
+        "/api/projects/project-open-gripper-demo/analysis-readiness/previews",
+        json={"target_id": "part-finger-link", "include_demo_estimates": False},
+    )
+
+    assert without_estimates.status_code == 200
+    assert without_estimates.json()["demo_estimates"] == []
+
+
 def test_create_analysis_job_selects_matching_stub_adapter() -> None:
     response = client.post(
         "/api/analysis-jobs",

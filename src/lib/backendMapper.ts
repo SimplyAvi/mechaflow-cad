@@ -412,6 +412,47 @@ const buildFallbackAnalysisReadiness = (
   };
 };
 
+const buildFallbackAssemblyReadiness = (
+  assembly: BackendAssembly,
+  task: BackendTaskRequirement,
+  projectId: string,
+): AnalysisReadinessPreview => ({
+  ...buildFallbackAnalysisReadiness(
+    assembly.parts[0] ?? {
+      id: assembly.id,
+      name: assembly.name,
+      category: 'assembly',
+      dimensions: { metadata: {} },
+      manufacturing_options: [],
+      related_fasteners: [],
+      wiring_route_ids: [],
+      metadata: {},
+    },
+    undefined,
+    task,
+    projectId,
+  ),
+  target_id: assembly.id,
+  target_name: assembly.name,
+  target_kind: 'assembly',
+  state: 'blocked_missing_inputs',
+  summary: 'Review required before meshing or solving: aggregate assembly geometry and material inputs are missing. No FEA was run.',
+  material_properties: null,
+  solver_inputs: {
+    geometry_source: null,
+    units: 'mm, N, MPa',
+    mesh_size_mm: null,
+    freecad_document: 'future FreeCAD document or STEP import path',
+    gmsh_model: 'future Gmsh .geo or API-generated mesh model',
+    calculix_input_deck: 'future CalculiX .inp deck',
+    notes: ['Units and coordinate frames must be normalized by the worker before solve.'],
+  },
+  review_required: [
+    'Aggregate assembly geometry and material inputs must be reviewed before solving.',
+    'A qualified reviewer must approve any factor-of-safety interpretation before release.',
+  ],
+});
+
 const mapPart = (
   part: BackendPart,
   index: number,
@@ -613,6 +654,8 @@ export function mapProjectPanelDataToReferenceDesign(
     id: assembly.id,
     name: assembly.name,
     explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
+    analysisReadiness: readinessByTargetId.get(assembly.id)
+      ?? buildFallbackAssemblyReadiness(assembly, task, project.id),
     parts: assembly.parts.map((part, index) =>
       mapPart(part, index, assembly, materialsById, task, project.id, readinessByTargetId.get(part.id))),
   }));

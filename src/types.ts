@@ -46,6 +46,7 @@ export interface Assembly {
   id: string;
   name: string;
   explodedProgress: number | null;
+  analysisReadiness: AnalysisReadinessPreview;
   parts: Part[];
 }
 
