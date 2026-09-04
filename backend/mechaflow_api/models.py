@@ -260,7 +260,7 @@ class Assembly(StrictModel):
     assembly_structure_confidence: RecommendationConfidence = RecommendationConfidence.unknown
 
 
-class BOMItem(StrictModel):
+class BOMItem(BaseModel):
     id: str
     part_id: str | None = None
     name: str
@@ -284,7 +284,7 @@ class TaskRequirement(StrictModel):
     assumptions: list[str] = Field(default_factory=list)
 
 
-class ReferenceDesign(StrictModel):
+class ReferenceDesign(BaseModel):
     id: str
     name: str
     source_url: HttpUrl
@@ -320,7 +320,7 @@ class Modification(StrictModel):
         return value
 
 
-class AnalysisJobRequest(StrictModel):
+class AnalysisJobRequest(BaseModel):
     job_type: AnalysisJobType
     target_id: str
     project_id: str
@@ -355,7 +355,7 @@ class AnalysisJob(StrictModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class AnalysisJobPlan(StrictModel):
+class AnalysisJobPlan(BaseModel):
     adapter_name: str
     job_type: AnalysisJobType
     queue_name: str
@@ -454,26 +454,26 @@ class Project(StrictModel):
         return self
 
 
-class ProjectModificationResponse(StrictModel):
+class ProjectModificationResponse(BaseModel):
     project: Project
     report: AnalysisReport
 
 
-class CatalogSeedResponse(StrictModel):
+class CatalogSeedResponse(BaseModel):
     reference_designs: list[ReferenceDesign] = Field(default_factory=list)
     materials: list[Material] = Field(default_factory=list)
     task_requirements: list[TaskRequirement] = Field(default_factory=list)
     sample_project: Project
 
 
-class PartManufacturingOptions(StrictModel):
+class PartManufacturingOptions(BaseModel):
     part_id: str
     part_name: str
     material_id: str | None = None
     options: list[ManufacturingOption] = Field(default_factory=list)
 
 
-class ProjectPanelData(StrictModel):
+class ProjectPanelData(BaseModel):
     project: Project
     task_requirements: list[TaskRequirement] = Field(default_factory=list)
     bom_items: list[BOMItem] = Field(default_factory=list)
