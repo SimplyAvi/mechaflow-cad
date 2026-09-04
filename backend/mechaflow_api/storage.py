@@ -80,7 +80,6 @@ class InMemoryProjectStore:
     def __init__(self, seed_projects: list[Project] | None = None) -> None:
         self._lock = RLock()
         self._projects: dict[str, Project] = {}
-        self._standalone_jobs: dict[str, AnalysisJob] = {}
         for project in seed_projects or []:
             self.create_project(project)
 
@@ -90,9 +89,6 @@ class InMemoryProjectStore:
             if job.id in incoming_ids:
                 raise AnalysisJobAlreadyExistsError(job.id)
             incoming_ids.add(job.id)
-        conflict = incoming_ids & self._standalone_jobs.keys()
-        if conflict:
-            raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
         for existing_project_id, existing_project in self._projects.items():
             if existing_project_id == project_id:
                 continue
@@ -102,8 +98,6 @@ class InMemoryProjectStore:
                 raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
     def _analysis_job_exists(self, job_id: str) -> bool:
-        if job_id in self._standalone_jobs:
-            return True
         return any(job.id == job_id for project in self._projects.values() for job in project.analysis_jobs)
 
     def list_projects(self) -> list[Project]:
@@ -144,7 +138,7 @@ class InMemoryProjectStore:
 
     def list_analysis_jobs(self, project_id: str | None = None) -> list[AnalysisJob]:
         with self._lock:
-            jobs = list(self._standalone_jobs.values())
+            jobs: list[AnalysisJob] = []
             for project in self._projects.values():
                 jobs.extend(project.analysis_jobs)
             if project_id is not None:
@@ -153,9 +147,6 @@ class InMemoryProjectStore:
 
     def get_analysis_job(self, job_id: str) -> AnalysisJob | None:
         with self._lock:
-            standalone = self._standalone_jobs.get(job_id)
-            if standalone is not None:
-                return standalone.model_copy(deep=True)
             for project in self._projects.values():
                 for job in project.analysis_jobs:
                     if job.id == job_id:
@@ -166,10 +157,6 @@ class InMemoryProjectStore:
         with self._lock:
             if self._analysis_job_exists(job.id):
                 raise AnalysisJobAlreadyExistsError(job.id)
-            if job.project_id is None:
-                stored = job.model_copy(deep=True)
-                self._standalone_jobs[stored.id] = stored
-                return stored.model_copy(deep=True)
             project = self._projects.get(job.project_id)
             if project is None:
                 raise ProjectNotFoundError(job.project_id)
@@ -186,14 +173,6 @@ class InMemoryProjectStore:
         update: Callable[[AnalysisJob], AnalysisJob],
     ) -> AnalysisJob | None:
         with self._lock:
-            standalone = self._standalone_jobs.get(job_id)
-            if standalone is not None:
-                stored = update(standalone.model_copy(deep=True)).model_copy(
-                    update={"id": job_id, "project_id": None},
-                    deep=True,
-                )
-                self._standalone_jobs[job_id] = stored
-                return stored.model_copy(deep=True)
             for project_id, project in self._projects.items():
                 for index, job in enumerate(project.analysis_jobs):
                     if job.id != job_id:

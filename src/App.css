@@ -32,6 +32,20 @@
   color: var(--text);
 }
 
+.empty-state {
+  margin: 24px;
+  max-width: 680px;
+}
+
+.empty-state h1 {
+  font-size: clamp(2rem, 6vw, 4rem);
+}
+
+.empty-state p {
+  color: #bad4e8;
+  line-height: 1.6;
+}
+
 .app-shell {
   color: var(--text);
   padding: 32px;
@@ -268,6 +282,7 @@ small,
 }
 
 .part-shape.risk-medium::after,
+.part-shape.risk-unknown::after,
 .part-shape.risk-high::after {
   border-radius: 999px;
   content: '';
@@ -280,6 +295,10 @@ small,
 
 .part-shape.risk-medium::after {
   background: var(--watch);
+}
+
+.part-shape.risk-unknown::after {
+  background: var(--muted);
 }
 
 .part-shape.risk-high::after {

@@ -106,10 +106,17 @@ def _validate_material_process(project: Project, part: Part, modification: Modif
     if not part_processes or not material_processes:
         raise MaterialProcessCompatibilityError("material and process compatibility requires review")
     compatible_processes = part_processes & material_processes
-    requested_process = modification.manufacturing_process
-    if requested_process is not None and requested_process not in compatible_processes:
+    current_process_value = part.metadata.get("preferred_manufacturing_process")
+    try:
+        current_process = ManufacturingProcess(current_process_value) if isinstance(current_process_value, str) else None
+    except ValueError:
+        current_process = None
+    effective_process = modification.manufacturing_process or current_process
+    if modification.material_id is not None and effective_process is None:
+        raise MaterialProcessCompatibilityError("material changes require an explicit compatible manufacturing process")
+    if effective_process is not None and effective_process not in compatible_processes:
         raise MaterialProcessCompatibilityError(
-            f"{material.id} is incompatible with {requested_process.value} for {part.id}"
+            f"{material.id} is incompatible with {effective_process.value} for {part.id}"
         )
     if not compatible_processes:
         raise MaterialProcessCompatibilityError(f"{material.id} has no compatible process for {part.id}")

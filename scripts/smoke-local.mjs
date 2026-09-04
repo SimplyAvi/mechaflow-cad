@@ -112,6 +112,35 @@ try {
   if (incompatibleModification.status !== 422) {
     throw new Error('Mock backend accepted an incompatible part material and process.');
   }
+  const compatibleModification = await fetch(`${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      id: 'smoke-compatible-material',
+      target_part_id: 'part-finger-link',
+      description: 'Persist a compatible local material preview.',
+      material_id: 'mat-carbon-fiber-nylon',
+      dimension_changes: { thickness_mm: 9 },
+      manufacturing_process: 'additive_fdm',
+    }),
+  });
+  if (!compatibleModification.ok) {
+    throw new Error(`Mock backend rejected a compatible modification with ${compatibleModification.status}.`);
+  }
+  const modifiedProject = (await compatibleModification.json()).project;
+  const modifiedPart = modifiedProject.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === 'part-finger-link');
+  const storedProject = await waitForJson(`${apiBaseUrl}/api/projects/${panelData.project.id}`);
+  const storedPart = storedProject.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === 'part-finger-link');
+  if (
+    modifiedPart?.material_id !== 'mat-carbon-fiber-nylon'
+    || modifiedPart?.dimensions.thickness_mm !== 9
+    || storedPart?.material_id !== 'mat-carbon-fiber-nylon'
+    || storedPart?.dimensions.thickness_mm !== 9
+  ) {
+    throw new Error('Mock backend did not persist the accepted project modification.');
+  }
 
   await new Promise((resolve, reject) => {
     const build = spawn('npm', ['run', 'build'], {

@@ -1,5 +1,5 @@
 export type JobStatus = 'queued' | 'running' | 'blocked' | 'failed' | 'complete';
-export type RiskLevel = 'low' | 'medium' | 'high';
+export type RiskLevel = 'low' | 'medium' | 'high' | 'unknown';
 export type RatingStatus = 'passes' | 'watch' | 'fails';
 
 export interface ReferenceDesign {

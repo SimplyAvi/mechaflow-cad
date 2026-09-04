@@ -286,7 +286,7 @@ class Modification(BaseModel):
 class AnalysisJobRequest(BaseModel):
     job_type: AnalysisJobType
     target_id: str
-    project_id: str | None = None
+    project_id: str
     local_compute_preferred: bool = True
     input_summary: dict[str, Any] = Field(default_factory=dict)
 
@@ -308,7 +308,7 @@ class AnalysisJob(BaseModel):
     job_type: AnalysisJobType
     status: AnalysisJobStatus
     target_id: str
-    project_id: str | None = None
+    project_id: str
     adapter_name: str
     local_compute_preferred: bool = True
     input_summary: dict[str, Any] = Field(default_factory=dict)

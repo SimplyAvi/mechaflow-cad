@@ -127,6 +127,7 @@ describe('MechaFlow cockpit', () => {
     firstPart.mass_kg = null;
     const currentMaterial = panelData.project.materials.find((material) => material.id === firstPart.material_id)!;
     currentMaterial.cost = null;
+    panelData.manufacturing_options[0]!.options[0]!.cost!.currency = 'credits';
     panelData.wiring_routes[0]!.bend_radius_min_mm = null;
     panelData.project.analysis_jobs = [
       {
@@ -146,6 +147,7 @@ describe('MechaFlow cockpit', () => {
     render(<App />);
 
     expect(await screen.findByLabelText(/Preserved task/i)).toHaveTextContent('payload unknown');
+    expect(screen.getByText(/Data source: backend panel data/i)).toBeInTheDocument();
     const referencePanel = screen.getByText('Reference design').closest('aside');
     expect(referencePanel).not.toBeNull();
     expect(within(referencePanel as HTMLElement).getAllByText('Review required')).toHaveLength(3);
@@ -153,11 +155,36 @@ describe('MechaFlow cockpit', () => {
     const inspectorPanel = screen.getByText('Part inspector').closest('aside');
     expect(inspectorPanel).not.toBeNull();
     expect(within(inspectorPanel as HTMLElement).getAllByText('Review required').length).toBeGreaterThanOrEqual(2);
+    const stressRisk = within(inspectorPanel as HTMLElement).getByText('Stress risk').closest('div');
+    expect(stressRisk).toHaveTextContent('Review required');
     expect(screen.getByLabelText(/Import Design progress unknown/i)).toBeInTheDocument();
     expect(screen.getByText(/^failed$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/cost review required/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/lead time review required/i)).toBeInTheDocument();
     expect(screen.getByText(/Bend radius review required/i)).toBeInTheDocument();
     expect(screen.getByText(/Payload rating review required/i)).toBeInTheDocument();
+  });
+
+  it('renders a loaded project with no parts as an explicit review state', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.project.name = 'Empty project';
+    panelData.project.assemblies = [];
+    panelData.manufacturing_options = [];
+    panelData.bom_items = [];
+    panelData.wiring_routes = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      return new Response('Not found', { status: 404 });
+    }));
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /Assembly review required/i })).toBeInTheDocument();
+    expect(screen.getByText(/Empty project has no selectable parts/i)).toBeInTheDocument();
+    expect(screen.getByText(/Data source: backend panel data/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Loading MechaFlow cockpit/i)).not.toBeInTheDocument();
   });
 });

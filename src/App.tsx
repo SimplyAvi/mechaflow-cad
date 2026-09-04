@@ -12,6 +12,13 @@ const statusLabel = {
   fails: 'Fails',
 };
 
+const riskLabel: Record<Part['stressRisk'], string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  unknown: 'Review required',
+};
+
 function App() {
   const [design, setDesign] = useState<ReferenceDesign | null>(null);
   const [selectedPartId, setSelectedPartId] = useState('finger-link-left');
@@ -50,8 +57,23 @@ function App() {
     }
   }, [materialOptions, selectedOptionId]);
 
-  if (!design || !selectedPart) {
+  if (!design) {
     return <main className="loading-shell">Loading MechaFlow cockpit...</main>;
+  }
+
+  if (!selectedPart) {
+    return (
+      <main className="loading-shell">
+        <section className="empty-state panel" aria-live="polite">
+          <p className="eyebrow">Project loaded</p>
+          <h1>Assembly review required</h1>
+          <p>{design.name} has no selectable parts. Add an assembly part before opening the CAD cockpit.</p>
+          <small>
+            Data source: {design.backend.source.replaceAll('-', ' ')} via {design.backend.endpoint}
+          </small>
+        </section>
+      </main>
+    );
   }
 
   const bomTotal = design.bom.length > 0 && design.bom.every((item) => item.unitCostUsd != null)
@@ -181,6 +203,10 @@ function App() {
             <div>
               <dt>Cost</dt>
               <dd>{selectedPart.estimatedCostUsd == null ? 'Review required' : formatCurrency(selectedPart.estimatedCostUsd)}</dd>
+            </div>
+            <div>
+              <dt>Stress risk</dt>
+              <dd>{riskLabel[selectedPart.stressRisk]}</dd>
             </div>
           </dl>
           <CapabilityCard rating={activeRating} targetPayloadLb={design.task.targetPayloadLb} />

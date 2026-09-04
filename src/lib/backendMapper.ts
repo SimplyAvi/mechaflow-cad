@@ -39,7 +39,13 @@ const round = (value: number, decimals = 1): number => Number(value.toFixed(deci
 const moneyRange = (cost?: { min?: number | null; max?: number | null; currency?: string } | null): string => {
   if (!cost || (cost.min == null && cost.max == null)) return 'Cost pending supplier adapter';
   const currency = cost.currency ?? 'USD';
-  const formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 });
+  let formatter: Intl.NumberFormat;
+  try {
+    formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 });
+  } catch (error) {
+    if (error instanceof RangeError) return 'Cost review required';
+    throw error;
+  }
   if (cost.min != null && cost.max != null) return `${formatter.format(cost.min)}-${formatter.format(cost.max)}`;
   return formatter.format(cost.min ?? cost.max ?? 0);
 };
@@ -95,7 +101,8 @@ const jobStatus = (status: string): JobStatus => {
 };
 
 const riskFromPart = (part: BackendPart): RiskLevel => {
-  if ((part.mass_kg ?? 0) > 0.2) return 'high';
+  if (part.mass_kg == null) return 'unknown';
+  if (part.mass_kg > 0.2) return 'high';
   if (part.wiring_route_ids.length > 0) return 'medium';
   return 'low';
 };

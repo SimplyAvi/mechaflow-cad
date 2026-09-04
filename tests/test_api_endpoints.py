@@ -259,6 +259,48 @@ def test_project_modification_enforces_part_material_process_compatibility() -> 
     assert controller["material_id"] == "mat-fr4-generic"
 
 
+def test_material_only_change_rejects_incompatible_retained_process() -> None:
+    local_client = TestClient(main_module.create_app())
+    sample = local_client.get("/api/projects/sample").json()
+    sample["id"] = "project-effective-process-flow"
+    sample["analysis_jobs"] = []
+    sample["reports"] = []
+    assert local_client.put("/api/projects/project-effective-process-flow", json=sample).status_code == 200
+
+    first = local_client.post(
+        "/api/projects/project-effective-process-flow/modifications",
+        json={
+            "id": "mod-finger-composite",
+            "target_part_id": "part-finger-link",
+            "description": "Print the finger from composite.",
+            "material_id": "mat-carbon-fiber-nylon",
+            "manufacturing_process": ManufacturingProcess.additive_fdm.value,
+        },
+    )
+    assert first.status_code == 200
+
+    incompatible = local_client.post(
+        "/api/projects/project-effective-process-flow/modifications",
+        json={
+            "id": "mod-finger-aluminum",
+            "target_part_id": "part-finger-link",
+            "description": "Return to aluminum without changing the retained process.",
+            "material_id": "mat-aluminum-6061-t6",
+        },
+    )
+
+    assert incompatible.status_code == 422
+    stored = local_client.get("/api/projects/project-effective-process-flow").json()
+    finger = next(
+        part
+        for assembly in stored["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-finger-link"
+    )
+    assert finger["material_id"] == "mat-carbon-fiber-nylon"
+    assert finger["metadata"]["preferred_manufacturing_process"] == "additive_fdm"
+
+
 def test_project_modification_requires_explicit_compatibility_data() -> None:
     local_client = TestClient(main_module.create_app())
     sample = local_client.get("/api/projects/sample").json()
@@ -356,6 +398,14 @@ def test_concurrent_analysis_job_creates_do_not_lose_accepted_jobs() -> None:
 def test_analysis_job_requires_an_existing_project() -> None:
     local_client = TestClient(main_module.create_app())
 
+    missing_owner = local_client.post(
+        "/api/analysis-jobs",
+        json={
+            "job_type": AnalysisJobType.extract_part_list.value,
+            "target_id": "assembly-without-owner",
+        },
+    )
+
     response = local_client.post(
         "/api/analysis-jobs",
         json={
@@ -365,6 +415,7 @@ def test_analysis_job_requires_an_existing_project() -> None:
         },
     )
 
+    assert missing_owner.status_code == 422
     assert response.status_code == 404
     assert local_client.get("/api/analysis-jobs", params={"project_id": "project-later"}).json() == []
 

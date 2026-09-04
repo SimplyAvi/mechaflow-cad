@@ -92,9 +92,18 @@ def test_task_and_part_schema_model_task_preserving_edits() -> None:
 
 
 def test_analysis_job_request_defaults_to_local_compute() -> None:
-    request = AnalysisJobRequest(job_type=AnalysisJobType.extract_part_list, target_id="asm-test")
+    request = AnalysisJobRequest(
+        job_type=AnalysisJobType.extract_part_list,
+        target_id="asm-test",
+        project_id="project-test",
+    )
 
     assert request.local_compute_preferred is True
+
+
+def test_analysis_job_request_requires_project_ownership() -> None:
+    with pytest.raises(ValidationError):
+        AnalysisJobRequest(job_type=AnalysisJobType.extract_part_list, target_id="asm-test")
 
 
 def test_worker_plan_and_artifact_models_define_adapter_contract() -> None:

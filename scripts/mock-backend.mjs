@@ -16,6 +16,23 @@ const configuredPort = parsePort(
 );
 const port = configuredPort ?? (await getFreePort(host));
 const projectId = mockBackendPanelData.project.id;
+let project = structuredClone(mockBackendPanelData.project);
+
+const projectManufacturingOptions = () =>
+  project.assemblies.flatMap((assembly) =>
+    assembly.parts.map((part) => ({
+      part_id: part.id,
+      part_name: part.name,
+      options: part.manufacturing_options,
+    })),
+  );
+
+const projectPanelData = () => ({
+  ...mockBackendPanelData,
+  project,
+  manufacturing_options: projectManufacturingOptions(),
+  reports: project.reports,
+});
 
 const sendJson = (response, statusCode, payload) => {
   const body = JSON.stringify(payload);
@@ -76,7 +93,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/catalog/seed') {
-      sendJson(response, 200, mockCatalogSeed);
+      sendJson(response, 200, { ...mockCatalogSeed, materials: project.materials, sample_project: project });
       return;
     }
 
@@ -86,7 +103,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/materials') {
-      sendJson(response, 200, mockBackendPanelData.project.materials);
+      sendJson(response, 200, project.materials);
       return;
     }
 
@@ -96,22 +113,22 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/assemblies/sample') {
-      sendJson(response, 200, mockBackendPanelData.project.assemblies[0]);
+      sendJson(response, 200, project.assemblies[0]);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/projects') {
-      sendJson(response, 200, [mockBackendPanelData.project]);
+      sendJson(response, 200, [project]);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname)) {
-      sendJson(response, 200, mockBackendPanelData.project);
+      sendJson(response, 200, project);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/panel-data')) {
-      sendJson(response, 200, mockBackendPanelData);
+      sendJson(response, 200, projectPanelData());
       return;
     }
 
@@ -126,7 +143,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/manufacturing-options')) {
-      sendJson(response, 200, mockBackendPanelData.manufacturing_options);
+      sendJson(response, 200, projectManufacturingOptions());
       return;
     }
 
@@ -136,13 +153,13 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/reports')) {
-      sendJson(response, 200, mockBackendPanelData.reports);
+      sendJson(response, 200, project.reports);
       return;
     }
 
     if (request.method === 'POST' && isProjectPath(url.pathname, '/modifications')) {
       const modification = await readJsonBody(request);
-      const parts = mockBackendPanelData.project.assemblies.flatMap((assembly) => assembly.parts);
+      const parts = project.assemblies.flatMap((assembly) => assembly.parts);
       const part = parts.find((candidate) => candidate.id === modification.target_part_id);
       if (!part) {
         sendJson(response, 404, { error: 'target part not found' });
@@ -150,12 +167,16 @@ const server = http.createServer(async (request, response) => {
       }
       if (modification.material_id || modification.manufacturing_process) {
         const materialId = modification.material_id || part.material_id;
-        const material = mockBackendPanelData.project.materials.find((candidate) => candidate.id === materialId);
+        const material = project.materials.find((candidate) => candidate.id === materialId);
         const partProcesses = new Set(
           part.manufacturing_options.map((option) => option.process).filter((process) => process !== 'unknown'),
         );
         const materialProcesses = material?.compatible_processes.filter((process) => process !== 'unknown') ?? [];
         const compatibleProcesses = materialProcesses.filter((process) => partProcesses.has(process));
+        const currentProcess = typeof part.metadata?.preferred_manufacturing_process === 'string'
+          ? part.metadata.preferred_manufacturing_process
+          : undefined;
+        const effectiveProcess = modification.manufacturing_process || currentProcess;
         if (!material) {
           sendJson(response, 422, { error: 'material not found' });
           return;
@@ -164,9 +185,13 @@ const server = http.createServer(async (request, response) => {
           sendJson(response, 422, { error: 'material and process compatibility requires review' });
           return;
         }
+        if (modification.material_id && !effectiveProcess) {
+          sendJson(response, 422, { error: 'material changes require an explicit compatible manufacturing process' });
+          return;
+        }
         if (
           compatibleProcesses.length === 0
-          || (modification.manufacturing_process && !compatibleProcesses.includes(modification.manufacturing_process))
+          || (effectiveProcess && !compatibleProcesses.includes(effectiveProcess))
         ) {
           sendJson(response, 422, { error: 'material and process are incompatible for this part' });
           return;
@@ -187,12 +212,39 @@ const server = http.createServer(async (request, response) => {
         assumptions: ['Mock endpoint mirrors the backend modification contract.'],
         generated_at: new Date().toISOString(),
       };
+      const storedModification = {
+        created_at: new Date().toISOString(),
+        ...modification,
+      };
+      const updatedAssemblies = project.assemblies.map((assembly) => ({
+        ...assembly,
+        parts: assembly.parts.map((candidate) => {
+          if (candidate.id !== modification.target_part_id) return candidate;
+          return {
+            ...candidate,
+            material_id: modification.material_id ?? candidate.material_id,
+            dimensions: {
+              ...candidate.dimensions,
+              ...(modification.dimension_changes ?? {}),
+            },
+            metadata: modification.manufacturing_process
+              ? {
+                  ...candidate.metadata,
+                  preferred_manufacturing_process: modification.manufacturing_process,
+                }
+              : candidate.metadata,
+          };
+        }),
+      }));
+      project = {
+        ...project,
+        assemblies: updatedAssemblies,
+        modifications: [...project.modifications, storedModification],
+        reports: [...project.reports, report],
+        updated_at: new Date().toISOString(),
+      };
       sendJson(response, 200, {
-        project: {
-          ...mockBackendPanelData.project,
-          modifications: [...mockBackendPanelData.project.modifications, modification],
-          reports: [...mockBackendPanelData.project.reports, report],
-        },
+        project,
         report,
       });
       return;
