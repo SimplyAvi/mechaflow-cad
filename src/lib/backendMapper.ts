@@ -414,10 +414,21 @@ const buildFallbackAnalysisReadiness = (
 
 const buildFallbackAssemblyReadiness = (
   assembly: BackendAssembly,
+  materialsById: Map<string, BackendMaterial>,
   task: BackendTaskRequirement,
   projectId: string,
-): AnalysisReadinessPreview => ({
-  ...buildFallbackAnalysisReadiness(
+): AnalysisReadinessPreview => {
+  const partIds = assembly.parts.map((part) => part.id);
+  const materialIds = new Set(assembly.parts.map((part) => part.material_id));
+  const aggregateMaterialId = materialIds.size === 1 ? [...materialIds][0] : undefined;
+  const aggregateMaterial = aggregateMaterialId ? materialsById.get(aggregateMaterialId) : undefined;
+  const allGeometryReady = assembly.parts.length > 0 && assembly.parts.every(
+    (part) => typeof part.source_file === 'string' && part.source_file.trim() !== '',
+  );
+  const allDimensionsReady = assembly.parts.length > 0 && assembly.parts.every(
+    (part) => Object.values(part.dimensions).some((value) => typeof value === 'number' && Number.isFinite(value)),
+  );
+  const base = buildFallbackAnalysisReadiness(
     assembly.parts[0] ?? {
       id: assembly.id,
       name: assembly.name,
@@ -428,30 +439,52 @@ const buildFallbackAssemblyReadiness = (
       wiring_route_ids: [],
       metadata: {},
     },
-    undefined,
+    aggregateMaterial,
     task,
     projectId,
-  ),
-  target_id: assembly.id,
-  target_name: assembly.name,
-  target_kind: 'assembly',
-  state: 'blocked_missing_inputs',
-  summary: 'Review required before meshing or solving: aggregate assembly geometry and material inputs are missing. No FEA was run.',
-  material_properties: null,
-  solver_inputs: {
-    geometry_source: null,
-    units: 'mm, N, MPa',
-    mesh_size_mm: null,
-    freecad_document: 'future FreeCAD document or STEP import path',
-    gmsh_model: 'future Gmsh .geo or API-generated mesh model',
-    calculix_input_deck: 'future CalculiX .inp deck',
-    notes: ['Units and coordinate frames must be normalized by the worker before solve.'],
-  },
-  review_required: [
-    'Aggregate assembly geometry and material inputs must be reviewed before solving.',
-    'A qualified reviewer must approve any factor-of-safety interpretation before release.',
-  ],
-});
+  );
+  const loadCases = base.load_cases.map((load) => ({ ...load, id: `load-${assembly.id}-active-task`, target_part_ids: partIds }));
+  const constraints = base.constraints.map((constraint) => ({
+    ...constraint,
+    id: `constraint-${assembly.id}-fixtures`,
+    target_part_ids: partIds,
+    region: 'assembly fixtures and contact sets need CAD naming',
+  }));
+  const blockingReview = [
+    ...(!allGeometryReady ? ['Aggregate assembly geometry source references are incomplete.'] : []),
+    ...(!aggregateMaterial ? ['Aggregate assembly material properties are incomplete or mixed.'] : []),
+    ...(!allDimensionsReady ? ['Aggregate assembly dimensions are incomplete for mesh sizing.'] : []),
+    ...(!base.load_cases.length ? ['No load-bearing task was available for an explicit structural load case.'] : []),
+  ];
+  const state = blockingReview.length > 0 ? 'blocked_missing_inputs' : 'pre_solver_ready';
+  const sourceFile = allGeometryReady ? assembly.parts.map((part) => part.source_file).join(', ') : null;
+  return {
+    ...base,
+    target_id: assembly.id,
+    target_name: assembly.name,
+    target_kind: 'assembly',
+    state,
+    summary: state === 'pre_solver_ready'
+      ? 'Pre-solver ready: aggregate assembly loads, constraints, material properties, and expected solver artifacts are recorded. This is not a real FEA result.'
+      : 'Review required before meshing or solving: aggregate assembly inputs are missing. No FEA was run.',
+    load_cases: loadCases,
+    constraints,
+    material_properties: aggregateMaterial ? base.material_properties : null,
+    solver_inputs: {
+      ...base.solver_inputs,
+      geometry_source: sourceFile,
+      mesh_size_mm: allDimensionsReady ? 4 : null,
+    },
+    review_required: [
+      'Aggregate assembly fixtures, contacts, and material assumptions must be reviewed before solving.',
+      'A qualified reviewer must approve any factor-of-safety interpretation before release.',
+      ...blockingReview,
+    ],
+    recommended_job_request: base.recommended_job_request
+      ? { ...base.recommended_job_request, target_id: assembly.id, input_summary: { readiness_state: state, target_part_ids: partIds } }
+      : null,
+  };
+};
 
 const mapPart = (
   part: BackendPart,
@@ -655,7 +688,7 @@ export function mapProjectPanelDataToReferenceDesign(
     name: assembly.name,
     explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
     analysisReadiness: readinessByTargetId.get(assembly.id)
-      ?? buildFallbackAssemblyReadiness(assembly, task, project.id),
+      ?? buildFallbackAssemblyReadiness(assembly, materialsById, task, project.id),
     parts: assembly.parts.map((part, index) =>
       mapPart(part, index, assembly, materialsById, task, project.id, readinessByTargetId.get(part.id))),
   }));

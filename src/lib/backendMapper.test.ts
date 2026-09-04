@@ -84,6 +84,19 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(steelOption?.taskImpact).toMatch(/no worker-supplied payload rating.*review is required/i);
   });
 
+  it('builds aggregate fallback readiness for assemblies', () => {
+    const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
+    const readiness = design.assembly.analysisReadiness;
+
+    expect(readiness.target_id).toBe(design.assembly.id);
+    expect(readiness.target_kind).toBe('assembly');
+    expect(readiness.load_cases[0]?.target_part_ids).toEqual(design.assembly.parts.map((part) => part.id));
+    expect(readiness.constraints[0]?.target_part_ids).toEqual(design.assembly.parts.map((part) => part.id));
+    expect(readiness.recommended_job_request?.target_id).toBe(design.assembly.id);
+    expect(readiness.state).toBe('blocked_missing_inputs');
+    expect(readiness.material_properties).toBeNull();
+  });
+
   it('keeps unrated material previews material-only', () => {
     const design = mapProjectPanelDataToReferenceDesign(
       structuredClone(mockProjectPanelData),
