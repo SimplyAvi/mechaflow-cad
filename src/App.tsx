@@ -111,6 +111,8 @@ function App() {
     [activeAssembly, selectedPartId],
   );
 
+  const materialCriterion = selectedPart?.designCriteria.find((criterion) => criterion.id === 'elasticity-stiffness');
+
   const materialOptions = useMemo(
     () => design?.materialOptions.filter((option) => option.partId === selectedPart?.id) ?? [],
     [design, selectedPart?.id],
@@ -323,7 +325,12 @@ function App() {
           <dl className="meta-grid compact">
             <div>
               <dt>Material</dt>
-              <dd>{selectedPart.material}</dd>
+              <dd>
+                {selectedPart.material}
+                <small className="criterion-source">
+                  {materialCriterion?.status ?? 'review-required'} - {materialCriterion?.sourceConfidence ?? 'review-required source'}
+                </small>
+              </dd>
             </div>
             <div>
               <dt>Process</dt>
