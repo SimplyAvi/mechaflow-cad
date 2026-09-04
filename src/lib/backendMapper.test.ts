@@ -274,4 +274,24 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.manufacturingOptions[0]?.estimatedCostUsd).toBe('Cost review required');
     expect(design.backend.source).toBe('backend-panel-data');
   });
+
+  it('maps every assembly, defaults to selectable parts, and keeps the full worker fallback', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    const populated = panelData.project.assemblies[0]!;
+    const empty = {
+      ...structuredClone(populated),
+      id: 'assembly-empty',
+      name: 'Empty assembly',
+      parts: [],
+      wiring_routes: [],
+    };
+    panelData.project.assemblies = [empty, populated];
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData);
+
+    expect(design.assemblies.map((assembly) => assembly.id)).toEqual(['assembly-empty', populated.id]);
+    expect(design.assembly.id).toBe(populated.id);
+    expect(design.assembly.parts.length).toBeGreaterThan(0);
+    expect(design.backend.integrationStubs).toContain('kicad-electronics-worker');
+  });
 });
