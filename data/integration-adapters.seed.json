@@ -52,10 +52,10 @@
     "capabilities": [
       {
         "id": "ecad-mcad-exchange",
-        "backend_job_types": ["import_design", "generate_bom", "check_wire_routing"],
+        "backend_job_types": ["check_wire_routing"],
         "input_formats": ["kicad_pcb", "STEP", "WRL"],
         "output_formats": ["STEP", "board keepout JSON", "connector table"],
-        "expected_artifacts": ["cad_metadata", "bom", "wiring_check"]
+        "expected_artifacts": ["wiring_check"]
       }
     ],
     "frontend_handoff": ["electronics awareness", "board keepout warnings", "connector metadata"],
@@ -94,10 +94,10 @@
     "capabilities": [
       {
         "id": "robot-description-import-export",
-        "backend_job_types": ["import_design", "generate_exploded_view"],
+        "backend_job_types": [],
         "input_formats": ["URDF", "Xacro", "STL", "DAE"],
         "output_formats": ["URDF", "link joint JSON", "reach check report"],
-        "expected_artifacts": ["cad_metadata", "exploded_view"]
+        "expected_artifacts": []
       }
     ],
     "frontend_handoff": ["link and joint tree", "reach envelope", "robot task panel"],
@@ -136,10 +136,10 @@
     "capabilities": [
       {
         "id": "material-and-rule-pack-loading",
-        "backend_job_types": ["quick_load_heuristic", "rerate_payload_capability", "generate_manufacturing_report"],
+        "backend_job_types": [],
         "input_formats": ["JSON", "CSV"],
         "output_formats": ["normalized material JSON", "advisory rule JSON"],
-        "expected_artifacts": ["load_heuristic", "payload_rerating", "manufacturing_report"]
+        "expected_artifacts": []
       }
     ],
     "frontend_handoff": ["material option cards", "confidence labels", "standards boundary warnings"],

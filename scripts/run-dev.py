@@ -62,8 +62,7 @@ def main() -> int:
     api_host = os.environ.get("MECHAFLOW_API_HOST", "127.0.0.1")
     frontend_host = os.environ.get("MECHAFLOW_FRONTEND_HOST", "127.0.0.1")
     api_port = env_port("MECHAFLOW_API_PORT", api_host)
-    excluded_frontend_ports = {api_port} if frontend_host == api_host else set()
-    frontend_port = env_port("MECHAFLOW_FRONTEND_PORT", frontend_host, excluded_frontend_ports)
+    frontend_port = env_port("MECHAFLOW_FRONTEND_PORT", frontend_host, {api_port})
     api_base_url = f"http://{api_host}:{api_port}"
     frontend_origin = f"http://{frontend_host}:{frontend_port}"
 

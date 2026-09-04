@@ -126,6 +126,9 @@ class SeedDataValidationTest(unittest.TestCase):
 
         handoff = self.load_json("data/backend-frontend-handoff.seed.json")
         aliases = handoff["id_aliases"]
+        adapter_seed = {item["id"]: item for item in self.load_json("data/integration-adapters.seed.json")}
+        runtime_adapters = {item.status.name: item.status for item in ADAPTERS}
+        adapter_aliases = {item["catalog_id"]: item["backend_name"] for item in aliases["adapters"]}
         sample_project = build_sample_project()
         sample_part_ids = {part.id for assembly in sample_project.assemblies for part in assembly.parts}
         sample_route_ids = {route.id for assembly in sample_project.assemblies for route in assembly.wiring_routes}
@@ -150,8 +153,37 @@ class SeedDataValidationTest(unittest.TestCase):
             {item["backend_id"] for item in aliases["materials"]}.issubset({item.id for item in DEFAULT_MATERIALS})
         )
         self.assertTrue(
-            {item["backend_name"] for item in aliases["adapters"]}.issubset({item.status.name for item in ADAPTERS})
+            set(adapter_aliases.values()).issubset(runtime_adapters)
         )
+        catalog_designs = self.load_json("catalog/reference-designs/reference-designs.seed.json")
+        required_adapter_ids = {
+            adapter_id
+            for design in catalog_designs
+            for adapter_id in design["handoff"]["required_adapter_ids"]
+        }
+        self.assertTrue(required_adapter_ids.issubset(adapter_aliases))
+        for adapter_id, adapter in adapter_seed.items():
+            seeded_job_types = {
+                job_type for capability in adapter["capabilities"] for job_type in capability["backend_job_types"]
+            }
+            seeded_artifacts = {
+                artifact for capability in adapter["capabilities"] for artifact in capability["expected_artifacts"]
+            }
+            if adapter_id not in adapter_aliases:
+                self.assertEqual(seeded_job_types, set())
+                self.assertEqual(seeded_artifacts, set())
+                continue
+            runtime_adapter = runtime_adapters[adapter_aliases[adapter_id]]
+            self.assertEqual(seeded_job_types, {job_type.value for job_type in runtime_adapter.supported_job_types})
+            self.assertEqual(seeded_artifacts, {artifact.value for artifact in runtime_adapter.expected_artifacts})
+        for design in catalog_designs:
+            supported_job_types = {
+                job_type
+                for adapter_id in design["handoff"]["required_adapter_ids"]
+                for capability in adapter_seed[adapter_id]["capabilities"]
+                for job_type in capability["backend_job_types"]
+            }
+            self.assertTrue(set(design["handoff"]["recommended_job_types"]).issubset(supported_job_types))
         self.assertTrue({item["sample_task_id"] for item in aliases["tasks"]}.issubset(backend_task_ids))
         self.assertTrue(
             {item["id"] for item in handoff["mvp_seed_project"]["sample_parts"]}.issubset(sample_part_ids)

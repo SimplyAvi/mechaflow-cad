@@ -11,4 +11,8 @@ if (!Number.isInteger(count) || count < 1 || count > 20) {
 const ports = await getFreePorts(count, host);
 
 console.log(`Suggested unused ports on ${host}: ${ports.join(', ')}`);
-console.log(`Example: MECHAFLOW_API_PORT=${ports[0]} MECHAFLOW_FRONTEND_PORT=${ports[1] ?? ports[0]} npm run dev:full`);
+if (ports.length > 1) {
+  console.log(`Example: MECHAFLOW_API_PORT=${ports[0]} MECHAFLOW_FRONTEND_PORT=${ports[1]} npm run dev:full`);
+} else {
+  console.log(`Example: MECHAFLOW_API_PORT=${ports[0]} npm run mock:api`);
+}

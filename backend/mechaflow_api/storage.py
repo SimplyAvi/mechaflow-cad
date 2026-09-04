@@ -103,10 +103,30 @@ def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None
 def normalize_project_references(project_id: str, project: Project) -> Project:
     project_id = validate_project_id(project_id)
     _ensure_json_finite(project.model_dump(mode="python"), "project")
+    route_ids_by_part: dict[str, list[str]] = {}
+    for assembly in project.assemblies:
+        for route in assembly.wiring_routes:
+            for connector in (route.from_connector, route.to_connector):
+                if connector.part_id is not None:
+                    route_ids = route_ids_by_part.setdefault(connector.part_id, [])
+                    if route.id not in route_ids:
+                        route_ids.append(route.id)
+    assemblies = [
+        assembly.model_copy(
+            update={
+                "parts": [
+                    part.model_copy(update={"wiring_route_ids": route_ids_by_part.get(part.id, [])}, deep=True)
+                    for part in assembly.parts
+                ]
+            },
+            deep=True,
+        )
+        for assembly in project.assemblies
+    ]
     analysis_jobs = [normalize_analysis_job(project_id, job) for job in project.analysis_jobs]
     reports = [report.model_copy(update={"project_id": project_id}, deep=True) for report in project.reports]
     return project.model_copy(
-        update={"id": project_id, "analysis_jobs": analysis_jobs, "reports": reports},
+        update={"id": project_id, "assemblies": assemblies, "analysis_jobs": analysis_jobs, "reports": reports},
         deep=True,
     )
 

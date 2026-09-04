@@ -220,6 +220,61 @@ def test_project_rejects_duplicate_assembly_and_wiring_route_ids() -> None:
     assert local_client.post("/api/projects", json=duplicate_route).status_code == 422
 
 
+def test_project_derives_part_wiring_routes_from_connector_endpoints() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-endpoint-wiring"
+    project["analysis_jobs"] = []
+    project["reports"] = []
+    finger = next(
+        part
+        for assembly in project["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-finger-link"
+    )
+    actuator_bracket = next(
+        part
+        for assembly in project["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-actuator-bracket"
+    )
+    finger["wiring_route_ids"] = []
+    actuator_bracket["wiring_route_ids"] = ["route-main-harness"]
+
+    created = local_client.post("/api/projects", json=project)
+
+    assert created.status_code == 201
+    created_finger = next(
+        part
+        for assembly in created.json()["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-finger-link"
+    )
+    assert created_finger["wiring_route_ids"] == ["route-finger-sensor"]
+    created_actuator_bracket = next(
+        part
+        for assembly in created.json()["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-actuator-bracket"
+    )
+    assert created_actuator_bracket["wiring_route_ids"] == []
+
+    response = local_client.post(
+        "/api/projects/project-endpoint-wiring/modifications",
+        json={
+            "id": "mod-endpoint-wiring",
+            "target_part_id": "part-finger-link",
+            "description": "Increase finger thickness while retaining endpoint-linked wiring.",
+            "dimension_changes": {"thickness_mm": 7},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["report"]["wiring_impacts"] == [
+        "Target part has wiring routes; clearance and bend radius need a worker check."
+    ]
+
+
 def test_project_rejects_invalid_ids_and_duplicate_material_ids() -> None:
     local_client = TestClient(main_module.create_app())
     sample = local_client.get("/api/projects/sample").json()

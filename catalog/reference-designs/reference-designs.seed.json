@@ -131,7 +131,6 @@
       "required_adapter_ids": [
         "freecad",
         "calculix-gmsh",
-        "ros-urdf",
         "manufacturing-quote-packets"
       ],
       "recommended_job_types": [
@@ -398,7 +397,6 @@
         "uncertain-cad-license"
       ],
       "required_adapter_ids": [
-        "ros-urdf",
         "freecad",
         "wireviz",
         "manufacturing-quote-packets"

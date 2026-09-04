@@ -13,10 +13,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def find_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+def find_free_port(excluded_ports: set[int] | None = None) -> int:
+    excluded_ports = excluded_ports or set()
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = int(sock.getsockname()[1])
+        if port not in excluded_ports:
+            return port
 
 
 def read_url(url: str) -> str:
@@ -42,7 +46,7 @@ def wait_for_health(api_base_url: str, process: subprocess.Popen[str]) -> None:
 
 def test_local_frontend_backend_smoke_path() -> None:
     api_port = find_free_port()
-    frontend_port = find_free_port()
+    frontend_port = find_free_port({api_port})
     api_base_url = f"http://127.0.0.1:{api_port}"
     frontend_base_url = f"http://127.0.0.1:{frontend_port}"
     env = os.environ.copy()

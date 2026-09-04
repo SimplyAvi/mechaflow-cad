@@ -202,12 +202,13 @@ const mapPart = (
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
   const payloadLb = estimatePayload(part, material, taskPayload);
-  const safetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
-    ? round(payloadLb / taskPayload, 1)
+  const rawSafetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
+    ? payloadLb / taskPayload
     : null;
+  const safetyFactor = rawSafetyFactor == null ? null : round(rawSafetyFactor, 1);
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
   const manufacturingOption = activeManufacturingOption(part);
-  const status = ratingStatus(payloadLb, taskPayload, safetyFactor, taskSafetyFactorMin);
+  const status = ratingStatus(payloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
   const ratingSummary = taskPayload == null
     ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
     : payloadLb == null || safetyFactor == null
@@ -216,7 +217,7 @@ const mapPart = (
         ? `${part.name} falls below the preserved ${taskPayload} lb payload target.`
         : taskSafetyFactorMin == null
           ? `${part.name} has no active safety-factor minimum; engineering review is required.`
-          : safetyFactor < taskSafetyFactorMin
+          : rawSafetyFactor != null && rawSafetyFactor < taskSafetyFactorMin
             ? `${part.name} estimates a ${safetyFactor.toFixed(1)} safety factor below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
             : `${part.name} is heuristically rated against the preserved ${taskPayload} lb task and ${taskSafetyFactorMin.toFixed(1)} safety-factor minimum until real workers run.`;
   return {
@@ -262,10 +263,11 @@ const mapMaterialOptions = (
       );
       if (material.id === currentMaterialId || compatibleProcesses.length === 0) return [];
       const payloadLb = estimatePayload(part, material, taskPayload);
-      const safetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
-        ? round(payloadLb / taskPayload, 1)
+      const rawSafetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
+        ? payloadLb / taskPayload
         : null;
-      const status = ratingStatus(payloadLb, taskPayload, safetyFactor, taskSafetyFactorMin);
+      const safetyFactor = rawSafetyFactor == null ? null : round(rawSafetyFactor, 1);
+      const status = ratingStatus(payloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
       const manufacturingProcess = compatibleProcesses[0];
       const currentDensity = currentMaterial?.properties.density_kg_m3;
       const nextDensity = material.properties.density_kg_m3;
