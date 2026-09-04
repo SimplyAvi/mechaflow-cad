@@ -15,6 +15,14 @@ const configuredPort = parsePort(
   'BACKEND_PORT',
 );
 const port = configuredPort ?? (await getFreePort(host));
+const defaultCorsOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173'];
+const configuredCorsOrigins = process.env.MECHAFLOW_CORS_ORIGINS?.trim();
+const corsOrigins = new Set(
+  (configuredCorsOrigins || defaultCorsOrigins.join(','))
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
 const projectId = mockBackendPanelData.project.id;
 let project = structuredClone(mockBackendPanelData.project);
 const editableDimensionFields = new Set(['length_mm', 'width_mm', 'height_mm', 'thickness_mm']);
@@ -91,10 +99,19 @@ const projectPanelData = () => ({
   reports: project.reports,
 });
 
-const sendJson = (response, statusCode, payload) => {
+const corsHeaders = (request) => {
+  const origin = request.headers.origin;
+  if (!origin) return {};
+  if (corsOrigins.has('*')) return { 'access-control-allow-origin': '*' };
+  return corsOrigins.has(origin)
+    ? { 'access-control-allow-origin': origin, vary: 'Origin' }
+    : { vary: 'Origin' };
+};
+
+const sendJson = (request, response, statusCode, payload) => {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
-    'access-control-allow-origin': '*',
+    ...corsHeaders(request),
     'access-control-allow-methods': 'GET, POST, OPTIONS',
     'access-control-allow-headers': 'content-type',
     'content-type': 'application/json; charset=utf-8',
@@ -114,15 +131,16 @@ const isProjectPath = (pathname, suffix = '') =>
   pathname === `/api/projects/${projectId}${suffix}` || pathname === `/api/projects/sample${suffix}`;
 
 const server = http.createServer(async (request, response) => {
+  const send = (statusCode, payload) => sendJson(request, response, statusCode, payload);
   try {
     if (!request.url) {
-      sendJson(response, 400, { error: 'Missing URL' });
+      send(400, { error: 'Missing URL' });
       return;
     }
 
     if (request.method === 'OPTIONS') {
       response.writeHead(204, {
-        'access-control-allow-origin': '*',
+        ...corsHeaders(request),
         'access-control-allow-methods': 'GET, POST, OPTIONS',
         'access-control-allow-headers': 'content-type',
       });
@@ -133,7 +151,7 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, `http://${host}:${port}`);
 
     if (request.method === 'GET' && url.pathname === '/health') {
-      sendJson(response, 200, {
+      send(200, {
         status: 'ok',
         service: 'mechaflow-cad-mock-api',
         version: mockBackendMetadata.version,
@@ -145,72 +163,72 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/metadata') {
-      sendJson(response, 200, mockBackendMetadata);
+      send(200, mockBackendMetadata);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/catalog/seed') {
-      sendJson(response, 200, { ...mockCatalogSeed, materials: project.materials, sample_project: project });
+      send(200, { ...mockCatalogSeed, materials: project.materials, sample_project: project });
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/reference-designs') {
-      sendJson(response, 200, mockReferenceDesigns);
+      send(200, mockReferenceDesigns);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/materials') {
-      sendJson(response, 200, project.materials);
+      send(200, project.materials);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/task-requirements/sample') {
-      sendJson(response, 200, mockTaskRequirements);
+      send(200, mockTaskRequirements);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/assemblies/sample') {
-      sendJson(response, 200, project.assemblies[0]);
+      send(200, project.assemblies[0]);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/projects') {
-      sendJson(response, 200, [project]);
+      send(200, [project]);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname)) {
-      sendJson(response, 200, project);
+      send(200, project);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/panel-data')) {
-      sendJson(response, 200, projectPanelData());
+      send(200, projectPanelData());
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/task-requirements')) {
-      sendJson(response, 200, mockBackendPanelData.task_requirements);
+      send(200, mockBackendPanelData.task_requirements);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/bom')) {
-      sendJson(response, 200, mockBackendPanelData.bom_items);
+      send(200, mockBackendPanelData.bom_items);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/manufacturing-options')) {
-      sendJson(response, 200, projectManufacturingOptions());
+      send(200, projectManufacturingOptions());
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/wiring-routes')) {
-      sendJson(response, 200, mockBackendPanelData.wiring_routes);
+      send(200, mockBackendPanelData.wiring_routes);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/reports')) {
-      sendJson(response, 200, project.reports);
+      send(200, project.reports);
       return;
     }
 
@@ -219,18 +237,18 @@ const server = http.createServer(async (request, response) => {
       try {
         modification = await readJsonBody(request);
       } catch {
-        sendJson(response, 422, { error: 'request body must contain valid JSON' });
+        send(422, { error: 'request body must contain valid JSON' });
         return;
       }
       const validationError = modificationValidationError(modification);
       if (validationError) {
-        sendJson(response, 422, { error: validationError });
+        send(422, { error: validationError });
         return;
       }
       const parts = project.assemblies.flatMap((assembly) => assembly.parts);
       const part = parts.find((candidate) => candidate.id === modification.target_part_id);
       if (!part) {
-        sendJson(response, 404, { error: 'target part not found' });
+        send(404, { error: 'target part not found' });
         return;
       }
       if (modification.material_id != null || modification.manufacturing_process) {
@@ -246,37 +264,79 @@ const server = http.createServer(async (request, response) => {
           : undefined;
         const effectiveProcess = modification.manufacturing_process ?? currentProcess;
         if (!material) {
-          sendJson(response, 422, { error: 'material not found' });
+          send(422, { error: 'material not found' });
           return;
         }
         if (partProcesses.size === 0 || materialProcesses.length === 0) {
-          sendJson(response, 422, { error: 'material and process compatibility requires review' });
+          send(422, { error: 'material and process compatibility requires review' });
           return;
         }
         if (modification.material_id != null && !effectiveProcess) {
-          sendJson(response, 422, { error: 'material changes require an explicit compatible manufacturing process' });
+          send(422, { error: 'material changes require an explicit compatible manufacturing process' });
           return;
         }
         if (
           compatibleProcesses.length === 0
           || (effectiveProcess && !compatibleProcesses.includes(effectiveProcess))
         ) {
-          sendJson(response, 422, { error: 'material and process are incompatible for this part' });
+          send(422, { error: 'material and process are incompatible for this part' });
           return;
         }
       }
+      const dimensionChanges = modification.dimension_changes ?? {};
+      const changedDimensionKeys = Object.keys(dimensionChanges).filter(
+        (field) => dimensionChanges[field] !== part.dimensions[field],
+      );
+      const materialChanged = modification.material_id != null && modification.material_id !== part.material_id;
+      const currentProcess = typeof part.metadata?.preferred_manufacturing_process === 'string'
+        ? part.metadata.preferred_manufacturing_process
+        : undefined;
+      const processChanged = modification.manufacturing_process != null
+        && modification.manufacturing_process !== currentProcess;
+      const massPropertiesChanged = materialChanged || changedDimensionKeys.length > 0;
       const report = {
         id: `report-${modification.id ?? 'mock-modification'}`,
         project_id: projectId,
         title: 'Advisory edit report from mock backend',
         status: 'requires_review',
-        summary: 'Mock backend accepted the local schema edit and would queue CAD, payload, wiring, and supplier workers next.',
-        task_results: [{ task_kind: 'lift_payload', status: 'requires_review', method: 'local_schema_update_only' }],
-        manufacturing_impacts: ['Preferred process captured from the modification payload.'],
+        summary: massPropertiesChanged
+          ? 'Mock backend accepted the local schema edit and would queue CAD, payload, wiring, and supplier workers next.'
+          : 'Mock backend accepted the local schema edit without a material or dimension change requiring re-rating.',
+        task_results: [{
+          task_kind: 'lift_payload',
+          status: 'requires_review',
+          method: 'local_schema_update_only',
+          notes: [
+            materialChanged ? `Material changed to ${modification.material_id}.` : 'Material unchanged.',
+            changedDimensionKeys.length > 0
+              ? `Dimensions changed: ${changedDimensionKeys.sort().join(', ')}.`
+              : 'No dimensions changed.',
+            processChanged
+              ? `Preferred process changed to ${modification.manufacturing_process}.`
+              : 'Manufacturing process unchanged.',
+          ],
+        }],
+        manufacturing_impacts: [
+          processChanged
+            ? `Preferred process changed to ${modification.manufacturing_process}.`
+            : 'Manufacturing process unchanged.',
+        ],
         wiring_impacts: ['Wiring clearance remains advisory until a worker validates geometry.'],
-        risks: ['Local edit preview does not modify CAD geometry yet.'],
-        unknowns: ['Mass properties and supplier cost are unknown.'],
-        recommendations: ['Queue estimate_mass_properties and rerate_payload_capability.'],
+        risks: [
+          'Local edit preview does not modify CAD geometry yet.',
+          ...(massPropertiesChanged
+            ? ['Strength, payload, and fatigue changes are advisory until CAD and FEA workers validate them.']
+            : []),
+        ],
+        unknowns: [
+          ...(massPropertiesChanged
+            ? ['Updated mass properties are unknown until a CAD worker recalculates them.']
+            : []),
+          'Supplier cost and lead time are unknown until a supplier adapter runs.',
+        ],
+        recommendations: massPropertiesChanged
+          ? ['Queue estimate_mass_properties and rerate_payload_capability.']
+          : [],
         assumptions: ['Mock endpoint mirrors the backend modification contract.'],
         generated_at: new Date().toISOString(),
       };
@@ -292,12 +352,10 @@ const server = http.createServer(async (request, response) => {
           return {
             ...candidate,
             material_id: modification.material_id ?? candidate.material_id,
-            mass_kg: modification.material_id != null || Object.keys(modification.dimension_changes ?? {}).length > 0
-              ? null
-              : candidate.mass_kg,
+            mass_kg: massPropertiesChanged ? null : candidate.mass_kg,
             dimensions: {
               ...candidate.dimensions,
-              ...(modification.dimension_changes ?? {}),
+              ...dimensionChanges,
             },
             metadata: modification.manufacturing_process
               ? {
@@ -315,16 +373,16 @@ const server = http.createServer(async (request, response) => {
         reports: [...project.reports, report],
         updated_at: new Date().toISOString(),
       };
-      sendJson(response, 200, {
+      send(200, {
         project,
         report,
       });
       return;
     }
 
-    sendJson(response, 404, { error: 'Not found' });
+    send(404, { error: 'Not found' });
   } catch (error) {
-    sendJson(response, 500, { error: error instanceof Error ? error.message : 'Unexpected mock backend error' });
+    send(500, { error: error instanceof Error ? error.message : 'Unexpected mock backend error' });
   }
 });
 

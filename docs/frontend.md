@@ -41,6 +41,7 @@ Mock or real backend variables:
 - `BACKEND_PORT`: shorter mock-backend alias.
 - `API_PORT`: fallback mock API alias.
 - `MECHAFLOW_API_HOST` or `BACKEND_HOST`: host bind address, default `127.0.0.1`.
+- `MECHAFLOW_CORS_ORIGINS`: comma-separated browser origins allowed by the Node mock, defaulting to Vite on `127.0.0.1:5173` and `localhost:5173`.
 
 Vite is configured with `strictPort: true`. If the selected frontend port is busy, startup fails clearly instead of silently moving to another port. Pick another port with `MECHAFLOW_FRONTEND_PORT`, `FRONTEND_PORT`, or use the helper below.
 
@@ -89,9 +90,11 @@ This starts:
 You can also run both processes manually:
 
 ```sh
-MECHAFLOW_API_PORT=7331 npm run mock:api
+MECHAFLOW_API_PORT=7331 MECHAFLOW_CORS_ORIGINS=http://127.0.0.1:7332 npm run mock:api
 VITE_API_BASE_URL=http://127.0.0.1:7331 MECHAFLOW_FRONTEND_PORT=7332 npm run dev
 ```
+
+`npm run dev:full` supplies its selected frontend origin to the mock automatically.
 
 ## Checks and tests
 

@@ -479,13 +479,21 @@ def test_idempotent_material_and_dimension_edits_preserve_mass() -> None:
     )
 
     assert response.status_code == 200
+    payload = response.json()
     edited_palm = next(
         part
-        for assembly in response.json()["project"]["assemblies"]
+        for assembly in payload["project"]["assemblies"]
         for part in assembly["parts"]
         if part["id"] == palm["id"]
     )
     assert edited_palm["mass_kg"] == palm["mass_kg"]
+    assert payload["report"]["task_results"][0]["notes"] == [
+        "Material unchanged.",
+        "No dimensions changed.",
+        "Manufacturing process unchanged.",
+    ]
+    assert not any("mass properties" in item.lower() for item in payload["report"]["unknowns"])
+    assert not any("mass properties" in item.lower() for item in payload["report"]["recommendations"])
 
 
 def test_project_modification_rejects_unknown_material_and_dimension() -> None:

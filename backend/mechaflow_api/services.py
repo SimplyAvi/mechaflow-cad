@@ -57,9 +57,13 @@ def apply_project_modification(project: Project, modification: Modification) -> 
 
     target_part = _find_part(project, modification.target_part_id)
     _validate_material_process(project, target_part, modification)
-    changed_keys = _validate_dimension_keys(modification)
+    submitted_dimension_keys = _validate_dimension_keys(modification)
     now = datetime.now(timezone.utc)
-    edited_part = _apply_part_update(target_part, modification)
+    edited_part, material_changed, changed_keys, process_changed = _apply_part_update(
+        target_part,
+        modification,
+        submitted_dimension_keys,
+    )
     updated_assemblies = []
 
     for assembly in project.assemblies:
@@ -71,7 +75,15 @@ def apply_project_modification(project: Project, modification: Modification) -> 
             updated_parts.append(edited_part)
         updated_assemblies.append(assembly.model_copy(update={"parts": updated_parts}))
 
-    report = _build_modification_report(project, edited_part, modification, changed_keys, now)
+    report = _build_modification_report(
+        project,
+        edited_part,
+        modification,
+        material_changed,
+        changed_keys,
+        process_changed,
+        now,
+    )
     updated_project = project.model_copy(
         update={
             "assemblies": updated_assemblies,
@@ -137,12 +149,16 @@ def _validate_dimension_keys(modification: Modification) -> list[str]:
     return sorted(modification.dimension_changes)
 
 
-def _apply_part_update(part: Part, modification: Modification) -> Part:
+def _apply_part_update(
+    part: Part,
+    modification: Modification,
+    submitted_dimension_keys: list[str],
+) -> tuple[Part, bool, list[str], bool]:
     updates = {}
     material_changed = modification.material_id is not None and modification.material_id != part.material_id
     if modification.material_id is not None:
         updates["material_id"] = modification.material_id
-    dimensions_changed = False
+    changed_dimension_keys: list[str] = []
     if modification.dimension_changes:
         dimension_data = part.dimensions.model_dump()
         dimension_data.update(modification.dimension_changes)
@@ -150,35 +166,49 @@ def _apply_part_update(part: Part, modification: Modification) -> Part:
             updated_dimensions = PartDimensions(**dimension_data)
         except ValidationError as exc:
             raise InvalidDimensionChangeError(str(exc)) from exc
-        dimensions_changed = updated_dimensions != part.dimensions
+        changed_dimension_keys = [
+            key
+            for key in submitted_dimension_keys
+            if getattr(updated_dimensions, key) != getattr(part.dimensions, key)
+        ]
         updates["dimensions"] = updated_dimensions
-    if material_changed or dimensions_changed:
+    if material_changed or changed_dimension_keys:
         updates["mass_kg"] = None
+    current_process = part.metadata.get("preferred_manufacturing_process")
+    process_changed = (
+        modification.manufacturing_process is not None
+        and modification.manufacturing_process.value != current_process
+    )
     if modification.manufacturing_process is not None:
         metadata = dict(part.metadata)
         metadata["preferred_manufacturing_process"] = modification.manufacturing_process.value
         updates["metadata"] = metadata
-    return part.model_copy(update=updates)
+    return part.model_copy(update=updates), material_changed, changed_dimension_keys, process_changed
 
 
 def _build_modification_report(
     project: Project,
     edited_part: Part,
     modification: Modification,
+    material_changed: bool,
     changed_keys: list[str],
+    process_changed: bool,
     generated_at: datetime,
 ) -> AnalysisReport:
     task_description = project.active_task.description if project.active_task else "No active task is set."
     task_kind = project.active_task.kind.value if project.active_task else "unknown"
-    material_note = f"Material set to {modification.material_id}." if modification.material_id else "Material unchanged."
+    material_note = (
+        f"Material changed to {modification.material_id}." if material_changed else "Material unchanged."
+    )
     dimension_note = (
         f"Dimensions changed: {', '.join(changed_keys)}." if changed_keys else "No dimensions changed."
     )
     process_note = (
-        f"Preferred process set to {modification.manufacturing_process.value}."
-        if modification.manufacturing_process
+        f"Preferred process changed to {modification.manufacturing_process.value}."
+        if process_changed and modification.manufacturing_process
         else "Manufacturing process unchanged."
     )
+    mass_properties_changed = material_changed or bool(changed_keys)
     wiring_note = (
         "Target part has wiring routes; clearance and bend radius need a worker check."
         if edited_part.wiring_route_ids
@@ -207,16 +237,28 @@ def _build_modification_report(
         wiring_impacts=[wiring_note],
         risks=[
             "Local edit preview does not modify CAD geometry yet.",
-            "Strength, payload, and fatigue changes are advisory until FreeCAD and FEA workers validate them.",
+            *(
+                ["Strength, payload, and fatigue changes are advisory until FreeCAD and FEA workers validate them."]
+                if mass_properties_changed
+                else []
+            ),
         ],
         unknowns=[
-            "Updated mass properties are unknown until a CAD worker recalculates them.",
+            *(
+                ["Updated mass properties are unknown until a CAD worker recalculates them."]
+                if mass_properties_changed
+                else []
+            ),
             "Supplier cost and lead time are unknown until a supplier adapter runs.",
         ],
-        recommendations=[
-            "Queue estimate_mass_properties after CAD worker integration.",
-            "Queue rerate_payload_capability before treating this edit as engineering guidance.",
-        ],
+        recommendations=(
+            [
+                "Queue estimate_mass_properties after CAD worker integration.",
+                "Queue rerate_payload_capability before treating this edit as engineering guidance.",
+            ]
+            if mass_properties_changed
+            else []
+        ),
         assumptions=["Part-level schema update is enough for frontend edit flow prototyping."],
         generated_at=generated_at,
     )

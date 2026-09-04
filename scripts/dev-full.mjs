@@ -19,10 +19,11 @@ const { backendPort, frontendPort } = await resolvePortPair({
   frontendPort: configuredFrontendPort,
 });
 const apiBaseUrl = `http://${backendHost}:${backendPort}`;
+const frontendOrigin = `http://${frontendHost}:${frontendPort}`;
 
 console.log('Starting MechaFlow CAD local stack with explicit ports:');
 console.log(`  backend:  ${apiBaseUrl}`);
-console.log(`  frontend: http://${frontendHost}:${frontendPort}`);
+console.log(`  frontend: ${frontendOrigin}`);
 console.log('Override with MECHAFLOW_API_PORT and MECHAFLOW_FRONTEND_PORT, or run npm run ports:find first.');
 
 const children = [];
@@ -55,6 +56,7 @@ start('api', process.execPath, ['scripts/mock-backend.mjs'], {
   MECHAFLOW_API_HOST: backendHost,
   BACKEND_PORT: String(backendPort),
   MECHAFLOW_API_PORT: String(backendPort),
+  MECHAFLOW_CORS_ORIGINS: process.env.MECHAFLOW_CORS_ORIGINS || frontendOrigin,
 });
 
 start('web', 'npx', ['vite', '--host', frontendHost, '--port', String(frontendPort), '--strictPort'], {

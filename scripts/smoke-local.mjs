@@ -87,8 +87,44 @@ try {
   spawnChild('api', process.execPath, ['scripts/mock-backend.mjs'], {
     BACKEND_HOST: host,
     BACKEND_PORT: String(backendPort),
+    MECHAFLOW_CORS_ORIGINS: frontendUrl,
   });
   await waitForJson(`${apiBaseUrl}/health`);
+
+  const allowedCorsResponse = await fetch(`${apiBaseUrl}/health`, {
+    headers: { Origin: frontendUrl },
+  });
+  const blockedCorsResponse = await fetch(`${apiBaseUrl}/health`, {
+    headers: { Origin: 'https://foreign.example' },
+  });
+  const allowedPreflightResponse = await fetch(
+    `${apiBaseUrl}/api/projects/sample/modifications`,
+    {
+      method: 'OPTIONS',
+      headers: {
+        Origin: frontendUrl,
+        'Access-Control-Request-Method': 'POST',
+      },
+    },
+  );
+  const blockedPreflightResponse = await fetch(
+    `${apiBaseUrl}/api/projects/sample/modifications`,
+    {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://foreign.example',
+        'Access-Control-Request-Method': 'POST',
+      },
+    },
+  );
+  if (
+    allowedCorsResponse.headers.get('access-control-allow-origin') !== frontendUrl
+    || allowedPreflightResponse.headers.get('access-control-allow-origin') !== frontendUrl
+    || blockedCorsResponse.headers.has('access-control-allow-origin')
+    || blockedPreflightResponse.headers.has('access-control-allow-origin')
+  ) {
+    throw new Error('Mock backend did not restrict CORS to the configured frontend origin.');
+  }
 
   const metadata = await waitForJson(`${apiBaseUrl}/api/metadata`);
   if (!metadata.concepts.includes('projects') || !metadata.concepts.includes('wiring_routes')) {
@@ -115,6 +151,36 @@ try {
   }
   if (demoReference.bom_items.map((item) => item.id).join(',') !== 'bom-m4-shoulder,bom-m4-locknut') {
     throw new Error('Mock backend reference-design BOM diverged from the FastAPI seed.');
+  }
+  const originalPalm = panelData.project.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === 'part-palm-plate');
+  const idempotentModification = await fetch(
+    `${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'smoke-idempotent-palm',
+        target_part_id: originalPalm.id,
+        description: 'Resubmit the current palm material and thickness.',
+        material_id: originalPalm.material_id,
+        dimension_changes: { thickness_mm: originalPalm.dimensions.thickness_mm },
+        manufacturing_process: originalPalm.metadata.preferred_manufacturing_process,
+      }),
+    },
+  );
+  if (!idempotentModification.ok) {
+    throw new Error(`Mock backend rejected an idempotent modification with ${idempotentModification.status}.`);
+  }
+  const idempotentPayload = await idempotentModification.json();
+  const idempotentPalm = idempotentPayload.project.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === originalPalm.id);
+  if (
+    idempotentPalm?.mass_kg !== originalPalm.mass_kg
+    || idempotentPayload.report.unknowns.some((item) => item.toLowerCase().includes('mass properties'))
+    || idempotentPayload.report.recommendations.some((item) => item.toLowerCase().includes('mass properties'))
+  ) {
+    throw new Error('Mock backend treated an idempotent modification as a mass-changing edit.');
   }
   const incompatibleModification = await fetch(`${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`, {
     method: 'POST',
