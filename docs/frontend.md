@@ -95,6 +95,8 @@ VITE_API_BASE_URL=http://127.0.0.1:7331 MECHAFLOW_FRONTEND_PORT=7332 npm run dev
 ```
 
 `npm run dev:full` supplies its selected frontend origin to the mock automatically.
+Browser mutation requests to the mock must come from an origin allowed by `MECHAFLOW_CORS_ORIGINS`, and
+JSON mutation bodies must use `Content-Type: application/json`.
 
 ## Checks and tests
 
@@ -142,7 +144,11 @@ The frontend also displays the intended mutation endpoint without requiring a wr
 POST /api/projects/{project_id}/modifications
 ```
 
-The preview payload mirrors the backend `Modification` contract: `target_part_id`, optional `material_id`, optional `dimension_changes`, and optional `manufacturing_process`. A real backend response should attach an advisory report until CAD, FEA, wiring, and supplier workers produce authoritative artifacts.
+The preview payload mirrors the backend `Modification` shape: required `id`, `target_part_id`, and
+`description`, plus optional `material_id`, `dimension_changes`, and `manufacturing_process`. The FastAPI
+backend owns the conditional validation and mass-invalidation rules in the
+[backend modification contract](backend.md#modification-contract). A real backend response should attach an
+advisory report until CAD, FEA, wiring, and supplier workers produce authoritative artifacts.
 
 The bundled mock lives in `src/data/backendPanelData.json` and follows the backend handoff concepts from the local FastAPI scaffold. The Node mock API in `scripts/mock-backend.mjs` serves the same data for frontend-to-backend development.
 

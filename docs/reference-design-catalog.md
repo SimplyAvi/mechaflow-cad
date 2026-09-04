@@ -36,7 +36,8 @@ The validator checks each entry against `catalog/schemas/reference-design.schema
 fields, field types, enums, patterns, and unknown fields all come from the schema rather than a second copy of
 it. On top of the schema it checks unique IDs, license caution visibility, integration adapter references,
 backend job type names, and references from designs to seed tasks, materials, manufacturing methods, and
-capability ratings.
+capability ratings. For every handoff job, one declared adapter capability must support the job type and
+artifact kind together, and the artifact must match the canonical kind for that job type.
 
 ## Adding a new reference design
 
