@@ -79,6 +79,10 @@ class InvalidWiringEndpointError(ValueError):
     """Raised when a wiring endpoint names a part outside the project."""
 
 
+class InvalidPartMaterialError(ValueError):
+    """Raised when a project part names a material outside the project."""
+
+
 class NonFiniteStorageValueError(ValueError):
     """Raised when persisted state contains a non-finite JSON number."""
 
@@ -119,8 +123,14 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
     project_id = validate_project_id(project_id)
     _ensure_json_finite(project.model_dump(mode="python"), "project")
     part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
+    material_ids = {material.id for material in project.materials}
     route_ids_by_part: dict[str, list[str]] = {}
     for assembly in project.assemblies:
+        for part in assembly.parts:
+            if part.material_id is not None and part.material_id not in material_ids:
+                raise InvalidPartMaterialError(
+                    f"part {part.id!r} references unknown project material {part.material_id!r}"
+                )
         for route in assembly.wiring_routes:
             for connector in (route.from_connector, route.to_connector):
                 if connector.part_id is not None:

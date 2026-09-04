@@ -13,6 +13,7 @@ from . import __version__
 
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
+DEFAULT_CORS_ORIGINS = ("http://127.0.0.1:5173", "http://localhost:5173")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -52,7 +53,9 @@ class Settings:
     # stable local URL or hosted deployment.
     port: int = field(default_factory=lambda: _env_int("MECHAFLOW_API_PORT", 0))
     api_prefix: str = field(default_factory=lambda: os.getenv("MECHAFLOW_API_PREFIX", "/api"))
-    cors_origins: tuple[str, ...] = field(default_factory=lambda: _env_csv("MECHAFLOW_CORS_ORIGINS", ("*",)))
+    cors_origins: tuple[str, ...] = field(
+        default_factory=lambda: _env_csv("MECHAFLOW_CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+    )
     local_mode: bool = field(default_factory=lambda: _env_bool("MECHAFLOW_LOCAL_MODE", True))
 
 

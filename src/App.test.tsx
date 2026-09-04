@@ -51,14 +51,14 @@ describe('MechaFlow cockpit', () => {
     await user.selectOptions(optionSelector, 'part-finger-link-mat-carbon-fiber-nylon');
 
     expect(
-      screen.getAllByText(/Combined material-and-geometry preview at 8 mm thickness is rated at 40\.7 lb/i).length,
+      screen.getAllByText(/Material-only preview has no worker-supplied payload rating/i).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText('40.7 lb projected rating')).toBeInTheDocument();
+    expect(screen.getByText(/Payload rating review required/i)).toBeInTheDocument();
     expect(screen.getByText(/Process cost:/i)).toHaveTextContent('$3-$12');
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent(
       '/api/projects/project-open-gripper-demo/modifications',
     );
-    expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('"thickness_mm": 8');
+    expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('"dimension_changes": {}');
     expect(screen.getByText(/mat-carbon-fiber-nylon/i)).toBeInTheDocument();
   });
 
@@ -144,50 +144,6 @@ describe('MechaFlow cockpit', () => {
 
     expect(await screen.findByRole('heading', { name: '$0.40-$0.80 open estimate' })).toBeInTheDocument();
     expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(4);
-  });
-
-  it('renders near-threshold safety estimates without contradicting watch status', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
-    const panelData = structuredClone(mockProjectPanelData);
-    panelData.project.active_task!.target_value = 50;
-    panelData.project.active_task!.safety_factor_min = 2;
-    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
-    finger.dimensions.thickness_mm = 9.9893;
-    panelData.project.materials = panelData.project.materials.filter((material) => material.id === finger.material_id);
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
-      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
-      return new Response('Not found', { status: 404 });
-    }));
-
-    render(<App />);
-
-    const ratingLine = await screen.findByText(/Safety factor 1\.999/i);
-    expect(ratingLine).toHaveTextContent('+49.96 lb against preserved task');
-    expect(screen.getByText('99.96 lb projected rating')).toBeInTheDocument();
-    expect(screen.queryByText(/2\.0 safety factor below the preserved 2\.0 minimum/i)).not.toBeInTheDocument();
-  });
-
-  it('renders bounds when display precision would cross a safety threshold', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
-    const panelData = structuredClone(mockProjectPanelData);
-    panelData.project.active_task!.target_value = 50;
-    panelData.project.active_task!.safety_factor_min = 2;
-    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
-    finger.dimensions.thickness_mm = 9.99999999;
-    panelData.project.materials = panelData.project.materials.filter((material) => material.id === finger.material_id);
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
-      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
-      return new Response('Not found', { status: 404 });
-    }));
-
-    render(<App />);
-
-    expect(await screen.findByText('< 100 lb projected rating')).toBeInTheDocument();
-    expect(screen.getByText(/Safety factor < 2 - < \+50 lb against preserved task/i)).toBeInTheDocument();
   });
 
   it('renders missing backend engineering values as review-required', async () => {

@@ -10,7 +10,7 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 - Viewing an animated exploded assembly concept.
 - Selecting parts from the assembly and part tree.
 - Preserving the active task while previewing material substitution.
-- Re-rating payload capability and safety factor.
+- Keeping payload capability and safety factor under review until a backend worker supplies a task-independent rating.
 - Showing background CAD, FEA, wiring, and supplier job status.
 - Reviewing BOM, cost, manufacturing, and lead-time panels.
 - Surfacing wiring routes, bend radius, service loops, and clearance risk.

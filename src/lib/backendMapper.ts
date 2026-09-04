@@ -20,7 +20,6 @@ import type {
   MaterialOption,
   Part,
   PartVisual,
-  RatingStatus,
   ReferenceDesign,
   RiskLevel,
   UsdRange,
@@ -83,32 +82,6 @@ const leadTime = (option: BackendManufacturingOption): string => {
   }
   if (option.lead_time_days_min != null) return `From ${option.lead_time_days_min} days`;
   return `Up to ${option.lead_time_days_max} days`;
-};
-
-const estimatePayload = (
-  part: BackendPart,
-  material: BackendMaterial | undefined,
-  taskPayload: number | null,
-): number | null => {
-  const thickness = part.dimensions.thickness_mm ?? part.dimensions.height_mm;
-  if (taskPayload == null || thickness == null || !material) return null;
-  const base = taskPayload + thickness * 3;
-  if (material.family.includes('polymer')) return base * 0.55;
-  if (material.family.includes('steel')) return base * 1.85;
-  if (material.family.includes('aluminum')) return base * 1.25;
-  return base;
-};
-
-const ratingStatus = (
-  payloadLb: number | null,
-  taskPayload: number | null,
-  safetyFactor: number | null,
-  taskSafetyFactorMin: number | null,
-): RatingStatus => {
-  if (payloadLb == null || taskPayload == null || safetyFactor == null) return 'watch';
-  if (payloadLb < taskPayload) return 'fails';
-  if (taskSafetyFactorMin == null || safetyFactor < taskSafetyFactorMin) return 'watch';
-  return 'passes';
 };
 
 const jobStatus = (status: string): JobStatus => {
@@ -198,28 +171,10 @@ const mapPart = (
   index: number,
   assembly: BackendAssembly,
   materialsById: Map<string, BackendMaterial>,
-  taskPayload: number | null,
-  taskSafetyFactorMin: number | null,
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
-  const rawPayloadLb = estimatePayload(part, material, taskPayload);
-  const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
-    ? rawPayloadLb / taskPayload
-    : null;
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
   const manufacturingOption = activeManufacturingOption(part);
-  const status = ratingStatus(rawPayloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
-  const ratingSummary = taskPayload == null
-    ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
-    : rawPayloadLb == null || rawSafetyFactor == null
-      ? `${part.name} has incomplete payload evidence; engineering review is required.`
-      : rawPayloadLb != null && rawPayloadLb < taskPayload
-        ? `${part.name} falls below the preserved ${taskPayload} lb payload target.`
-        : taskSafetyFactorMin == null
-          ? `${part.name} has no active safety-factor minimum; engineering review is required.`
-          : rawSafetyFactor != null && rawSafetyFactor < taskSafetyFactorMin
-            ? `${part.name}'s estimated safety factor is below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
-            : `${part.name} is heuristically rated against the preserved ${taskPayload} lb task and ${taskSafetyFactorMin.toFixed(1)} safety-factor minimum until real workers run.`;
   return {
     id: part.id,
     name: part.name,
@@ -234,10 +189,10 @@ const mapPart = (
     fasteners: part.related_fasteners,
     relatedWires: part.wiring_route_ids,
     rating: {
-      status,
-      payloadLb: rawPayloadLb,
-      safetyFactor: rawSafetyFactor,
-      summary: ratingSummary,
+      status: 'watch',
+      payloadLb: null,
+      safetyFactor: null,
+      summary: `${part.name} has no worker-supplied payload rating; engineering review is required.`,
       warning: part.wiring_route_ids.length > 0 ? 'Linked wiring routes require clearance checks after geometry edits.' : undefined,
     },
     visual: visualFor(part, index, node?.exploded_transform.translation_mm),
@@ -247,8 +202,6 @@ const mapPart = (
 const mapMaterialOptions = (
   parts: BackendPart[],
   materials: BackendMaterial[],
-  taskPayload: number | null,
-  taskSafetyFactorMin: number | null,
   projectId: string,
 ): MaterialOption[] =>
   parts.flatMap((part) => {
@@ -262,69 +215,31 @@ const mapMaterialOptions = (
         (process) => process !== 'unknown' && partProcesses.has(process),
       );
       if (material.id === currentMaterialId || compatibleProcesses.length === 0) return [];
-      const materialOnlyPayloadLb = estimatePayload(part, material, taskPayload);
-      const materialOnlySafetyFactor = materialOnlyPayloadLb != null && taskPayload != null && taskPayload > 0
-        ? materialOnlyPayloadLb / taskPayload
-        : null;
-      const materialOnlyStatus = ratingStatus(
-        materialOnlyPayloadLb,
-        taskPayload,
-        materialOnlySafetyFactor,
-        taskSafetyFactorMin,
-      );
-      const currentThicknessMm = part.dimensions.thickness_mm;
-      const nextThicknessMm = materialOnlyStatus === 'fails' && currentThicknessMm != null
-        ? currentThicknessMm + 2
-        : null;
-      const dimensionChanges: Record<string, number> = nextThicknessMm == null
-        ? {}
-        : { thickness_mm: nextThicknessMm };
-      const previewPart = nextThicknessMm == null
-        ? part
-        : { ...part, dimensions: { ...part.dimensions, ...dimensionChanges } };
-      const rawPayloadLb = estimatePayload(previewPart, material, taskPayload);
-      const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
-        ? rawPayloadLb / taskPayload
-        : null;
-      const status = ratingStatus(rawPayloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
       const manufacturingProcess = compatibleProcesses[0];
       const currentDensity = currentMaterial?.properties.density_kg_m3;
       const nextDensity = material.properties.density_kg_m3;
-      const thicknessRatio = nextThicknessMm != null && currentThicknessMm != null
-        ? nextThicknessMm / currentThicknessMm
-        : 1;
       const weightDeltaLb = part.mass_kg != null && currentDensity != null && currentDensity > 0 && nextDensity != null
-        ? round(part.mass_kg * (nextDensity / currentDensity * thicknessRatio - 1) * 2.20462, 2)
+        ? round(part.mass_kg * (nextDensity / currentDensity - 1) * 2.20462, 2)
         : null;
       const manufacturingOption = part.manufacturing_options.find(
         (option) => option.process === manufacturingProcess,
       );
-      const previewScope = nextThicknessMm == null
-        ? 'Material-only preview'
-        : `Combined material-and-geometry preview at ${nextThicknessMm} mm thickness`;
+      const previewScope = 'Material-only preview';
       return {
         id: `${part.id}-${material.id}`,
         partId: part.id,
         material: material.name,
         process: toTitle(manufacturingProcess),
-        payloadLb: rawPayloadLb,
-        safetyFactor: rawSafetyFactor,
+        payloadLb: null,
+        safetyFactor: null,
         weightDeltaLb,
         costRangeUsd: usdCostRange(manufacturingOption?.cost),
-        taskImpact: taskPayload == null || rawPayloadLb == null || rawSafetyFactor == null
-          ? 'Payload target or rating is unknown; engineering review is required.'
-          : status === 'fails'
-            ? `${previewScope} is rated at ${round(rawPayloadLb, 2)} lb and remains below the preserved ${taskPayload} lb task.`
-            : taskSafetyFactorMin == null
-              ? `${previewScope}: the active safety-factor minimum is unknown; engineering review is required.`
-              : status === 'watch'
-                ? `${previewScope} has an estimated safety factor below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
-                : `${previewScope} keeps the preserved ${taskPayload} lb task active with a ${rawSafetyFactor.toFixed(1)} safety factor estimate.`,
+        taskImpact: `${previewScope} has no worker-supplied payload rating; engineering review is required.`,
         wiringImpact: part.wiring_route_ids.length > 0
           ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
           : 'No linked wiring route is known for this part in the sample project.',
         manufacturingImpact: `${previewScope} uses ${toTitle(manufacturingProcess)} and remains advisory until supplier and manufacturing workers run.`,
-        status,
+        status: 'watch',
         backendModification: {
           endpoint: `/api/projects/${projectId}/modifications`,
           method: 'POST',
@@ -333,13 +248,11 @@ const mapMaterialOptions = (
             target_part_id: part.id,
             description: `${previewScope} for ${part.name} using ${material.name} while preserving the active task.`,
             material_id: material.id,
-            dimension_changes: dimensionChanges,
+            dimension_changes: {},
             manufacturing_process: manufacturingProcess,
           },
           reportTitle: `Advisory edit report for ${part.name}`,
-          reportSummary: nextThicknessMm != null
-            ? 'Local preview would return requires_review because payload, fatigue, wiring, and manufacturability need real workers.'
-            : 'Local preview would update project metadata and attach an advisory report before real CAD geometry changes exist.',
+          reportSummary: 'Local preview would update project metadata and attach an advisory report before real CAD geometry changes exist.',
           reportStatus: 'requires_review',
         },
       };
@@ -441,14 +354,13 @@ export function mapProjectPanelDataToReferenceDesign(
   const backendAssemblies = projectAssemblies(panelData);
   const task = activeTaskFrom(panelData.task_requirements, project.active_task);
   const taskPayload = task.unit === 'lb' && typeof task.target_value === 'number' ? task.target_value : null;
-  const taskSafetyFactorMin = typeof task.safety_factor_min === 'number' ? task.safety_factor_min : null;
   const materialsById = new Map(project.materials.map((material) => [material.id, material]));
   const assemblies = backendAssemblies.map((assembly) => ({
     id: assembly.id,
     name: assembly.name,
     explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
     parts: assembly.parts.map((part, index) =>
-      mapPart(part, index, assembly, materialsById, taskPayload, taskSafetyFactorMin)),
+      mapPart(part, index, assembly, materialsById)),
   }));
   const defaultAssemblyIndex = Math.max(0, backendAssemblies.findIndex((assembly) => assembly.parts.length > 0));
   const assembly = assemblies[defaultAssemblyIndex]!;
@@ -477,8 +389,6 @@ export function mapProjectPanelDataToReferenceDesign(
     materialOptions: mapMaterialOptions(
       allBackendParts,
       project.materials,
-      taskPayload,
-      taskSafetyFactorMin,
       project.id,
     ),
     bom: mapBOM(panelData.bom_items, allParts),

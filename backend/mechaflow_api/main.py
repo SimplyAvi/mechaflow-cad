@@ -53,6 +53,7 @@ from .storage import (
     AnalysisJobAlreadyExistsError,
     InvalidAnalysisJobAdapterError,
     InvalidAnalysisJobArtifactError,
+    InvalidPartMaterialError,
     InvalidWiringEndpointError,
     NonFiniteStorageValueError,
     ProjectAlreadyExistsError,
@@ -284,6 +285,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         except (
             InvalidAnalysisJobAdapterError,
             InvalidAnalysisJobArtifactError,
+            InvalidPartMaterialError,
             InvalidWiringEndpointError,
             NonFiniteStorageValueError,
         ) as exc:

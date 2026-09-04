@@ -139,16 +139,20 @@ def _validate_dimension_keys(modification: Modification) -> list[str]:
 
 def _apply_part_update(part: Part, modification: Modification) -> Part:
     updates = {}
+    material_changed = modification.material_id is not None and modification.material_id != part.material_id
     if modification.material_id is not None:
         updates["material_id"] = modification.material_id
+    dimensions_changed = False
     if modification.dimension_changes:
         dimension_data = part.dimensions.model_dump()
         dimension_data.update(modification.dimension_changes)
         try:
-            updates["dimensions"] = PartDimensions(**dimension_data)
+            updated_dimensions = PartDimensions(**dimension_data)
         except ValidationError as exc:
             raise InvalidDimensionChangeError(str(exc)) from exc
-    if modification.material_id is not None or modification.dimension_changes:
+        dimensions_changed = updated_dimensions != part.dimensions
+        updates["dimensions"] = updated_dimensions
+    if material_changed or dimensions_changed:
         updates["mass_kg"] = None
     if modification.manufacturing_process is not None:
         metadata = dict(part.metadata)

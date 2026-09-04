@@ -49,6 +49,14 @@ If `MECHAFLOW_API_PORT` is omitted, the backend defaults to port `0`, which asks
 
 If the configured port is busy, uvicorn exits with a clear bind error. Pick another port rather than silently colliding with another local project.
 
+The backend allows the default Vite origins `http://127.0.0.1:5173` and `http://localhost:5173`. Add other local frontend origins explicitly as a comma-separated list:
+
+```bash
+export MECHAFLOW_CORS_ORIGINS=http://127.0.0.1:5179,http://localhost:5179
+```
+
+Include every frontend origin that should access the API. `python scripts/run-dev.py` configures its selected static-frontend origin automatically.
+
 ## Find an unused port
 
 ```bash

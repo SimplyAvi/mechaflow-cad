@@ -28,6 +28,23 @@ def test_health_and_status_endpoints() -> None:
     assert {adapter["name"] for adapter in payload["adapters"]} >= {"freecad-worker", "calculix-fea-worker"}
 
 
+def test_cors_defaults_to_local_vite_and_supports_configured_origins(monkeypatch) -> None:
+    monkeypatch.delenv("MECHAFLOW_CORS_ORIGINS", raising=False)
+    default_client = TestClient(main_module.create_app())
+
+    allowed = default_client.get("/health", headers={"Origin": "http://127.0.0.1:5173"})
+    foreign = default_client.get("/health", headers={"Origin": "https://foreign.example"})
+
+    assert allowed.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+    assert "access-control-allow-origin" not in foreign.headers
+
+    monkeypatch.setenv("MECHAFLOW_CORS_ORIGINS", "http://127.0.0.1:7332,http://localhost:7332")
+    configured_client = TestClient(main_module.create_app())
+    configured = configured_client.get("/health", headers={"Origin": "http://localhost:7332"})
+
+    assert configured.headers["access-control-allow-origin"] == "http://localhost:7332"
+
+
 def test_status_is_ok_when_adapters_are_no_longer_stubs(monkeypatch) -> None:
     ready_adapters = [adapter.model_copy(update={"status": "ready"}) for adapter in main_module.list_adapter_statuses()]
     monkeypatch.setattr(main_module, "list_adapter_statuses", lambda: ready_adapters)
@@ -311,6 +328,21 @@ def test_project_rejects_wiring_endpoints_for_unknown_parts() -> None:
     assert local_client.get("/api/projects/project-unknown-wiring-endpoint").status_code == 404
 
 
+def test_project_rejects_parts_with_unknown_materials() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-unknown-part-material"
+    project["analysis_jobs"] = []
+    project["reports"] = []
+    project["assemblies"][0]["parts"][0]["material_id"] = "mat-typo"
+
+    response = local_client.post("/api/projects", json=project)
+
+    assert response.status_code == 422
+    assert "references unknown project material 'mat-typo'" in response.json()["detail"]
+    assert local_client.get("/api/projects/project-unknown-part-material").status_code == 404
+
+
 def test_project_rejects_invalid_ids_and_duplicate_material_ids() -> None:
     local_client = TestClient(main_module.create_app())
     sample = local_client.get("/api/projects/sample").json()
@@ -422,6 +454,38 @@ def test_project_modification_endpoint_updates_part_and_returns_report() -> None
     assert stored_part["mass_kg"] is None
     assert stored["modifications"][0]["id"] == "mod-finger-material-thickness"
     assert stored["reports"][0]["id"] == payload["report"]["id"]
+
+
+def test_idempotent_material_and_dimension_edits_preserve_mass() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    palm = next(
+        part
+        for assembly in project["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-palm-plate"
+    )
+
+    response = local_client.post(
+        "/api/projects/project-open-gripper-demo/modifications",
+        json={
+            "id": "mod-idempotent-palm",
+            "target_part_id": palm["id"],
+            "description": "Resubmit the current palm material and thickness.",
+            "material_id": palm["material_id"],
+            "dimension_changes": {"thickness_mm": palm["dimensions"]["thickness_mm"]},
+            "manufacturing_process": ManufacturingProcess.cnc_machining.value,
+        },
+    )
+
+    assert response.status_code == 200
+    edited_palm = next(
+        part
+        for assembly in response.json()["project"]["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == palm["id"]
+    )
+    assert edited_palm["mass_kg"] == palm["mass_kg"]
 
 
 def test_project_modification_rejects_unknown_material_and_dimension() -> None:
