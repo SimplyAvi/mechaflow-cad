@@ -11,7 +11,7 @@ const backendPort = parsePort(
 const frontendPort = parsePort(
   process.env.MECHAFLOW_FRONTEND_PORT || process.env.FRONTEND_PORT || process.env.PORT,
   'MECHAFLOW_FRONTEND_PORT',
-) ?? (await getFreePort(frontendHost));
+) ?? (await getFreePort(frontendHost, backendHost === frontendHost ? [backendPort] : []));
 const apiBaseUrl = `http://${backendHost}:${backendPort}`;
 
 console.log('Starting MechaFlow CAD local stack with explicit ports:');

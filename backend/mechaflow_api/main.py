@@ -52,6 +52,7 @@ from .settings import Settings, get_settings
 from .storage import (
     AnalysisJobAlreadyExistsError,
     InvalidAnalysisJobAdapterError,
+    NonFiniteStorageValueError,
     ProjectAlreadyExistsError,
     ProjectNotFoundError,
     ProjectStore,
@@ -278,7 +279,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=409, detail="project already exists") from exc
         except AnalysisJobAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
-        except InvalidAnalysisJobAdapterError as exc:
+        except (InvalidAnalysisJobAdapterError, NonFiniteStorageValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
@@ -293,6 +294,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}/panel-data", response_model=ProjectPanelData, tags=["projects"])
     def project_panel_data(project_id: str) -> ProjectPanelData:
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
         return build_project_panel_data(get_project_or_404(project_id))
 
     @app.get(
@@ -383,6 +386,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 continue
             except ProjectNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="project not found") from exc
+            except NonFiniteStorageValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}", response_model=AnalysisJob, tags=["jobs"])
     def analysis_job(job_id: str) -> AnalysisJob:

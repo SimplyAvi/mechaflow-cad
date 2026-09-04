@@ -18,20 +18,24 @@ ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "frontend"
 
 
-def find_free_port(host: str) -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind((host, 0))
-        return int(sock.getsockname()[1])
+def find_free_port(host: str, excluded_ports: set[int] | None = None) -> int:
+    excluded_ports = excluded_ports or set()
+    while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind((host, 0))
+            port = int(sock.getsockname()[1])
+        if port not in excluded_ports:
+            return port
 
 
-def env_port(name: str, host: str) -> int:
+def env_port(name: str, host: str, excluded_ports: set[int] | None = None) -> int:
     raw = os.environ.get(name)
     if raw:
         value = int(raw)
         if value < 1 or value > 65535:
             raise ValueError(f"{name} must be between 1 and 65535 for the dev runner")
         return value
-    return find_free_port(host)
+    return find_free_port(host, excluded_ports)
 
 
 class RuntimeConfigHandler(http.server.SimpleHTTPRequestHandler):
@@ -58,7 +62,8 @@ def main() -> int:
     api_host = os.environ.get("MECHAFLOW_API_HOST", "127.0.0.1")
     frontend_host = os.environ.get("MECHAFLOW_FRONTEND_HOST", "127.0.0.1")
     api_port = env_port("MECHAFLOW_API_PORT", api_host)
-    frontend_port = env_port("MECHAFLOW_FRONTEND_PORT", frontend_host)
+    excluded_frontend_ports = {api_port} if frontend_host == api_host else set()
+    frontend_port = env_port("MECHAFLOW_FRONTEND_PORT", frontend_host, excluded_frontend_ports)
     api_base_url = f"http://{api_host}:{api_port}"
     frontend_origin = f"http://{frontend_host}:{frontend_port}"
 

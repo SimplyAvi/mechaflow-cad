@@ -99,6 +99,10 @@ def test_catalog_and_sample_project_are_structured() -> None:
     assert payload["active_task"]["target_value"] == 50
     assert payload["assemblies"][0]["wiring_routes"][0]["bend_radius_min_mm"] == 12
 
+    panel = client.get("/api/projects/sample/panel-data")
+    assert panel.status_code == 200
+    assert panel.json()["project"]["id"] == "project-open-gripper-demo"
+
 
 def test_frontend_mock_projection_matches_backend_seed_contract() -> None:
     backend_panel = client.get("/api/projects/project-open-gripper-demo/panel-data").json()
@@ -254,6 +258,38 @@ def test_project_write_rejects_nonfinite_part_dimensions() -> None:
 
     assert response.status_code == 422
     assert local_client.get("/api/projects/project-nonfinite-dimensions").status_code == 404
+
+
+def test_storage_rejects_nonfinite_project_and_job_values() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-nonfinite-mass"
+    project["analysis_jobs"] = []
+    project["reports"] = []
+    project["assemblies"][0]["parts"][0]["mass_kg"] = 98765.4321
+    project_body = json.dumps(project).replace("98765.4321", "1e309", 1)
+
+    project_response = local_client.post(
+        "/api/projects",
+        content=project_body,
+        headers={"content-type": "application/json"},
+    )
+
+    assert project_response.status_code == 422
+    assert local_client.get("/api/projects/project-nonfinite-mass").status_code == 404
+
+    existing_job_ids = {job["id"] for job in local_client.get("/api/analysis-jobs").json()}
+    job_response = local_client.post(
+        "/api/analysis-jobs",
+        content=(
+            '{"job_type":"run_fea","target_id":"part-finger-link",'
+            '"project_id":"project-open-gripper-demo","input_summary":{"load":1e309}}'
+        ),
+        headers={"content-type": "application/json"},
+    )
+
+    assert job_response.status_code == 422
+    assert {job["id"] for job in local_client.get("/api/analysis-jobs").json()} == existing_job_ids
 
 
 def test_project_modification_endpoint_updates_part_and_returns_report() -> None:

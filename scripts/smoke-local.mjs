@@ -7,7 +7,8 @@ import { getFreePort } from './port-utils.mjs';
 
 const host = process.env.FRONTEND_HOST || process.env.BACKEND_HOST || process.env.MECHAFLOW_API_HOST || '127.0.0.1';
 const backendPort = Number(process.env.BACKEND_PORT || process.env.MECHAFLOW_API_PORT) || (await getFreePort(host));
-const frontendPort = Number(process.env.FRONTEND_PORT || process.env.MECHAFLOW_FRONTEND_PORT) || (await getFreePort(host));
+const frontendPort = Number(process.env.FRONTEND_PORT || process.env.MECHAFLOW_FRONTEND_PORT)
+  || (await getFreePort(host, [backendPort]));
 const apiBaseUrl = `http://${host}:${backendPort}`;
 const frontendUrl = `http://${host}:${frontendPort}`;
 const children = [];

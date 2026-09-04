@@ -15,6 +15,12 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.wiringRoutes.every((route) => route.serviceLoop === null)).toBe(true);
   });
 
+  it('keeps clearance under review without an explicit backend result or threshold', () => {
+    const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
+
+    expect(design.wiringRoutes.every((route) => route.clearanceStatus === 'watch')).toBe(true);
+  });
+
   it('maps only explicit task, hierarchy, and analysis values', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
     const finger = design.assembly.parts.find((part) => part.id === 'part-finger-link');

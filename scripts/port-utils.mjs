@@ -9,7 +9,7 @@ export function parsePort(value, name) {
   return parsed;
 }
 
-export function getFreePort(host = '127.0.0.1') {
+function listenOnFreePort(host) {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
     server.unref();
@@ -20,10 +20,37 @@ export function getFreePort(host = '127.0.0.1') {
         server.close(() => reject(new Error('Could not determine a free TCP port.')));
         return;
       }
-      const { port } = address;
-      server.close(() => resolve(port));
+      resolve({ port: address.port, server });
     });
   });
+}
+
+const closeServer = (server) => new Promise((resolve) => server.close(resolve));
+
+export async function getFreePorts(count, host = '127.0.0.1', excludedPorts = []) {
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error('Port count must be a positive integer.');
+  }
+  const excluded = new Set(excludedPorts);
+  const reservations = [];
+  const ports = [];
+  try {
+    while (ports.length < count) {
+      const allocation = await listenOnFreePort(host);
+      reservations.push(allocation);
+      if (!excluded.has(allocation.port)) {
+        ports.push(allocation.port);
+        excluded.add(allocation.port);
+      }
+    }
+    return ports;
+  } finally {
+    await Promise.all(reservations.map(({ server }) => closeServer(server)));
+  }
+}
+
+export async function getFreePort(host = '127.0.0.1', excludedPorts = []) {
+  return (await getFreePorts(1, host, excludedPorts))[0];
 }
 
 export function assertPortAvailable(port, host = '127.0.0.1') {

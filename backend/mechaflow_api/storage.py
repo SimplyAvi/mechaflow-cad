@@ -7,6 +7,7 @@ hosted deployments.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from datetime import datetime, timezone
 from threading import RLock
@@ -70,7 +71,23 @@ class InvalidAnalysisJobAdapterError(ValueError):
     """Raised when a persisted analysis job names an unsupported adapter."""
 
 
+class NonFiniteStorageValueError(ValueError):
+    """Raised when persisted state contains a non-finite JSON number."""
+
+
+def _ensure_json_finite(value: object, path: str) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise NonFiniteStorageValueError(f"{path} must contain only finite numbers")
+    if isinstance(value, dict):
+        for key, item in value.items():
+            _ensure_json_finite(item, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _ensure_json_finite(item, f"{path}[{index}]")
+
+
 def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None = None) -> AnalysisJob:
+    _ensure_json_finite(job.model_dump(mode="python"), "analysis_job")
     if get_adapter_for_job(job) is None:
         raise InvalidAnalysisJobAdapterError(
             f"adapter {job.adapter_name!r} does not support analysis job type {job.job_type.value!r}"
@@ -85,6 +102,7 @@ def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None
 
 def normalize_project_references(project_id: str, project: Project) -> Project:
     project_id = validate_project_id(project_id)
+    _ensure_json_finite(project.model_dump(mode="python"), "project")
     analysis_jobs = [normalize_analysis_job(project_id, job) for job in project.analysis_jobs]
     reports = [report.model_copy(update={"project_id": project_id}, deep=True) for report in project.reports]
     return project.model_copy(

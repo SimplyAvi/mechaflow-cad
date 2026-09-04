@@ -55,7 +55,8 @@ and path-traversal requests return `404`.
 It then runs `tests/frontend_smoke.mjs`, which discovers the module the served page loads, imports it
 under browser-like globals so the page bootstrap in `frontend/app.js` runs on its own, and asserts the
 entries it renders match `/api/catalog/reference-designs` and `/api/data/tasks` on the same configurable
-base URL. Node.js is the only extra requirement, and it is an open-source test-only dependency: the app
+base URL. Node.js matching the `engines.node` requirement in `package.json` is the only extra requirement,
+and it is an open-source test-only dependency: the app
 itself still runs on the Python standard library alone.
 
 ## Catalog validation

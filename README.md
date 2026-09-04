@@ -107,7 +107,8 @@ python3 scripts/validate_catalog.py
 python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'
 ```
 
-The smoke test additionally needs Node.js, an open-source test-only dependency: it runs the frontend
+The smoke test additionally needs Node.js matching `^22.22.2 || ^24.15.0 || >=26.0.0`, an open-source
+test-only dependency: it runs the frontend
 module's page bootstrap against the live backend API and asserts what the page renders.
 
 ## Hosting philosophy
@@ -123,6 +124,7 @@ Keep hosting cheap by making the platform cloud-assisted rather than cloud-depen
 ## Integrated local MVP quick start
 
 Backend dependencies are managed by Python packaging, while frontend dependencies are managed by npm.
+Use Node.js matching the `engines.node` requirement in `package.json`.
 
 ```bash
 python3 -m venv .venv

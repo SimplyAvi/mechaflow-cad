@@ -18,6 +18,8 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 
 ## Install
 
+Use Node.js matching `^22.22.2 || ^24.15.0 || >=26.0.0`, as declared in `package.json`.
+
 ```sh
 npm ci
 ```
