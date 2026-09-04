@@ -192,6 +192,30 @@ def test_project_rejects_duplicate_part_ids_across_assemblies() -> None:
     assert local_client.get("/api/projects/project-duplicate-parts").status_code == 404
 
 
+def test_project_rejects_duplicate_assembly_and_wiring_route_ids() -> None:
+    local_client = TestClient(main_module.create_app())
+    sample = local_client.get("/api/projects/sample").json()
+    sample["analysis_jobs"] = []
+    sample["reports"] = []
+
+    duplicate_assembly = deepcopy(sample)
+    duplicate_assembly["id"] = "project-duplicate-assemblies"
+    second_assembly = deepcopy(duplicate_assembly["assemblies"][0])
+    second_assembly["parts"] = []
+    second_assembly["wiring_routes"] = []
+    duplicate_assembly["assemblies"].append(second_assembly)
+    assert local_client.post("/api/projects", json=duplicate_assembly).status_code == 422
+
+    duplicate_route = deepcopy(sample)
+    duplicate_route["id"] = "project-duplicate-routes"
+    second_assembly = deepcopy(duplicate_route["assemblies"][0])
+    second_assembly["id"] = "assembly-duplicate-route"
+    second_assembly["parts"] = []
+    second_assembly["wiring_routes"] = [deepcopy(second_assembly["wiring_routes"][0])]
+    duplicate_route["assemblies"].append(second_assembly)
+    assert local_client.post("/api/projects", json=duplicate_route).status_code == 422
+
+
 def test_project_rejects_invalid_ids_and_duplicate_material_ids() -> None:
     local_client = TestClient(main_module.create_app())
     sample = local_client.get("/api/projects/sample").json()
@@ -292,6 +316,21 @@ def test_project_modification_rejects_unknown_material_and_dimension() -> None:
         },
     )
     assert bad_dimension.status_code == 422
+
+    original = client.get("/api/projects/project-invalid-modification-flow").json()
+    original_thickness = original["assemblies"][0]["parts"][0]["dimensions"]["thickness_mm"]
+    nonfinite_dimension = client.post(
+        "/api/projects/project-invalid-modification-flow/modifications",
+        content=(
+            '{"id":"mod-infinite-dimension","target_part_id":"part-finger-link",'
+            '"description":"Reject a non-finite dimension.",'
+            '"dimension_changes":{"thickness_mm":1e309}}'
+        ),
+        headers={"content-type": "application/json"},
+    )
+    assert nonfinite_dimension.status_code == 422
+    stored = client.get("/api/projects/project-invalid-modification-flow").json()
+    assert stored["assemblies"][0]["parts"][0]["dimensions"]["thickness_mm"] == original_thickness
 
 
 def test_project_modification_enforces_part_material_process_compatibility() -> None:

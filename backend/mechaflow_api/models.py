@@ -376,6 +376,16 @@ def validate_project_id(value: str) -> str:
     return value
 
 
+def _duplicate_ids(values: list[str]) -> set[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for value in values:
+        if value in seen:
+            duplicates.add(value)
+        seen.add(value)
+    return duplicates
+
+
 class Project(BaseModel):
     model_config = ConfigDict(json_schema_extra={"description": "A user workspace that keeps task requirements active while a design changes."})
 
@@ -399,25 +409,26 @@ class Project(BaseModel):
 
     @model_validator(mode="after")
     def validate_unique_ids(self) -> Project:
-        seen_parts: set[str] = set()
-        duplicate_parts: set[str] = set()
-        for assembly in self.assemblies:
-            for part in assembly.parts:
-                if part.id in seen_parts:
-                    duplicate_parts.add(part.id)
-                seen_parts.add(part.id)
+        duplicate_assemblies = _duplicate_ids([assembly.id for assembly in self.assemblies])
+        if duplicate_assemblies:
+            raise ValueError(f"assembly ids must be unique within a project: {sorted(duplicate_assemblies)}")
+
+        duplicate_parts = _duplicate_ids(
+            [part.id for assembly in self.assemblies for part in assembly.parts]
+        )
         if duplicate_parts:
             raise ValueError(f"part ids must be unique across project assemblies: {sorted(duplicate_parts)}")
+
+        duplicate_routes = _duplicate_ids(
+            [route.id for assembly in self.assemblies for route in assembly.wiring_routes]
+        )
+        if duplicate_routes:
+            raise ValueError(f"wiring route ids must be unique across project assemblies: {sorted(duplicate_routes)}")
 
         material_ids = [material.id for material in self.materials]
         if any(not material_id.strip() for material_id in material_ids):
             raise ValueError("material ids must not be blank")
-        seen_materials: set[str] = set()
-        duplicate_materials: set[str] = set()
-        for material_id in material_ids:
-            if material_id in seen_materials:
-                duplicate_materials.add(material_id)
-            seen_materials.add(material_id)
+        duplicate_materials = _duplicate_ids(material_ids)
         if duplicate_materials:
             raise ValueError(f"material ids must be unique within a project: {sorted(duplicate_materials)}")
         return self

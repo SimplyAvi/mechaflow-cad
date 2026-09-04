@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -128,6 +129,11 @@ def _validate_dimension_keys(modification: Modification) -> list[str]:
         raise InvalidDimensionChangeError(
             f"dimension_changes can only include {sorted(_EDITABLE_DIMENSION_FIELDS)}, got {invalid_keys}"
         )
+    nonfinite_keys = sorted(
+        key for key, value in modification.dimension_changes.items() if not math.isfinite(value)
+    )
+    if nonfinite_keys:
+        raise InvalidDimensionChangeError(f"dimension_changes must be finite, got {nonfinite_keys}")
     return sorted(modification.dimension_changes)
 
 

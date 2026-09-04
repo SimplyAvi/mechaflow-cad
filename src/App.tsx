@@ -1,10 +1,34 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { loadCockpitDesign } from './lib/api';
-import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign } from './types';
+import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import './App.css';
 
 const formatCurrency = (value: number): string =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+
+const formatUsdRange = (range: UsdRange): string => {
+  if (range.min != null && range.max != null) {
+    if (range.min === range.max) return formatCurrency(range.min);
+    return `${formatCurrency(range.min)}-${formatCurrency(range.max)}`;
+  }
+  if (range.min != null) return `From ${formatCurrency(range.min)}`;
+  return `Up to ${formatCurrency(range.max ?? 0)}`;
+};
+
+const totalBomCost = (items: ReferenceDesign['bom']): UsdRange | null => {
+  if (items.length === 0 || items.some((item) => item.unitCostRangeUsd == null)) return null;
+  const hasMin = items.every((item) => item.unitCostRangeUsd?.min != null);
+  const hasMax = items.every((item) => item.unitCostRangeUsd?.max != null);
+  if (!hasMin && !hasMax) return null;
+  return {
+    min: hasMin
+      ? items.reduce((sum, item) => sum + item.quantity * (item.unitCostRangeUsd?.min ?? 0), 0)
+      : null,
+    max: hasMax
+      ? items.reduce((sum, item) => sum + item.quantity * (item.unitCostRangeUsd?.max ?? 0), 0)
+      : null,
+  };
+};
 
 const statusLabel = {
   passes: 'Passes',
@@ -95,9 +119,7 @@ function App() {
     );
   }
 
-  const bomTotal = design.bom.length > 0 && design.bom.every((item) => item.unitCostUsd != null)
-    ? design.bom.reduce((sum, item) => sum + item.quantity * (item.unitCostUsd ?? 0), 0)
-    : null;
+  const bomTotal = totalBomCost(design.bom);
   const activeRating = selectedOption
     ? {
         payloadLb: selectedOption.payloadLb,
@@ -228,7 +250,7 @@ function App() {
             </div>
             <div>
               <dt>Cost</dt>
-              <dd>{selectedPart.estimatedCostUsd == null ? 'Review required' : formatCurrency(selectedPart.estimatedCostUsd)}</dd>
+              <dd>{selectedPart.costRangeUsd == null ? 'Review required' : formatUsdRange(selectedPart.costRangeUsd)}</dd>
             </div>
             <div>
               <dt>Stress risk</dt>
@@ -360,9 +382,9 @@ function MaterialSubstitution({
                 : `${selectedOption.weightDeltaLb > 0 ? '+' : ''}${selectedOption.weightDeltaLb.toFixed(2)} lb`}
             </li>
             <li>
-              Cost change: {selectedOption.costDeltaUsd == null
+              Process cost: {selectedOption.costRangeUsd == null
                 ? 'review required'
-                : `${selectedOption.costDeltaUsd > 0 ? '+' : ''}${formatCurrency(selectedOption.costDeltaUsd)}`}
+                : formatUsdRange(selectedOption.costRangeUsd)}
             </li>
             <li>{selectedOption.manufacturingImpact}</li>
             <li>{selectedOption.wiringImpact}</li>
@@ -417,17 +439,17 @@ function AnalysisPanel({ design }: { design: ReferenceDesign }) {
   );
 }
 
-function BomPanel({ design, total }: { design: ReferenceDesign; total: number | null }) {
+function BomPanel({ design, total }: { design: ReferenceDesign; total: UsdRange | null }) {
   return (
     <article className="panel">
       <p className="eyebrow">BOM and cost</p>
-      <h2>{total == null ? 'Cost review required' : `${formatCurrency(total)} open estimate`}</h2>
+      <h2>{total == null ? 'Cost review required' : `${formatUsdRange(total)} open estimate`}</h2>
       <div className="bom-list">
         {design.bom.map((item) => (
           <div key={item.id}>
             <strong>{item.quantity}x {item.item}</strong>
             <small>
-              {item.source} - {item.unitCostUsd == null ? 'cost review required' : `${formatCurrency(item.unitCostUsd)} each`} -{' '}
+              {item.source} - {item.unitCostRangeUsd == null ? 'cost review required' : `${formatUsdRange(item.unitCostRangeUsd)} each`} -{' '}
               {item.leadTimeDays == null ? 'lead time review required' : `${item.leadTimeDays} day lead`}
             </small>
           </div>
@@ -447,7 +469,7 @@ function ManufacturingPanel({ design }: { design: ReferenceDesign }) {
           <div className="manufacturing-card" key={option.id}>
             <strong>{option.label}</strong>
             <span>{option.process}</span>
-            <small>{option.estimatedCostUsd} - {option.leadTime}</small>
+            <small>{option.costDisplay} - {option.leadTime}</small>
             <p>{option.riskNote}</p>
           </div>
         ))}

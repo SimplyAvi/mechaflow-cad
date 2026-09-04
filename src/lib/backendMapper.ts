@@ -23,6 +23,7 @@ import type {
   RatingStatus,
   ReferenceDesign,
   RiskLevel,
+  UsdRange,
   WiringRoute,
 } from '../types';
 
@@ -43,19 +44,32 @@ const usdFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 });
 
-const usdCostRange = (cost?: BackendMoneyRange | null): BackendMoneyRange | null => {
+const usdCostRange = (cost?: BackendMoneyRange | null): UsdRange | null => {
   if (!cost || typeof cost.currency !== 'string') return null;
-  return cost.currency.trim().toUpperCase() === 'USD' ? cost : null;
+  if (cost.currency.trim().toUpperCase() !== 'USD') return null;
+  const min = cost.min ?? null;
+  const max = cost.max ?? null;
+  if (
+    (min != null && (!Number.isFinite(min) || min < 0))
+    || (max != null && (!Number.isFinite(max) || max < 0))
+    || (min != null && max != null && min > max)
+  ) return null;
+  return min == null && max == null ? null : { min, max };
+};
+
+const formatUsdRange = (cost: UsdRange): string => {
+  if (cost.min != null && cost.max != null) {
+    if (cost.min === cost.max) return usdFormatter.format(cost.min);
+    return `${usdFormatter.format(cost.min)}-${usdFormatter.format(cost.max)}`;
+  }
+  if (cost.min != null) return `From ${usdFormatter.format(cost.min)}`;
+  return `Up to ${usdFormatter.format(cost.max ?? 0)}`;
 };
 
 const moneyRange = (cost?: BackendMoneyRange | null): string => {
-  if (!cost || (cost.min == null && cost.max == null)) return 'Cost pending supplier adapter';
   const usdCost = usdCostRange(cost);
   if (!usdCost) return 'Cost review required';
-  if (usdCost.min != null && usdCost.max != null) {
-    return `${usdFormatter.format(usdCost.min)}-${usdFormatter.format(usdCost.max)}`;
-  }
-  return usdFormatter.format(usdCost.min ?? usdCost.max ?? 0);
+  return formatUsdRange(usdCost);
 };
 
 const leadTime = (option: BackendManufacturingOption): string => {
@@ -64,16 +78,6 @@ const leadTime = (option: BackendManufacturingOption): string => {
     return `${option.lead_time_days_min}-${option.lead_time_days_max} days`;
   }
   return `${option.lead_time_days_min ?? option.lead_time_days_max} days`;
-};
-
-const materialCost = (material: BackendMaterial): number | null => {
-  const cost = usdCostRange(material.cost);
-  const low = cost?.min;
-  const high = cost?.max;
-  if (low == null && high == null) return null;
-  if (low == null) return high ?? null;
-  if (high == null) return low;
-  return (low + high) / 2;
 };
 
 const estimatePayload = (
@@ -176,14 +180,12 @@ const projectAssemblies = (panelData: BackendProjectPanelData): BackendAssembly[
     wiring_routes: [],
   }];
 
-const costForPart = (part: BackendPart, material?: BackendMaterial): number | null => {
-  if (part.mass_kg == null || !material) return null;
-  const unitMaterialCost = materialCost(material);
-  if (unitMaterialCost == null) return null;
-  const massLb = part.mass_kg * 2.20462;
-  const materialBase = unitMaterialCost * Math.max(0.2, massLb);
-  const machiningFactor = part.manufacturing_options.some((option) => option.process.includes('cnc')) ? 3 : 1.4;
-  return round(Math.max(6, materialBase * machiningFactor + part.related_fasteners.length * 2), 0);
+const activeManufacturingOption = (part: BackendPart): BackendManufacturingOption | undefined => {
+  const preferredProcess = part.metadata.preferred_manufacturing_process;
+  if (typeof preferredProcess === 'string') {
+    return part.manufacturing_options.find((option) => option.process === preferredProcess);
+  }
+  return part.manufacturing_options[0];
 };
 
 const mapPart = (
@@ -200,6 +202,7 @@ const mapPart = (
     ? round(payloadLb / taskPayload, 1)
     : null;
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
+  const manufacturingOption = activeManufacturingOption(part);
   const status = ratingStatus(payloadLb, taskPayload, safetyFactor, taskSafetyFactorMin);
   const ratingSummary = taskPayload == null
     ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
@@ -218,9 +221,9 @@ const mapPart = (
     subassembly: node?.name ?? part.category,
     purpose: part.purpose ?? 'Purpose metadata has not been extracted yet.',
     material: material?.name ?? part.material_id ?? 'Unknown material',
-    manufacturingProcess: toTitle(String(part.metadata.preferred_manufacturing_process ?? part.manufacturing_options[0]?.process ?? 'unknown')),
+    manufacturingProcess: toTitle(manufacturingOption?.process ?? 'unknown'),
     weightLb: part.mass_kg == null ? null : round(part.mass_kg * 2.20462, 2),
-    estimatedCostUsd: costForPart(part, material),
+    costRangeUsd: usdCostRange(manufacturingOption?.cost),
     stressRisk: riskFromPart(part),
     replacementDifficulty: replacementRisk(part),
     fasteners: part.related_fasteners,
@@ -265,9 +268,9 @@ const mapMaterialOptions = (
       const weightDeltaLb = part.mass_kg != null && currentDensity != null && currentDensity > 0 && nextDensity != null
         ? round(part.mass_kg * (nextDensity / currentDensity - 1) * 2.20462, 2)
         : null;
-      const currentCost = currentMaterial ? materialCost(currentMaterial) : null;
-      const nextCost = materialCost(material);
-      const costDeltaUsd = currentCost != null && nextCost != null ? round(nextCost - currentCost, 0) : null;
+      const manufacturingOption = part.manufacturing_options.find(
+        (option) => option.process === manufacturingProcess,
+      );
       const needsGeometryChange = status === 'fails';
       const dimensionChanges: Record<string, number> =
         needsGeometryChange && part.dimensions.thickness_mm ? { thickness_mm: part.dimensions.thickness_mm + 2 } : {};
@@ -279,7 +282,7 @@ const mapMaterialOptions = (
         payloadLb,
         safetyFactor,
         weightDeltaLb,
-        costDeltaUsd,
+        costRangeUsd: usdCostRange(manufacturingOption?.cost),
         taskImpact: taskPayload == null || payloadLb == null || safetyFactor == null
           ? 'Payload target or rating is unknown; engineering review is required.'
           : status === 'fails'
@@ -339,20 +342,19 @@ const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
       item: part.name,
       quantity: 1,
       source: part.relatedWires.length > 0 ? 'wire harness' : 'fabricate',
-      unitCostUsd: null,
+      unitCostRangeUsd: null,
       leadTimeDays: null,
     }));
   }
 
   return items.map((item) => {
     const price = usdCostRange(item.price);
-    const unitCostUsd = price?.min ?? price?.max ?? null;
     return {
       id: item.id,
       item: item.name,
       quantity: item.quantity,
       source: item.name.toLowerCase().includes('harness') ? 'wire harness' : item.part_id ? 'fabricate' : 'off the shelf',
-      unitCostUsd,
+      unitCostRangeUsd: price,
       leadTimeDays: null,
     };
   });
@@ -364,7 +366,7 @@ const mapManufacturing = (partOptions: BackendPartManufacturingOptions[]): Manuf
       id: `${partOption.part_id}-${option.id}`,
       label: partOption.part_name,
       process: toTitle(option.process),
-      estimatedCostUsd: moneyRange(option.cost),
+      costDisplay: moneyRange(option.cost),
       leadTime: leadTime(option),
       riskNote: option.risk_notes[0] ?? `${option.description} Confidence: ${toTitle(option.confidence)}.`,
       partName: partOption.part_name,

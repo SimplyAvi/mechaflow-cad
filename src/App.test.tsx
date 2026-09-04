@@ -32,6 +32,9 @@ describe('MechaFlow cockpit', () => {
       'https://github.com/SimplyAvi/mechaflow-cad',
     );
     expect(screen.getAllByText(/Advisory edit report/i).length).toBeGreaterThan(0);
+    const inspectorPanel = screen.getByText('Part inspector').closest('aside');
+    expect(inspectorPanel).not.toBeNull();
+    expect(within(inspectorPanel as HTMLElement).getByText('$25-$80')).toBeInTheDocument();
   });
 
   it('updates capability impact and backend modification preview when a material substitution is selected', async () => {
@@ -48,6 +51,7 @@ describe('MechaFlow cockpit', () => {
     await user.selectOptions(optionSelector, 'part-finger-link-mat-carbon-fiber-nylon');
 
     expect(screen.getAllByText(/Fails the preserved 50 lb task/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Process cost:/i)).toHaveTextContent('$3-$12');
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('/api/projects/project-open-gripper-demo/modifications');
     expect(screen.getByText(/mat-carbon-fiber-nylon/i)).toBeInTheDocument();
   });
@@ -109,6 +113,31 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/http:\/\/api.test\/api\/projects\/project-open-gripper-demo\/panel-data/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
+  });
+
+  it('renders explicit BOM prices and totals as ranges', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.bom_items = panelData.bom_items.map((item) => ({
+      ...item,
+      price: {
+        currency: 'USD',
+        min: 10,
+        max: 20,
+        confidence: 'estimated_from_heuristic',
+      },
+    }));
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      return new Response('Not found', { status: 404 });
+    }));
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: '$40-$80 open estimate' })).toBeInTheDocument();
+    expect(screen.getAllByText(/\$10-\$20 each/i)).toHaveLength(4);
   });
 
   it('renders missing backend engineering values as review-required', async () => {

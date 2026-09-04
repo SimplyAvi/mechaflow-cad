@@ -55,7 +55,7 @@ export interface Part {
   material: string;
   manufacturingProcess: string;
   weightLb: number | null;
-  estimatedCostUsd: number | null;
+  costRangeUsd: UsdRange | null;
   stressRisk: RiskLevel;
   replacementDifficulty: RiskLevel;
   fasteners: string[];
@@ -90,7 +90,7 @@ export interface MaterialOption {
   payloadLb: number | null;
   safetyFactor: number | null;
   weightDeltaLb: number | null;
-  costDeltaUsd: number | null;
+  costRangeUsd: UsdRange | null;
   taskImpact: string;
   wiringImpact: string;
   manufacturingImpact: string;
@@ -122,15 +122,20 @@ export interface BOMItem {
   item: string;
   quantity: number;
   source: 'open design' | 'off the shelf' | 'fabricate' | 'wire harness';
-  unitCostUsd: number | null;
+  unitCostRangeUsd: UsdRange | null;
   leadTimeDays: number | null;
+}
+
+export interface UsdRange {
+  min: number | null;
+  max: number | null;
 }
 
 export interface ManufacturingOption {
   id: string;
   label: string;
   process: string;
-  estimatedCostUsd: string;
+  costDisplay: string;
   leadTime: string;
   riskNote: string;
   partName?: string;
