@@ -212,4 +212,17 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.assembly.parts.length).toBeGreaterThan(0);
     expect(design.backend.integrationStubs).toContain('kicad-electronics-worker');
   });
+
+  it('keeps missing mass risk and invalid currency unknown', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.mass_kg = null;
+    panelData.manufacturing_options[0]!.options[0]!.cost!.currency = 'credits';
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+
+    expect(design.assembly.parts.find((part) => part.id === finger.id)?.stressRisk).toBe('unknown');
+    expect(design.manufacturingOptions[0]?.estimatedCostUsd).toBe('Cost review required');
+    expect(design.backend.source).toBe('backend-panel-data');
+  });
 });
