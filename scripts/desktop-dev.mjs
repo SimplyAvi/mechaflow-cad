@@ -99,6 +99,7 @@ try {
   await waitForUrl(frontendOrigin, 'Vite frontend');
   start('desktop', 'npx', ['electron', 'desktop/main.cjs'], {
     MECHAFLOW_DESKTOP_URL: frontendOrigin,
+    MECHAFLOW_DESKTOP_SMOKE: process.env.MECHAFLOW_DESKTOP_SMOKE || '0',
   });
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);

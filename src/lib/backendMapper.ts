@@ -198,6 +198,9 @@ const activeManufacturingOption = (part: BackendPart): BackendManufacturingOptio
 
 const criterionStatus = (confidence?: unknown): DesignCriterion['status'] => {
   if (confidence === 'measured') return 'measured';
+  if (confidence === 'unknown_or_needs_review' || confidence === 'review' || confidence === 'review-required') {
+    return 'review-required';
+  }
   if (typeof confidence === 'string' && confidence.trim() !== '') return 'estimated';
   return 'review-required';
 };

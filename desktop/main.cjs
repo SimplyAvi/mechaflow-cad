@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell } = require('electron');
 
 const desktopUrl = process.env.MECHAFLOW_DESKTOP_URL;
+const smokeMode = process.env.MECHAFLOW_DESKTOP_SMOKE === '1';
 
 if (!desktopUrl) {
   throw new Error('MECHAFLOW_DESKTOP_URL must point to the local Vite demo URL. Use npm run desktop:dev.');
@@ -24,6 +25,7 @@ const createWindow = async () => {
     minHeight: 760,
     title: 'MechaFlow CAD local desktop demo',
     backgroundColor: '#08111f',
+    show: !smokeMode,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -46,6 +48,7 @@ const createWindow = async () => {
   });
 
   await window.loadURL(desktopUrl);
+  if (smokeMode) app.quit();
 };
 
 app.whenReady().then(createWindow);
