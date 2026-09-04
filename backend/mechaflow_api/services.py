@@ -104,7 +104,8 @@ def _find_part(project: Project, part_id: str) -> Part:
 
 
 def _validate_material_process(project: Project, part: Part, modification: Modification) -> None:
-    if modification.material_id is None and modification.manufacturing_process is None:
+    material_changed = modification.material_id is not None and modification.material_id != part.material_id
+    if not material_changed and modification.manufacturing_process is None:
         return
     material_id = part.material_id if modification.material_id is None else modification.material_id
     material = next((candidate for candidate in project.materials if candidate.id == material_id), None)
@@ -125,7 +126,7 @@ def _validate_material_process(project: Project, part: Part, modification: Modif
     except ValueError:
         current_process = None
     effective_process = modification.manufacturing_process or current_process
-    if modification.material_id is not None and effective_process is None:
+    if material_changed and effective_process is None:
         raise MaterialProcessCompatibilityError("material changes require an explicit compatible manufacturing process")
     if effective_process is not None and effective_process not in compatible_processes:
         raise MaterialProcessCompatibilityError(

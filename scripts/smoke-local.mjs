@@ -154,18 +154,60 @@ try {
   }
   const originalPalm = panelData.project.assemblies.flatMap((assembly) => assembly.parts)
     .find((part) => part.id === 'part-palm-plate');
+  const originalModificationCount = panelData.project.modifications.length;
+  const foreignSimpleMutation = await fetch(
+    `${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`,
+    {
+      method: 'POST',
+      headers: { Origin: 'https://foreign.example', 'content-type': 'text/plain' },
+      body: JSON.stringify({
+        id: 'smoke-foreign-mutation',
+        target_part_id: originalPalm.id,
+        description: 'Reject a foreign simple-request mutation.',
+        dimension_changes: { thickness_mm: originalPalm.dimensions.thickness_mm + 1 },
+      }),
+    },
+  );
+  const allowedNonJsonMutation = await fetch(
+    `${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`,
+    {
+      method: 'POST',
+      headers: { Origin: frontendUrl, 'content-type': 'text/plain' },
+      body: JSON.stringify({
+        id: 'smoke-non-json-mutation',
+        target_part_id: originalPalm.id,
+        description: 'Reject a non-JSON mutation body.',
+        dimension_changes: { thickness_mm: originalPalm.dimensions.thickness_mm + 1 },
+      }),
+    },
+  );
+  const projectAfterBlockedMutations = await waitForJson(
+    `${apiBaseUrl}/api/projects/${panelData.project.id}`,
+  );
+  const palmAfterBlockedMutations = projectAfterBlockedMutations.assemblies
+    .flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === originalPalm.id);
+  if (
+    foreignSimpleMutation.status !== 403
+    || allowedNonJsonMutation.status !== 415
+    || palmAfterBlockedMutations?.dimensions.thickness_mm !== originalPalm.dimensions.thickness_mm
+    || projectAfterBlockedMutations.modifications.length !== originalModificationCount
+  ) {
+    throw new Error('Mock backend allowed a blocked mutation request to change project state.');
+  }
+  const initialFinger = panelData.project.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === 'part-finger-link');
   const idempotentModification = await fetch(
     `${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        id: 'smoke-idempotent-palm',
-        target_part_id: originalPalm.id,
-        description: 'Resubmit the current palm material and thickness.',
-        material_id: originalPalm.material_id,
-        dimension_changes: { thickness_mm: originalPalm.dimensions.thickness_mm },
-        manufacturing_process: originalPalm.metadata.preferred_manufacturing_process,
+        id: 'smoke-idempotent-finger',
+        target_part_id: initialFinger.id,
+        description: 'Resubmit the current finger material and thickness.',
+        material_id: initialFinger.material_id,
+        dimension_changes: { thickness_mm: initialFinger.dimensions.thickness_mm },
       }),
     },
   );
@@ -173,10 +215,10 @@ try {
     throw new Error(`Mock backend rejected an idempotent modification with ${idempotentModification.status}.`);
   }
   const idempotentPayload = await idempotentModification.json();
-  const idempotentPalm = idempotentPayload.project.assemblies.flatMap((assembly) => assembly.parts)
-    .find((part) => part.id === originalPalm.id);
+  const idempotentFinger = idempotentPayload.project.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === initialFinger.id);
   if (
-    idempotentPalm?.mass_kg !== originalPalm.mass_kg
+    idempotentFinger?.mass_kg !== initialFinger.mass_kg
     || idempotentPayload.report.unknowns.some((item) => item.toLowerCase().includes('mass properties'))
     || idempotentPayload.report.recommendations.some((item) => item.toLowerCase().includes('mass properties'))
   ) {

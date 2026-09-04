@@ -459,34 +459,33 @@ def test_project_modification_endpoint_updates_part_and_returns_report() -> None
 def test_idempotent_material_and_dimension_edits_preserve_mass() -> None:
     local_client = TestClient(main_module.create_app())
     project = local_client.get("/api/projects/sample").json()
-    palm = next(
+    finger = next(
         part
         for assembly in project["assemblies"]
         for part in assembly["parts"]
-        if part["id"] == "part-palm-plate"
+        if part["id"] == "part-finger-link"
     )
 
     response = local_client.post(
         "/api/projects/project-open-gripper-demo/modifications",
         json={
-            "id": "mod-idempotent-palm",
-            "target_part_id": palm["id"],
-            "description": "Resubmit the current palm material and thickness.",
-            "material_id": palm["material_id"],
-            "dimension_changes": {"thickness_mm": palm["dimensions"]["thickness_mm"]},
-            "manufacturing_process": ManufacturingProcess.cnc_machining.value,
+            "id": "mod-idempotent-finger",
+            "target_part_id": finger["id"],
+            "description": "Resubmit the current finger material and thickness.",
+            "material_id": finger["material_id"],
+            "dimension_changes": {"thickness_mm": finger["dimensions"]["thickness_mm"]},
         },
     )
 
     assert response.status_code == 200
     payload = response.json()
-    edited_palm = next(
+    edited_finger = next(
         part
         for assembly in payload["project"]["assemblies"]
         for part in assembly["parts"]
-        if part["id"] == palm["id"]
+        if part["id"] == finger["id"]
     )
-    assert edited_palm["mass_kg"] == palm["mass_kg"]
+    assert edited_finger["mass_kg"] == finger["mass_kg"]
     assert payload["report"]["task_results"][0]["notes"] == [
         "Material unchanged.",
         "No dimensions changed.",

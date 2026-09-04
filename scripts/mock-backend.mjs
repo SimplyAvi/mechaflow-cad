@@ -99,11 +99,16 @@ const projectPanelData = () => ({
   reports: project.reports,
 });
 
+const isOriginAllowed = (request) => {
+  const origin = request.headers.origin;
+  return !origin || corsOrigins.has('*') || corsOrigins.has(origin);
+};
+
 const corsHeaders = (request) => {
   const origin = request.headers.origin;
   if (!origin) return {};
   if (corsOrigins.has('*')) return { 'access-control-allow-origin': '*' };
-  return corsOrigins.has(origin)
+  return isOriginAllowed(request)
     ? { 'access-control-allow-origin': origin, vary: 'Origin' }
     : { vary: 'Origin' };
 };
@@ -233,6 +238,15 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && isProjectPath(url.pathname, '/modifications')) {
+      if (!isOriginAllowed(request)) {
+        send(403, { error: 'origin is not allowed' });
+        return;
+      }
+      const contentType = request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
+        send(415, { error: 'content-type must be application/json' });
+        return;
+      }
       let modification;
       try {
         modification = await readJsonBody(request);
@@ -251,7 +265,8 @@ const server = http.createServer(async (request, response) => {
         send(404, { error: 'target part not found' });
         return;
       }
-      if (modification.material_id != null || modification.manufacturing_process) {
+      const materialChanged = modification.material_id != null && modification.material_id !== part.material_id;
+      if (materialChanged || modification.manufacturing_process) {
         const materialId = modification.material_id ?? part.material_id;
         const material = project.materials.find((candidate) => candidate.id === materialId);
         const partProcesses = new Set(
@@ -271,7 +286,7 @@ const server = http.createServer(async (request, response) => {
           send(422, { error: 'material and process compatibility requires review' });
           return;
         }
-        if (modification.material_id != null && !effectiveProcess) {
+        if (materialChanged && !effectiveProcess) {
           send(422, { error: 'material changes require an explicit compatible manufacturing process' });
           return;
         }
@@ -287,7 +302,6 @@ const server = http.createServer(async (request, response) => {
       const changedDimensionKeys = Object.keys(dimensionChanges).filter(
         (field) => dimensionChanges[field] !== part.dimensions[field],
       );
-      const materialChanged = modification.material_id != null && modification.material_id !== part.material_id;
       const currentProcess = typeof part.metadata?.preferred_manufacturing_process === 'string'
         ? part.metadata.preferred_manufacturing_process
         : undefined;
