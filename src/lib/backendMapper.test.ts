@@ -261,15 +261,35 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
       (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
     );
 
-    expect(mappedFinger?.rating.payloadLb).toBe(100);
+    expect(mappedFinger?.rating.payloadLb).toBe(99.5);
     expect(mappedFinger?.rating.safetyFactor).toBe(2);
     expect(mappedFinger?.rating.status).toBe('watch');
     expect(mappedFinger?.rating.summary).toMatch(/below the preserved 2\.0 minimum/i);
     expect(mappedFinger?.rating.summary).not.toMatch(/2\.0 safety factor below the preserved 2\.0 minimum/i);
-    expect(steelOption?.payloadLb).toBe(100);
+    expect(steelOption?.payloadLb).toBe(99.5);
     expect(steelOption?.safetyFactor).toBe(2);
     expect(steelOption?.status).toBe('watch');
     expect(steelOption?.taskImpact).not.toMatch(/2\.0 safety factor.*below the preserved 2\.0 minimum/i);
+  });
+
+  it('rates combined material-and-geometry previews from submitted dimensions', () => {
+    const design = mapProjectPanelDataToReferenceDesign(
+      structuredClone(mockProjectPanelData),
+      mockBackendMetadata,
+      'http://api.test',
+    );
+    const compositeOption = design.materialOptions.find(
+      (option) => option.id === 'part-finger-link-mat-carbon-fiber-nylon',
+    );
+
+    expect(compositeOption?.backendModification.payload.dimension_changes).toEqual({ thickness_mm: 8 });
+    expect(compositeOption?.payloadLb).toBe(40.7);
+    expect(compositeOption?.taskImpact).toMatch(
+      /combined material-and-geometry preview at 8 mm thickness is rated at 40\.7 lb/i,
+    );
+    expect(compositeOption?.backendModification.payload.description).toMatch(
+      /combined material-and-geometry preview at 8 mm thickness/i,
+    );
   });
 
   it('uses explicit BOM processes and preserves one-sided lead-time bounds', () => {
