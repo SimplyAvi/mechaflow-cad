@@ -38,11 +38,15 @@ const toTitle = (value: string): string =>
 
 const round = (value: number, decimals = 1): number => Number(value.toFixed(decimals));
 
-const usdFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
+const formatUsd = (value: number): string => {
+  const fractionDigits = Number.isInteger(value) ? 0 : 2;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+};
 
 const usdCostRange = (cost?: BackendMoneyRange | null): UsdRange | null => {
   if (!cost || typeof cost.currency !== 'string') return null;
@@ -59,11 +63,11 @@ const usdCostRange = (cost?: BackendMoneyRange | null): UsdRange | null => {
 
 const formatUsdRange = (cost: UsdRange): string => {
   if (cost.min != null && cost.max != null) {
-    if (cost.min === cost.max) return usdFormatter.format(cost.min);
-    return `${usdFormatter.format(cost.min)}-${usdFormatter.format(cost.max)}`;
+    if (cost.min === cost.max) return formatUsd(cost.min);
+    return `${formatUsd(cost.min)}-${formatUsd(cost.max)}`;
   }
-  if (cost.min != null) return `From ${usdFormatter.format(cost.min)}`;
-  return `Up to ${usdFormatter.format(cost.max ?? 0)}`;
+  if (cost.min != null) return `From ${formatUsd(cost.min)}`;
+  return `Up to ${formatUsd(cost.max ?? 0)}`;
 };
 
 const moneyRange = (cost?: BackendMoneyRange | null): string => {

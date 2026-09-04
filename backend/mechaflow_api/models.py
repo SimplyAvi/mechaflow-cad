@@ -6,13 +6,15 @@ WireViz, and supplier APIs can populate or consume them later through adapters.
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     HttpUrl,
@@ -201,11 +203,21 @@ class WiringRoute(BaseModel):
     confidence: RecommendationConfidence = RecommendationConfidence.unknown
 
 
+def _reject_nonfinite_number(value: Any) -> Any:
+    try:
+        return "non-finite" if not math.isfinite(float(value)) else value
+    except (TypeError, ValueError, OverflowError):
+        return value
+
+
+PositiveFiniteFloat = Annotated[float, BeforeValidator(_reject_nonfinite_number), Field(gt=0)]
+
+
 class PartDimensions(BaseModel):
-    length_mm: PositiveFloat | None = None
-    width_mm: PositiveFloat | None = None
-    height_mm: PositiveFloat | None = None
-    thickness_mm: PositiveFloat | None = None
+    length_mm: PositiveFiniteFloat | None = None
+    width_mm: PositiveFiniteFloat | None = None
+    height_mm: PositiveFiniteFloat | None = None
+    thickness_mm: PositiveFiniteFloat | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

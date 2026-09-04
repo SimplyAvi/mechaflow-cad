@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .adapters import choose_adapter, list_adapter_statuses
+from .adapters import choose_adapter, get_adapter_for_job, list_adapter_statuses
 from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS
 from .models import (
     AnalysisArtifact,
@@ -51,6 +51,7 @@ from .services import (
 from .settings import Settings, get_settings
 from .storage import (
     AnalysisJobAlreadyExistsError,
+    InvalidAnalysisJobAdapterError,
     ProjectAlreadyExistsError,
     ProjectNotFoundError,
     ProjectStore,
@@ -277,6 +278,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=409, detail="project already exists") from exc
         except AnalysisJobAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
+        except InvalidAnalysisJobAdapterError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
@@ -388,38 +391,22 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/plan", response_model=AnalysisJobPlan, tags=["jobs"])
     def analysis_job_plan(job_id: str) -> AnalysisJobPlan:
         job = get_analysis_job_or_404(job_id)
-        adapter = choose_adapter(
-            AnalysisJobRequest(
-                job_type=job.job_type,
-                target_id=job.target_id,
-                project_id=job.project_id,
-                local_compute_preferred=job.local_compute_preferred,
-                input_summary=job.input_summary,
-            )
+        request = AnalysisJobRequest(
+            job_type=job.job_type,
+            target_id=job.target_id,
+            project_id=job.project_id,
+            local_compute_preferred=job.local_compute_preferred,
+            input_summary=job.input_summary,
         )
+        adapter = get_adapter_for_job(job)
         if adapter is None:
             raise HTTPException(status_code=409, detail="analysis job has no matching adapter")
-        return adapter.plan(
-            AnalysisJobRequest(
-                job_type=job.job_type,
-                target_id=job.target_id,
-                project_id=job.project_id,
-                local_compute_preferred=job.local_compute_preferred,
-                input_summary=job.input_summary,
-            )
-        )
+        return adapter.plan(request)
 
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])
     def run_analysis_job_stub(job_id: str) -> AnalysisJob:
         def run_stub(job: AnalysisJob) -> AnalysisJob:
-            request = AnalysisJobRequest(
-                job_type=job.job_type,
-                target_id=job.target_id,
-                project_id=job.project_id,
-                local_compute_preferred=job.local_compute_preferred,
-                input_summary=job.input_summary,
-            )
-            adapter = choose_adapter(request)
+            adapter = get_adapter_for_job(job)
             now = datetime.now(timezone.utc)
             if adapter is None:
                 return job.model_copy(update={"status": AnalysisJobStatus.blocked_missing_adapter, "updated_at": now})

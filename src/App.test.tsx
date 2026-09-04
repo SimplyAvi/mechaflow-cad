@@ -122,8 +122,8 @@ describe('MechaFlow cockpit', () => {
       ...item,
       price: {
         currency: 'USD',
-        min: 10,
-        max: 20,
+        min: 0.1,
+        max: 0.2,
         confidence: 'estimated_from_heuristic',
       },
     }));
@@ -136,8 +136,8 @@ describe('MechaFlow cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '$40-$80 open estimate' })).toBeInTheDocument();
-    expect(screen.getAllByText(/\$10-\$20 each/i)).toHaveLength(4);
+    expect(await screen.findByRole('heading', { name: '$0.40-$0.80 open estimate' })).toBeInTheDocument();
+    expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(4);
   });
 
   it('renders missing backend engineering values as review-required', async () => {

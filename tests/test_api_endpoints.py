@@ -237,6 +237,25 @@ def test_project_rejects_invalid_ids_and_duplicate_material_ids() -> None:
     assert local_client.post("/api/projects", json=duplicate_materials).status_code == 422
 
 
+def test_project_write_rejects_nonfinite_part_dimensions() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-nonfinite-dimensions"
+    project["analysis_jobs"] = []
+    project["reports"] = []
+    project["assemblies"][0]["parts"][0]["dimensions"]["thickness_mm"] = 98765.4321
+    request_body = json.dumps(project).replace("98765.4321", "1e309", 1)
+
+    response = local_client.post(
+        "/api/projects",
+        content=request_body,
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 422
+    assert local_client.get("/api/projects/project-nonfinite-dimensions").status_code == 404
+
+
 def test_project_modification_endpoint_updates_part_and_returns_report() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-modification-flow"
@@ -620,6 +639,38 @@ def test_overlapping_job_types_have_explicit_adapter_owners() -> None:
         )
         assert response.status_code == 202
         assert response.json()["adapter_name"] == adapter_name
+
+
+def test_persisted_adapter_owner_controls_job_planning_and_execution() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-persisted-adapter"
+    wire_job = next(job for job in project["analysis_jobs"] if job["job_type"] == "check_wire_routing")
+    project["analysis_jobs"] = [wire_job]
+    project["reports"] = []
+    wire_job["id"] = "job-persisted-kicad"
+    wire_job["adapter_name"] = "kicad-electronics-worker"
+    wire_job["artifacts"] = []
+
+    assert local_client.post("/api/projects", json=project).status_code == 201
+    plan = local_client.get("/api/analysis-jobs/job-persisted-kicad/plan")
+    completed = local_client.post("/api/analysis-jobs/job-persisted-kicad/run-stub")
+
+    assert plan.status_code == 200
+    assert plan.json()["adapter_name"] == "kicad-electronics-worker"
+    assert plan.json()["queue_name"] == "electronics-local"
+    assert completed.status_code == 200
+    assert completed.json()["adapter_name"] == "kicad-electronics-worker"
+    assert completed.json()["artifacts"][-1]["generated_by"] == "kicad-electronics-worker"
+
+    invalid_project = deepcopy(project)
+    invalid_project["id"] = "project-invalid-adapter-owner"
+    invalid_project["analysis_jobs"][0]["id"] = "job-invalid-adapter-owner"
+    invalid_project["analysis_jobs"][0]["job_type"] = AnalysisJobType.run_fea.value
+    rejected = local_client.post("/api/projects", json=invalid_project)
+
+    assert rejected.status_code == 422
+    assert local_client.get("/api/projects/project-invalid-adapter-owner").status_code == 404
 
 
 def test_analysis_job_contract_supports_planning_and_local_stub_execution() -> None:

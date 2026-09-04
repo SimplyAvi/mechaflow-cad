@@ -3,8 +3,15 @@ import { loadCockpitDesign } from './lib/api';
 import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import './App.css';
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+const formatCurrency = (value: number): string => {
+  const fractionDigits = Number.isInteger(value) ? 0 : 2;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+};
 
 const formatUsdRange = (range: UsdRange): string => {
   if (range.min != null && range.max != null) {

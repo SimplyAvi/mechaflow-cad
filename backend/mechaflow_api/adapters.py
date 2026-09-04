@@ -201,6 +201,13 @@ def list_adapter_statuses() -> list[AdapterStatus]:
     return [adapter.status for adapter in ADAPTERS]
 
 
+def get_adapter_for_job(job: AnalysisJob) -> StubAdapter | None:
+    adapter = ADAPTERS_BY_NAME.get(job.adapter_name)
+    if adapter is None or job.job_type not in adapter.status.supported_job_types:
+        return None
+    return adapter
+
+
 def choose_adapter(request: AnalysisJobRequest) -> StubAdapter | None:
     adapter = ADAPTERS_BY_NAME.get(DEFAULT_ADAPTER_BY_JOB_TYPE.get(request.job_type, ""))
     return adapter if adapter and adapter.supports(request) else None

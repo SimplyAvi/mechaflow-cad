@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from threading import RLock
 from typing import Protocol
 
+from .adapters import get_adapter_for_job
 from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
 from .models import (
     AnalysisArtifact,
@@ -65,7 +66,15 @@ class ProjectNotFoundError(ValueError):
     """Raised when a project-owned mutation targets a missing project."""
 
 
+class InvalidAnalysisJobAdapterError(ValueError):
+    """Raised when a persisted analysis job names an unsupported adapter."""
+
+
 def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None = None) -> AnalysisJob:
+    if get_adapter_for_job(job) is None:
+        raise InvalidAnalysisJobAdapterError(
+            f"adapter {job.adapter_name!r} does not support analysis job type {job.job_type.value!r}"
+        )
     normalized_job_id = job.id if job_id is None else job_id
     artifacts = [artifact.model_copy(update={"job_id": normalized_job_id}, deep=True) for artifact in job.artifacts]
     return job.model_copy(
