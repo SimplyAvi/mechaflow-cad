@@ -250,6 +250,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     const panelData = structuredClone(mockProjectPanelData);
     const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
     finger.mass_kg = null;
+    finger.manufacturing_options[0]!.cost!.currency = 'credits';
     const aluminum = panelData.project.materials.find((material) => material.id === 'mat-aluminum-6061-t6')!;
     aluminum.cost!.currency = 'EUR';
     panelData.bom_items[0]!.price = {
@@ -263,16 +264,36 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
 
     const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
-    const mappedPalm = design.assembly.parts.find((part) => part.id === 'part-palm-plate');
     const steelOption = design.materialOptions.find(
       (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
     );
     expect(mappedFinger?.stressRisk).toBe('unknown');
-    expect(mappedPalm?.estimatedCostUsd).toBeNull();
-    expect(steelOption?.costDeltaUsd).toBeNull();
-    expect(design.bom[0]?.unitCostUsd).toBeNull();
-    expect(design.manufacturingOptions[0]?.estimatedCostUsd).toBe('Cost review required');
+    expect(mappedFinger?.costRangeUsd).toBeNull();
+    expect(steelOption?.costRangeUsd).toBeNull();
+    expect(design.bom[0]?.unitCostRangeUsd).toBeNull();
+    expect(design.manufacturingOptions[0]?.costDisplay).toBe('Cost review required');
     expect(design.backend.source).toBe('backend-panel-data');
+  });
+
+  it('preserves explicit manufacturing and BOM cost ranges', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.bom_items[0]!.price = {
+      currency: 'USD',
+      min: 14,
+      max: 20,
+      confidence: 'estimated_from_heuristic',
+    };
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+    const finger = design.assembly.parts.find((part) => part.id === 'part-finger-link');
+    const compositeOption = design.materialOptions.find(
+      (option) => option.id === 'part-finger-link-mat-carbon-fiber-nylon',
+    );
+
+    expect(finger?.costRangeUsd).toEqual({ min: 25, max: 80 });
+    expect(compositeOption?.costRangeUsd).toEqual({ min: 3, max: 12 });
+    expect(design.bom[0]?.unitCostRangeUsd).toEqual({ min: 14, max: 20 });
+    expect(design.manufacturingOptions[0]?.costDisplay).toBe('$25-$80');
   });
 
   it('maps every assembly, defaults to selectable parts, and keeps the full worker fallback', () => {
