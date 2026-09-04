@@ -109,6 +109,43 @@ class ReportStatus(str, Enum):
     superseded = "superseded"
 
 
+class AnalysisReadinessState(str, Enum):
+    pre_solver_ready = "pre_solver_ready"
+    review_required = "review_required"
+    blocked_missing_inputs = "blocked_missing_inputs"
+    solver_result_available = "solver_result_available"
+
+
+class AnalysisResultTrust(str, Enum):
+    demo_estimate = "demo_estimate"
+    pre_solver_input = "pre_solver_input"
+    solver_result = "solver_result"
+
+
+class AnalysisLoadType(str, Enum):
+    force = "force"
+    moment = "moment"
+    pressure = "pressure"
+    gravity = "gravity"
+    thermal = "thermal"
+
+
+class AnalysisConstraintType(str, Enum):
+    fixed = "fixed"
+    pinned = "pinned"
+    bearing = "bearing"
+    contact = "contact"
+    symmetry = "symmetry"
+    review_required = "review_required"
+
+
+class SolverPipelineStepStatus(str, Enum):
+    stub_contract = "stub_contract"
+    ready_for_worker = "ready_for_worker"
+    blocked_missing_input = "blocked_missing_input"
+    completed_by_solver = "completed_by_solver"
+
+
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -367,6 +404,106 @@ class AnalysisJobPlan(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class AnalysisLoadCase(StrictModel):
+    id: str
+    name: str
+    description: str
+    load_type: AnalysisLoadType
+    target_part_ids: list[str] = Field(default_factory=list)
+    magnitude: float | None = None
+    unit: str | None = None
+    direction: Vector3 = Field(default_factory=Vector3)
+    application_region: str = "review required"
+    confidence: RecommendationConfidence = RecommendationConfidence.heuristic
+    review_required: bool = True
+
+
+class AnalysisConstraint(StrictModel):
+    id: str
+    name: str
+    constraint_type: AnalysisConstraintType
+    target_part_ids: list[str] = Field(default_factory=list)
+    region: str = "review required"
+    degrees_of_freedom: list[str] = Field(default_factory=list)
+    confidence: RecommendationConfidence = RecommendationConfidence.heuristic
+    review_required: bool = True
+
+
+class AnalysisMaterialPropertySet(StrictModel):
+    material_id: str | None = None
+    material_name: str = "Review required"
+    properties: MaterialProperties = Field(default_factory=MaterialProperties)
+    provenance: RecommendationConfidence = RecommendationConfidence.unknown
+    source: SourceAttribution | None = None
+    review_notes: list[str] = Field(default_factory=list)
+
+
+class AnalysisThermalGuidance(StrictModel):
+    max_service_temp_c: PositiveFloat | None = None
+    heat_deflection_temp_c: PositiveFloat | None = None
+    guidance: str
+    confidence: RecommendationConfidence = RecommendationConfidence.unknown
+    review_required: bool = True
+
+
+class ExpectedAnalysisResultArtifact(StrictModel):
+    kind: str
+    title: str
+    file_format: str
+    produced_by: str
+    replaces_demo_estimate: bool = True
+    review_required_before_release: bool = True
+
+
+class SolverInputSpec(StrictModel):
+    geometry_source: str | None = None
+    units: str = "mm, N, MPa"
+    mesh_size_mm: PositiveFloat | None = None
+    freecad_document: str | None = None
+    gmsh_model: str | None = None
+    calculix_input_deck: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class SolverPipelineStep(StrictModel):
+    order: int = Field(ge=1)
+    adapter_name: str
+    open_source_tool: str
+    action: str
+    consumes: list[str] = Field(default_factory=list)
+    produces: list[str] = Field(default_factory=list)
+    status: SolverPipelineStepStatus = SolverPipelineStepStatus.stub_contract
+    review_notes: list[str] = Field(default_factory=list)
+
+
+class AnalysisReadinessRequest(BaseModel):
+    target_id: str
+    job_type: AnalysisJobType = AnalysisJobType.run_fea
+    include_demo_estimates: bool = True
+
+
+class AnalysisReadinessPreview(StrictModel):
+    project_id: str
+    target_id: str
+    target_name: str
+    target_kind: Literal["part", "assembly"]
+    state: AnalysisReadinessState
+    trust_label: AnalysisResultTrust = AnalysisResultTrust.pre_solver_input
+    summary: str
+    criteria: list[str] = Field(default_factory=list)
+    load_cases: list[AnalysisLoadCase] = Field(default_factory=list)
+    constraints: list[AnalysisConstraint] = Field(default_factory=list)
+    material_properties: AnalysisMaterialPropertySet | None = None
+    thermal_guidance: AnalysisThermalGuidance | None = None
+    solver_inputs: SolverInputSpec = Field(default_factory=SolverInputSpec)
+    expected_result_artifacts: list[ExpectedAnalysisResultArtifact] = Field(default_factory=list)
+    solver_pipeline: list[SolverPipelineStep] = Field(default_factory=list)
+    demo_estimates: list[str] = Field(default_factory=list)
+    review_required: list[str] = Field(default_factory=list)
+    recommended_job_request: AnalysisJobRequest | None = None
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class AnalysisReport(StrictModel):
     id: str
     project_id: str
@@ -480,3 +617,4 @@ class ProjectPanelData(BaseModel):
     manufacturing_options: list[PartManufacturingOptions] = Field(default_factory=list)
     wiring_routes: list[WiringRoute] = Field(default_factory=list)
     reports: list[AnalysisReport] = Field(default_factory=list)
+    analysis_readiness_previews: list[AnalysisReadinessPreview] = Field(default_factory=list)

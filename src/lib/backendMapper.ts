@@ -1,6 +1,7 @@
 import type {
   AdvisoryReport,
   AnalysisJob,
+  AnalysisReadinessPreview,
   BackendApiMetadata,
   BackendAnalysisJob,
   BackendAnalysisReport,
@@ -229,12 +230,14 @@ const confidenceLabel = (value?: unknown): string => {
 
 const criterionSource = (source: string, confidence?: unknown): string => `${source} - ${confidenceLabel(confidence)}`;
 
+const demoDesignCriteria = (part: BackendPart): Record<string, unknown> => metadataRecord(part.metadata.demo_design_criteria);
+
 const buildDesignCriteria = (
   part: BackendPart,
   material: BackendMaterial | undefined,
   manufacturingOption: BackendManufacturingOption | undefined,
 ): DesignCriterion[] => {
-  const demoCriteria = metadataRecord(part.metadata.demo_design_criteria);
+  const demoCriteria = demoDesignCriteria(part);
   const demoLoadCapacityLb = numberMetadata(demoCriteria.load_capacity_lb);
   const loadStatus = criterionStatus(demoCriteria.load_capacity_status);
   const materialStatus = criterionStatus(material?.confidence);
@@ -295,11 +298,128 @@ const buildDesignCriteria = (
   ];
 };
 
+const buildFallbackAnalysisReadiness = (
+  part: BackendPart,
+  material: BackendMaterial | undefined,
+  task: BackendTaskRequirement,
+  projectId: string,
+): AnalysisReadinessPreview => {
+  const demoCriteria = demoDesignCriteria(part);
+  const demoLoadCapacityLb = numberMetadata(demoCriteria.load_capacity_lb);
+  const hasPayloadTask = task.kind === 'lift_payload' && typeof task.target_value === 'number';
+  const hasGeometry = typeof part.source_file === 'string' && part.source_file.trim() !== '';
+  const hasMaterial = Boolean(material);
+  const dimensionsReady = Object.values(part.dimensions).some((value) => typeof value === 'number' && Number.isFinite(value));
+  const blockingReview = [
+    ...(!hasGeometry ? ['No source CAD file reference is attached to this part.'] : []),
+    ...(!hasMaterial ? ['No material property set is attached to this part.'] : []),
+    ...(!hasPayloadTask ? ['No load-bearing task was available for an explicit structural load case.'] : []),
+    ...(!dimensionsReady ? ['Geometry dimensions are incomplete for mesh sizing.'] : []),
+  ];
+  const state = blockingReview.length > 0 ? 'blocked_missing_inputs' : 'pre_solver_ready';
+  return {
+    project_id: projectId,
+    target_id: part.id,
+    target_name: part.name,
+    target_kind: 'part',
+    state,
+    trust_label: 'pre_solver_input',
+    summary: state === 'pre_solver_ready'
+      ? 'Pre-solver ready: explicit loads, constraints, material properties, and expected solver artifacts are recorded. This is not a real FEA result.'
+      : 'Review required before meshing or solving: one or more required analysis inputs are missing. No FEA was run.',
+    criteria: [
+      'Load path: tie the active task load to named CAD faces, fasteners, bearings, or contact pads.',
+      'Stiffness: elastic modulus is material input only; real displacement must come from a solver or test.',
+      'Thermal: heat-deflection or service temperature is a screening limit, not a thermal result.',
+      'Manufacturing: process, grain direction, print orientation, and fastener preload remain review-required.',
+    ],
+    load_cases: hasPayloadTask ? [{
+      id: `load-${part.id}-active-task`,
+      name: 'Preserved task static payload screening load',
+      description: `Use the active task target of ${task.target_value} ${task.unit ?? ''} as a pre-solver static load. Load direction and contact patch must be reviewed before any real solve.`,
+      load_type: 'force',
+      target_part_ids: [part.id],
+      magnitude: task.target_value,
+      unit: task.unit,
+      direction: { x: 0, y: 0, z: -1 },
+      application_region: 'estimated grip or reaction region from seed metadata',
+      confidence: 'estimated_from_heuristic',
+      review_required: true,
+    }] : [],
+    constraints: [{
+      id: `constraint-${part.id}-fixtures`,
+      name: 'Fixture and fastener support set',
+      constraint_type: 'pinned',
+      target_part_ids: [part.id],
+      region: part.related_fasteners.join(', ') || 'fixture faces need CAD naming',
+      degrees_of_freedom: ['translation_x', 'translation_y', 'translation_z'],
+      confidence: 'estimated_from_heuristic',
+      review_required: true,
+    }],
+    material_properties: material ? {
+      material_id: material.id,
+      material_name: material.name,
+      properties: material.properties,
+      provenance: material.confidence,
+      source: material.source,
+      review_notes: [...material.notes, 'Replace seed properties with a sourced material record before engineering use.'],
+    } : null,
+    thermal_guidance: {
+      max_service_temp_c: material?.properties.max_service_temp_c ?? null,
+      heat_deflection_temp_c: material?.properties.heat_deflection_temp_c ?? null,
+      guidance: material == null
+        ? 'Material selection is missing, so thermal limits cannot be screened yet.'
+        : 'Seed material temperature guidance is present but not a thermal simulation. Use a sourced datasheet and thermal load case before heat-sensitive release decisions.',
+      confidence: material?.confidence ?? 'unknown_or_needs_review',
+      review_required: true,
+    },
+    solver_inputs: {
+      geometry_source: part.source_file ?? null,
+      units: 'mm, N, MPa',
+      mesh_size_mm: dimensionsReady ? 4 : null,
+      freecad_document: 'future FreeCAD document or STEP import path',
+      gmsh_model: 'future Gmsh .geo or API-generated mesh model',
+      calculix_input_deck: 'future CalculiX .inp deck',
+      notes: ['Units and coordinate frames must be normalized by the worker before solve.'],
+    },
+    expected_result_artifacts: [
+      { kind: 'geometry_prep', title: 'FreeCAD analysis geometry package', file_format: 'STEP or BREP plus part-map JSON', produced_by: 'freecad-fea-prep-worker', replaces_demo_estimate: true, review_required_before_release: true },
+      { kind: 'mesh', title: 'Gmsh finite-element mesh', file_format: '.msh plus mesh-quality JSON', produced_by: 'gmsh-meshing-worker', replaces_demo_estimate: true, review_required_before_release: true },
+      { kind: 'solver_deck', title: 'CalculiX static structural input deck', file_format: '.inp', produced_by: 'calculix-fea-worker', replaces_demo_estimate: true, review_required_before_release: true },
+      { kind: 'solver_results', title: 'Stress, displacement, and safety-factor result package', file_format: '.frd, .vtk, and advisory JSON report', produced_by: 'calculix-fea-worker', replaces_demo_estimate: true, review_required_before_release: true },
+    ],
+    solver_pipeline: [
+      { order: 1, adapter_name: 'freecad-fea-prep-worker', open_source_tool: 'FreeCAD', action: 'Prepare defeatured analysis geometry, named faces, and units.', consumes: ['source_file', 'assembly nodes', 'part metadata'], produces: ['STEP or BREP analysis solid', 'part-map JSON', 'named-face set'], status: 'ready_for_worker', review_notes: ['Geometry prep is a contract only; the desktop demo does not import FreeCAD yet.'] },
+      { order: 2, adapter_name: 'gmsh-meshing-worker', open_source_tool: 'Gmsh', action: 'Generate mesh with quality metrics and element-size provenance.', consumes: ['analysis solid', 'named faces', 'mesh sizing policy'], produces: ['.msh mesh', 'mesh-quality JSON'], status: 'stub_contract', review_notes: ['Mesh convergence and local refinement rules are future work.'] },
+      { order: 3, adapter_name: 'calculix-fea-worker', open_source_tool: 'CalculiX', action: 'Run static structural solve from explicit loads, constraints, and material properties.', consumes: ['.msh mesh', 'material property JSON', 'load and constraint JSON'], produces: ['.inp deck', '.frd results', '.dat solver log'], status: 'stub_contract', review_notes: ['No solver is invoked by the readiness preview.'] },
+    ],
+    demo_estimates: [
+      ...(demoLoadCapacityLb == null ? [] : [`Demo estimate only: seeded capacity ${formatMeasurement(demoLoadCapacityLb)} lb. This must be replaced by solver and test evidence.`]),
+      ...(stringMetadata(demoCriteria.load_capacity_note) ? [stringMetadata(demoCriteria.load_capacity_note)!] : []),
+    ],
+    review_required: [
+      'Named faces, contact regions, and fixture assumptions must be reviewed in CAD before solving.',
+      'A qualified reviewer must approve any factor-of-safety interpretation before release.',
+      ...blockingReview,
+    ],
+    recommended_job_request: {
+      job_type: 'run_fea',
+      target_id: part.id,
+      project_id: projectId,
+      local_compute_preferred: true,
+      input_summary: { readiness_state: state },
+    },
+  };
+};
+
 const mapPart = (
   part: BackendPart,
   index: number,
   assembly: BackendAssembly,
   materialsById: Map<string, BackendMaterial>,
+  task: BackendTaskRequirement,
+  projectId: string,
+  readinessPreview?: AnalysisReadinessPreview,
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
@@ -325,6 +445,7 @@ const mapPart = (
       warning: part.wiring_route_ids.length > 0 ? 'Linked wiring routes require clearance checks after geometry edits.' : undefined,
     },
     designCriteria: buildDesignCriteria(part, material, manufacturingOption),
+    analysisReadiness: readinessPreview ?? buildFallbackAnalysisReadiness(part, material, task, projectId),
     visual: visualFor(part, index, node?.exploded_transform.translation_mm),
   };
 };
@@ -485,12 +606,15 @@ export function mapProjectPanelDataToReferenceDesign(
   const task = activeTaskFrom(panelData.task_requirements, project.active_task);
   const taskPayload = task.unit === 'lb' && typeof task.target_value === 'number' ? task.target_value : null;
   const materialsById = new Map(project.materials.map((material) => [material.id, material]));
+  const readinessByTargetId = new Map(
+    (panelData.analysis_readiness_previews ?? []).map((preview) => [preview.target_id, preview]),
+  );
   const assemblies = backendAssemblies.map((assembly) => ({
     id: assembly.id,
     name: assembly.name,
     explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
     parts: assembly.parts.map((part, index) =>
-      mapPart(part, index, assembly, materialsById)),
+      mapPart(part, index, assembly, materialsById, task, project.id, readinessByTargetId.get(part.id))),
   }));
   const defaultAssemblyIndex = Math.max(0, backendAssemblies.findIndex((assembly) => assembly.parts.length > 0));
   const assembly = assemblies[defaultAssemblyIndex]!;
@@ -535,12 +659,14 @@ export function mapProjectPanelDataToReferenceDesign(
       apiBaseUrl,
       projectId: project.id,
       endpoint: `/api/projects/${project.id}/panel-data`,
-      concepts: metadata?.concepts ?? ['projects', 'task_requirements', 'bom_items', 'manufacturing_options', 'wiring_routes', 'reports'],
+      concepts: metadata?.concepts ?? ['projects', 'task_requirements', 'analysis_readiness', 'bom_items', 'manufacturing_options', 'wiring_routes', 'reports'],
       advisoryNotice:
         metadata?.advisory_notice ??
         'Engineering checks are local advisory mock data until FreeCAD, FEA, wiring, and supplier workers validate them.',
       integrationStubs: metadata?.integration_stubs.map((stub) => stub.name ?? stub.capability ?? 'unknown-worker') ?? [
         'freecad-worker',
+        'freecad-fea-prep-worker',
+        'gmsh-meshing-worker',
         'calculix-fea-worker',
         'kicad-electronics-worker',
         'wireviz-harness-worker',

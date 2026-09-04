@@ -525,6 +525,108 @@ small,
   border-color: rgba(148, 163, 184, 0.24);
 }
 
+.readiness-panel {
+  background: rgba(2, 6, 23, 0.32);
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 18px;
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+  padding: 14px;
+}
+
+.readiness-panel h4 {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.readiness-panel p,
+.readiness-panel ul,
+.readiness-panel li {
+  color: #c4d7e8;
+  font-size: 0.88rem;
+}
+
+.readiness-banner {
+  border-radius: 14px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.readiness-banner span {
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.readiness-banner.state-pre_solver_ready {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.readiness-banner.state-blocked_missing_inputs,
+.readiness-banner.state-review_required {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.readiness-banner.state-solver_result_available {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+}
+
+.readiness-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.readiness-summary div,
+.readiness-stack > div,
+.demo-estimate-note {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.readiness-summary dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.readiness-summary dd {
+  margin: 0;
+}
+
+.readiness-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.readiness-stack p,
+.demo-estimate-note ul {
+  margin-bottom: 0;
+}
+
+.readiness-stack ul,
+.demo-estimate-note ul {
+  margin-top: 8px;
+  padding-left: 18px;
+}
+
+.demo-estimate-note {
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
 .warning {
   color: #fde68a !important;
 }
@@ -738,7 +840,8 @@ small,
     flex-direction: column;
   }
 
-  .meta-grid {
+  .meta-grid,
+  .readiness-summary {
     grid-template-columns: 1fr;
   }
 }

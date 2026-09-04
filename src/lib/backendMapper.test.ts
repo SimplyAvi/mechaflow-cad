@@ -32,6 +32,10 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(finger?.visual.explodeX).toBe(32);
     expect(finger?.visual.shape).toBe('tool');
     expect(finger?.designCriteria[0]?.sourceConfidence).toMatch(/Part metadata demo estimate/i);
+    expect(finger?.analysisReadiness.state).toBe('pre_solver_ready');
+    expect(finger?.analysisReadiness.summary).toMatch(/not a real FEA result/i);
+    expect(finger?.analysisReadiness.expected_result_artifacts.map((artifact) => artifact.kind))
+      .toContain('mesh');
   });
 
   it('does not derive a physical payload rating from the task target', () => {

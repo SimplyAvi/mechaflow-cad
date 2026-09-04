@@ -36,6 +36,7 @@ CONCEPTS = [
     "materials",
     "task_requirements",
     "analysis_jobs",
+    "analysis_readiness",
     "manufacturing_options",
     "wiring_routes",
     "reports",
@@ -95,6 +96,7 @@ class MechaFlowHandler(SimpleHTTPRequestHandler):
                         "find_free_port_command": "python scripts/find-free-port.py",
                     },
                     "integration_stubs": [],
+                    "analysis_notice": "Local responses are pre-solver metadata or demo estimates unless a future worker attaches real FEA artifacts.",
                 }
             )
             return

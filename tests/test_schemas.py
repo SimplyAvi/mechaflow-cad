@@ -5,9 +5,13 @@ from mechaflow_api.catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_R
 from mechaflow_api.models import (
     AnalysisArtifact,
     AnalysisArtifactKind,
+    AnalysisConstraint,
+    AnalysisConstraintType,
     AnalysisJobPlan,
     AnalysisJobRequest,
     AnalysisJobType,
+    AnalysisLoadCase,
+    AnalysisLoadType,
     ManufacturingOption,
     ManufacturingProcess,
     Material,
@@ -104,6 +108,29 @@ def test_analysis_job_request_defaults_to_local_compute() -> None:
 def test_analysis_job_request_requires_project_ownership() -> None:
     with pytest.raises(ValidationError):
         AnalysisJobRequest(job_type=AnalysisJobType.extract_part_list, target_id="asm-test")
+
+
+def test_analysis_input_models_define_loads_constraints_and_review_state() -> None:
+    load_case = AnalysisLoadCase(
+        id="load-static-payload",
+        name="Static payload",
+        description="Preserved task load for pre-solver review.",
+        load_type=AnalysisLoadType.force,
+        target_part_ids=["part-test"],
+        magnitude=50,
+        unit="lb",
+    )
+    constraint = AnalysisConstraint(
+        id="constraint-pin",
+        name="Pinned mount",
+        constraint_type=AnalysisConstraintType.pinned,
+        target_part_ids=["part-test"],
+        region="M4 shoulder screw faces",
+        degrees_of_freedom=["translation_x", "translation_y", "translation_z"],
+    )
+
+    assert load_case.review_required is True
+    assert constraint.constraint_type is AnalysisConstraintType.pinned
 
 
 def test_worker_plan_and_artifact_models_define_adapter_contract() -> None:

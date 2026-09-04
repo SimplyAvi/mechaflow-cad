@@ -82,15 +82,15 @@ Use:
 
 ## FEA and meshing
 
-### CalculiX
+Current MVP status: the app records pre-solver load cases, constraints, material provenance, thermal guidance, and expected artifacts only. It does not run a solver. Demo estimates must be replaced by real solver and review artifacts before engineering use.
+
+### FreeCAD FEM preparation
 
 Use:
 
-- Structural finite element analysis.
-
-Notes:
-
-- FreeCAD FEM supports CalculiX workflows.
+- Defeatured analysis geometry.
+- Named faces for loads, constraints, contacts, and fixtures.
+- Material assignment and unit normalization before meshing.
 
 ### Gmsh
 
@@ -99,6 +99,19 @@ Repository: https://github.com/sasobadovinac/gmsh or official upstream mirrors w
 Use:
 
 - Mesh generation.
+- Mesh-quality and convergence metadata.
+
+### CalculiX
+
+Use:
+
+- Static structural finite element analysis.
+- Solver decks, result files, stress and displacement extraction, and review reports.
+
+Notes:
+
+- FreeCAD FEM supports CalculiX workflows.
+- The current adapter contract keeps Gmsh meshing separable from CalculiX solving so future workers can replace either stage.
 
 ### Python CalculiX tools
 

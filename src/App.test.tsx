@@ -28,6 +28,10 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not real FEA results/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/140 lb demo limit/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Source and confidence/i);
+    expect(screen.getByLabelText(/Pre-solver analysis readiness/i)).toHaveTextContent(/pre-solver input only/i);
+    expect(screen.getByLabelText(/Pre-solver analysis readiness/i)).toHaveTextContent(/no FEA claim/i);
+    expect(screen.getByLabelText(/Pre-solver analysis readiness/i)).toHaveTextContent(/Explicit load cases/i);
+    expect(screen.getByLabelText(/Pre-solver analysis readiness/i)).toHaveTextContent(/Gmsh finite-element mesh/i);
     expect(screen.getByText(/Background analysis status/i)).toBeInTheDocument();
     expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
     expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
@@ -86,6 +90,8 @@ describe('MechaFlow cockpit', () => {
 
     expect(screen.getByRole('heading', { name: /Upper arm link/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/72 lb demo limit/i);
+    expect(screen.getByLabelText(/Pre-solver analysis readiness/i)).toHaveTextContent(/Demo estimate only/i);
+    expect(screen.getByLabelText(/Pre-solver analysis readiness/i)).toHaveTextContent(/CalculiX static structural input deck/i);
     expect(screen.getByText(/Main arm harness/i)).toBeInTheDocument();
     expect(screen.queryByText(/Finger force sensor lead/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/service loop review required/i).length).toBeGreaterThan(0);
@@ -123,6 +129,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Review required/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not a load-bearing part/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Source and confidence/i);
+    expect(screen.getByLabelText(/Pre-solver analysis readiness/i)).toHaveTextContent(/Board support, connector loads, and heat dissipation need review/i);
     expect(screen.getByText(/No compatible substitution options are available/i)).toHaveTextContent(
       /compatibility review is required/i,
     );

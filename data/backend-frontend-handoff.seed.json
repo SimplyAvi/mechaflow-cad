@@ -35,42 +35,57 @@
         "backend_id": "mat-aluminum-6061-t6",
         "frontend_label": "Aluminum 6061-T6",
         "backend_family": "aluminum",
-        "backend_processes": ["cnc_machining", "sheet_metal"]
+        "backend_processes": [
+          "cnc_machining",
+          "sheet_metal"
+        ]
       },
       {
         "catalog_id": "steel-aisi-1018",
         "backend_id": "mat-low-carbon-steel",
         "frontend_label": "Low-carbon steel",
         "backend_family": "steel",
-        "backend_processes": ["cnc_machining", "sheet_metal"]
+        "backend_processes": [
+          "cnc_machining",
+          "sheet_metal"
+        ]
       },
       {
         "catalog_id": "carbon-fiber-nylon-generic",
         "backend_id": "mat-carbon-fiber-nylon",
         "frontend_label": "Carbon-fiber reinforced nylon",
         "backend_family": "polymer_composite",
-        "backend_processes": ["additive_fdm", "additive_sls"]
+        "backend_processes": [
+          "additive_fdm",
+          "additive_sls"
+        ]
       },
       {
         "catalog_id": "pla-generic",
         "backend_id": "mat-pla-generic",
         "frontend_label": "Generic PLA printed polymer",
         "backend_family": "polymer",
-        "backend_processes": ["additive_fdm"]
+        "backend_processes": [
+          "additive_fdm"
+        ]
       },
       {
         "catalog_id": "petg-generic",
         "backend_id": "mat-petg-generic",
         "frontend_label": "Generic PETG printed polymer",
         "backend_family": "polymer",
-        "backend_processes": ["additive_fdm"]
+        "backend_processes": [
+          "additive_fdm"
+        ]
       },
       {
         "catalog_id": "fr4-generic",
         "backend_id": "mat-fr4-generic",
         "frontend_label": "Generic FR-4 PCB laminate",
         "backend_family": "electronics_substrate",
-        "backend_processes": ["pcb_fabrication"]
+        "backend_processes": [
+          "pcb_fabrication"
+        ]
       }
     ],
     "manufacturing_methods": [
@@ -159,6 +174,14 @@
         "backend_name": "freecad-worker"
       },
       {
+        "catalog_id": "freecad-fea-prep",
+        "backend_name": "freecad-fea-prep-worker"
+      },
+      {
+        "catalog_id": "gmsh-meshing",
+        "backend_name": "gmsh-meshing-worker"
+      },
+      {
         "catalog_id": "calculix-gmsh",
         "backend_name": "calculix-fea-worker"
       },
@@ -188,8 +211,13 @@
         "purpose": "Selectable load-bearing part for material substitution and payload re-rating UI flows.",
         "material_id": "aluminum-6061-t6",
         "manufacturing_method_id": "cnc-milling",
-        "capability_rating_ids": ["payload-static", "deflection-limit"],
-        "wiring_route_ids": ["route-finger-sensor"]
+        "capability_rating_ids": [
+          "payload-static",
+          "deflection-limit"
+        ],
+        "wiring_route_ids": [
+          "route-finger-sensor"
+        ]
       },
       {
         "id": "part-palm-plate",
@@ -197,8 +225,13 @@
         "purpose": "Base structure for exploded-view grouping, PCB clearance, and harness pass-through checks.",
         "material_id": "aluminum-6061-t6",
         "manufacturing_method_id": "cnc-milling",
-        "capability_rating_ids": ["payload-static", "manufacturability"],
-        "wiring_route_ids": ["route-main-harness"]
+        "capability_rating_ids": [
+          "payload-static",
+          "manufacturability"
+        ],
+        "wiring_route_ids": [
+          "route-main-harness"
+        ]
       },
       {
         "id": "part-controller-pcb",
@@ -206,8 +239,14 @@
         "purpose": "Electronics-aware selectable item for KiCad, KiCadStepUp, WireViz, and manufacturing packet handoff.",
         "material_id": "fr4-generic",
         "manufacturing_method_id": "pcb-fabrication",
-        "capability_rating_ids": ["wire-clearance", "manufacturability"],
-        "wiring_route_ids": ["route-finger-sensor", "route-main-harness"]
+        "capability_rating_ids": [
+          "wire-clearance",
+          "manufacturability"
+        ],
+        "wiring_route_ids": [
+          "route-finger-sensor",
+          "route-main-harness"
+        ]
       }
     ],
     "sample_wiring_routes": [
@@ -216,16 +255,27 @@
         "name": "Finger sensor lead",
         "from_part_id": "part-controller-pcb",
         "to_part_id": "part-finger-link",
-        "capability_rating_ids": ["wire-clearance"],
-        "adapter_ids": ["wireviz", "freecad"]
+        "capability_rating_ids": [
+          "wire-clearance"
+        ],
+        "adapter_ids": [
+          "wireviz",
+          "freecad"
+        ]
       },
       {
         "id": "route-main-harness",
         "name": "Main palm harness",
         "from_part_id": "part-controller-pcb",
         "to_part_id": "part-palm-plate",
-        "capability_rating_ids": ["wire-clearance"],
-        "adapter_ids": ["wireviz", "kicad-stepup", "freecad"]
+        "capability_rating_ids": [
+          "wire-clearance"
+        ],
+        "adapter_ids": [
+          "wireviz",
+          "kicad-stepup",
+          "freecad"
+        ]
       }
     ],
     "analysis_job_sequence": [

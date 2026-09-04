@@ -12,6 +12,7 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 - Preserving the active task while previewing material substitution.
 - Keeping payload capability and safety factor under review until a backend worker supplies a task-independent rating.
 - Showing plain-English part criteria for load role, material, stiffness, heat limit, manufacturing process, source confidence, and review-required values.
+- Showing selected-part pre-solver analysis readiness with explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes.
 - Showing background CAD, future FEA, wiring, and supplier job status without claiming that real FEA has run.
 - Reviewing BOM, cost, manufacturing, and lead-time panels.
 - Surfacing wiring routes, bend radius, service loops, and clearance risk.
@@ -154,6 +155,16 @@ GET /api/projects/project-open-gripper-demo/panel-data
 - `manufacturing_options`: part-grouped manufacturing choices.
 - `wiring_routes`: connector-to-connector harness routes.
 - `reports`: advisory summaries from local modification previews or workers.
+- `analysis_readiness_previews`: optional pre-solver readiness previews keyed by part or assembly id. When omitted, the frontend derives a clearly labeled local preview from the same part, material, and task fields for demo continuity.
+
+The frontend also displays the intended pre-solver readiness endpoints without requiring a solve:
+
+```text
+GET /api/projects/{project_id}/analysis-readiness/{target_id}
+POST /api/projects/{project_id}/analysis-readiness/previews
+```
+
+Those responses are not FEA results. They prepare explicit worker inputs and list the artifacts a future FreeCAD, Gmsh, and CalculiX path should attach.
 
 The frontend also displays the intended mutation endpoint without requiring a write during normal UI use:
 
