@@ -176,6 +176,28 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(8);
   });
 
+  it('renders near-threshold safety estimates without contradicting watch status', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.project.active_task!.target_value = 50;
+    panelData.project.active_task!.safety_factor_min = 2;
+    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.dimensions.thickness_mm = 16.5;
+    panelData.project.materials.find((material) => material.id === finger.material_id)!.family = 'other';
+    panelData.project.materials.find((material) => material.id === 'mat-low-carbon-steel')!.family = 'other';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      return new Response('Not found', { status: 404 });
+    }));
+
+    render(<App />);
+
+    expect(await screen.findByText(/Safety factor < 2\.0/i)).toBeInTheDocument();
+    expect(screen.queryByText(/2\.0 safety factor below the preserved 2\.0 minimum/i)).not.toBeInTheDocument();
+  });
+
   it('renders missing backend engineering values as review-required', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const panelData = structuredClone(mockProjectPanelData);
