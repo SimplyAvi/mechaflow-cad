@@ -93,7 +93,7 @@ def _find_part(project: Project, part_id: str) -> Part:
 def _validate_material_process(project: Project, part: Part, modification: Modification) -> None:
     if modification.material_id is None and modification.manufacturing_process is None:
         return
-    material_id = modification.material_id or part.material_id
+    material_id = part.material_id if modification.material_id is None else modification.material_id
     material = next((candidate for candidate in project.materials if candidate.id == material_id), None)
     if material is None:
         if modification.material_id is not None:
@@ -142,6 +142,8 @@ def _apply_part_update(part: Part, modification: Modification) -> Part:
             updates["dimensions"] = PartDimensions(**dimension_data)
         except ValidationError as exc:
             raise InvalidDimensionChangeError(str(exc)) from exc
+    if modification.material_id is not None or modification.dimension_changes:
+        updates["mass_kg"] = None
     if modification.manufacturing_process is not None:
         metadata = dict(part.metadata)
         metadata["preferred_manufacturing_process"] = modification.manufacturing_process.value

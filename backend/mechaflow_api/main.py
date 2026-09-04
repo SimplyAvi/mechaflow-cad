@@ -34,6 +34,7 @@ from .models import (
     ReferenceDesign,
     TaskRequirement,
     WiringRoute,
+    validate_project_id,
 )
 from .services import (
     InvalidDimensionChangeError,
@@ -280,9 +281,12 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
         try:
+            validate_project_id(project_id)
             return project_store.upsert_project(project_id, project)
         except AnalysisJobAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}/panel-data", response_model=ProjectPanelData, tags=["projects"])
     def project_panel_data(project_id: str) -> ProjectPanelData:

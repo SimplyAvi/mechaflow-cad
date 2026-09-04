@@ -22,6 +22,7 @@ from .models import (
     AnalysisReport,
     Project,
     ReportStatus,
+    validate_project_id,
 )
 
 
@@ -64,11 +65,18 @@ class ProjectNotFoundError(ValueError):
     """Raised when a project-owned mutation targets a missing project."""
 
 
+def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None = None) -> AnalysisJob:
+    normalized_job_id = job.id if job_id is None else job_id
+    artifacts = [artifact.model_copy(update={"job_id": normalized_job_id}, deep=True) for artifact in job.artifacts]
+    return job.model_copy(
+        update={"id": normalized_job_id, "project_id": project_id, "artifacts": artifacts},
+        deep=True,
+    )
+
+
 def normalize_project_references(project_id: str, project: Project) -> Project:
-    analysis_jobs = [
-        job.model_copy(update={"project_id": project_id}, deep=True)
-        for job in project.analysis_jobs
-    ]
+    project_id = validate_project_id(project_id)
+    analysis_jobs = [normalize_analysis_job(project_id, job) for job in project.analysis_jobs]
     reports = [report.model_copy(update={"project_id": project_id}, deep=True) for report in project.reports]
     return project.model_copy(
         update={"id": project_id, "analysis_jobs": analysis_jobs, "reports": reports},
@@ -160,7 +168,7 @@ class InMemoryProjectStore:
             project = self._projects.get(job.project_id)
             if project is None:
                 raise ProjectNotFoundError(job.project_id)
-            stored = job.model_copy(update={"project_id": project.id}, deep=True)
+            stored = normalize_analysis_job(project.id, job)
             self._projects[project.id] = project.model_copy(
                 update={"analysis_jobs": [*project.analysis_jobs, stored]},
                 deep=True,
@@ -177,10 +185,7 @@ class InMemoryProjectStore:
                 for index, job in enumerate(project.analysis_jobs):
                     if job.id != job_id:
                         continue
-                    stored = update(job.model_copy(deep=True)).model_copy(
-                        update={"id": job_id, "project_id": project_id},
-                        deep=True,
-                    )
+                    stored = normalize_analysis_job(project_id, update(job.model_copy(deep=True)), job_id)
                     jobs = list(project.analysis_jobs)
                     jobs[index] = stored
                     self._projects[project_id] = project.model_copy(update={"analysis_jobs": jobs}, deep=True)

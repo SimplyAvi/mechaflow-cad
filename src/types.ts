@@ -10,6 +10,7 @@ export interface ReferenceDesign {
   formats: string[];
   task: TaskRequirement;
   assembly: Assembly;
+  assemblies: Assembly[];
   materialOptions: MaterialOption[];
   bom: BOMItem[];
   manufacturingOptions: ManufacturingOption[];
@@ -40,6 +41,7 @@ export interface TaskRequirement {
 }
 
 export interface Assembly {
+  id: string;
   name: string;
   explodedProgress: number | null;
   parts: Part[];

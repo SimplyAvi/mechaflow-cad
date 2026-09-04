@@ -82,6 +82,9 @@ try {
   if (!metadata.concepts.includes('projects') || !metadata.concepts.includes('wiring_routes')) {
     throw new Error('Mock backend metadata did not expose expected concepts.');
   }
+  if (!metadata.integration_stubs.some((stub) => stub.name === 'kicad-electronics-worker')) {
+    throw new Error('Mock backend metadata omitted the KiCad integration stub.');
+  }
 
   const panelData = await waitForJson(`${apiBaseUrl}/api/projects/sample/panel-data`);
   if (panelData.project.id !== 'project-open-gripper-demo') {
@@ -98,6 +101,9 @@ try {
   ) {
     throw new Error('Mock backend did not return the canonical demo reference identity.');
   }
+  if (demoReference.bom_items.map((item) => item.id).join(',') !== 'bom-m4-shoulder,bom-m4-locknut') {
+    throw new Error('Mock backend reference-design BOM diverged from the FastAPI seed.');
+  }
   const incompatibleModification = await fetch(`${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -113,6 +119,15 @@ try {
     throw new Error('Mock backend accepted an incompatible part material and process.');
   }
   const invalidModifications = [
+    {
+      payload: {
+        id: 'smoke-blank-material',
+        target_part_id: 'part-finger-link',
+        description: 'Reject a blank material id.',
+        material_id: '',
+      },
+      failure: 'a blank material id',
+    },
     {
       payload: {
         id: 'smoke-missing-description',
@@ -183,8 +198,10 @@ try {
   if (
     modifiedPart?.material_id !== 'mat-carbon-fiber-nylon'
     || modifiedPart?.dimensions.thickness_mm !== 9
+    || modifiedPart?.mass_kg !== null
     || storedPart?.material_id !== 'mat-carbon-fiber-nylon'
     || storedPart?.dimensions.thickness_mm !== 9
+    || storedPart?.mass_kg !== null
   ) {
     throw new Error('Mock backend did not persist the accepted project modification.');
   }

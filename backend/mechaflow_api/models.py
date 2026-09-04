@@ -6,11 +6,21 @@ WireViz, and supplier APIs can populate or consume them later through adapters.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, NonNegativeFloat, PositiveFloat, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    NonNegativeFloat,
+    PositiveFloat,
+    field_validator,
+    model_validator,
+)
 
 
 class CADFileFormat(str, Enum):
@@ -282,6 +292,13 @@ class Modification(BaseModel):
     manufacturing_process: ManufacturingProcess | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @field_validator("material_id")
+    @classmethod
+    def validate_material_id(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("material_id must not be blank")
+        return value
+
 
 class AnalysisJobRequest(BaseModel):
     job_type: AnalysisJobType
@@ -348,6 +365,17 @@ class AnalysisReport(BaseModel):
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+PROJECT_ID_PATTERN = re.compile(r"^[A-Za-z0-9._~-]+$")
+
+
+def validate_project_id(value: str) -> str:
+    if value in {"sample", ".", ".."}:
+        raise ValueError(f"project id {value!r} is reserved")
+    if not PROJECT_ID_PATTERN.fullmatch(value):
+        raise ValueError("project id must be a URL-safe path segment")
+    return value
+
+
 class Project(BaseModel):
     model_config = ConfigDict(json_schema_extra={"description": "A user workspace that keeps task requirements active while a design changes."})
 
@@ -364,17 +392,34 @@ class Project(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        return validate_project_id(value)
+
     @model_validator(mode="after")
-    def validate_unique_part_ids(self) -> Project:
-        seen: set[str] = set()
-        duplicates: set[str] = set()
+    def validate_unique_ids(self) -> Project:
+        seen_parts: set[str] = set()
+        duplicate_parts: set[str] = set()
         for assembly in self.assemblies:
             for part in assembly.parts:
-                if part.id in seen:
-                    duplicates.add(part.id)
-                seen.add(part.id)
-        if duplicates:
-            raise ValueError(f"part ids must be unique across project assemblies: {sorted(duplicates)}")
+                if part.id in seen_parts:
+                    duplicate_parts.add(part.id)
+                seen_parts.add(part.id)
+        if duplicate_parts:
+            raise ValueError(f"part ids must be unique across project assemblies: {sorted(duplicate_parts)}")
+
+        material_ids = [material.id for material in self.materials]
+        if any(not material_id.strip() for material_id in material_ids):
+            raise ValueError("material ids must not be blank")
+        seen_materials: set[str] = set()
+        duplicate_materials: set[str] = set()
+        for material_id in material_ids:
+            if material_id in seen_materials:
+                duplicate_materials.add(material_id)
+            seen_materials.add(material_id)
+        if duplicate_materials:
+            raise ValueError(f"material ids must be unique within a project: {sorted(duplicate_materials)}")
         return self
 
 

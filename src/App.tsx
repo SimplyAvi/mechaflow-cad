@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { loadCockpitDesign } from './lib/api';
-import type { AdvisoryReport, MaterialOption, Part, ReferenceDesign } from './types';
+import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign } from './types';
 import './App.css';
 
 const formatCurrency = (value: number): string =>
@@ -21,6 +21,7 @@ const riskLabel: Record<Part['stressRisk'], string> = {
 
 function App() {
   const [design, setDesign] = useState<ReferenceDesign | null>(null);
+  const [selectedAssemblyId, setSelectedAssemblyId] = useState('');
   const [selectedPartId, setSelectedPartId] = useState('finger-link-left');
   const [selectedOptionId, setSelectedOptionId] = useState('ribbed-aluminum-left');
   const [isExploded, setIsExploded] = useState(true);
@@ -30,6 +31,7 @@ function App() {
     loadCockpitDesign().then((loadedDesign) => {
       if (!cancelled) {
         setDesign(loadedDesign);
+        setSelectedAssemblyId(loadedDesign.assembly.id);
         setSelectedPartId(loadedDesign.assembly.parts[0]?.id ?? '');
         setSelectedOptionId(loadedDesign.materialOptions[0]?.id ?? '');
       }
@@ -39,9 +41,19 @@ function App() {
     };
   }, []);
 
+  const selectableAssemblies = useMemo(
+    () => design?.assemblies.filter((assembly) => assembly.parts.length > 0) ?? [],
+    [design],
+  );
+
+  const activeAssembly = useMemo(
+    () => design?.assemblies.find((assembly) => assembly.id === selectedAssemblyId) ?? design?.assembly,
+    [design, selectedAssemblyId],
+  );
+
   const selectedPart = useMemo(
-    () => design?.assembly.parts.find((part) => part.id === selectedPartId) ?? design?.assembly.parts[0],
-    [design, selectedPartId],
+    () => activeAssembly?.parts.find((part) => part.id === selectedPartId) ?? activeAssembly?.parts[0],
+    [activeAssembly, selectedPartId],
   );
 
   const materialOptions = useMemo(
@@ -57,11 +69,18 @@ function App() {
     }
   }, [materialOptions, selectedOptionId]);
 
+  const selectAssembly = (assemblyId: string) => {
+    const assembly = design?.assemblies.find((candidate) => candidate.id === assemblyId);
+    if (!assembly) return;
+    setSelectedAssemblyId(assembly.id);
+    setSelectedPartId(assembly.parts[0]?.id ?? '');
+  };
+
   if (!design) {
     return <main className="loading-shell">Loading MechaFlow cockpit...</main>;
   }
 
-  if (!selectedPart) {
+  if (!activeAssembly || !selectedPart) {
     return (
       <main className="loading-shell">
         <section className="empty-state panel" aria-live="polite">
@@ -138,14 +157,21 @@ function App() {
             <small>Project {design.backend.projectId}</small>
             <small>{design.backend.concepts.slice(0, 5).join(', ')}</small>
           </div>
-          <PartTree parts={design.assembly.parts} selectedPartId={selectedPart.id} onSelect={setSelectedPartId} />
+          {selectableAssemblies.length > 1 ? (
+            <AssemblySelector
+              assemblies={selectableAssemblies}
+              selectedAssemblyId={activeAssembly.id}
+              onSelect={selectAssembly}
+            />
+          ) : null}
+          <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={setSelectedPartId} />
         </aside>
 
         <section className="viewer-card panel">
           <div className="viewer-toolbar">
             <div>
               <p className="eyebrow">Animated exploded view concept</p>
-              <h2>{design.assembly.name}</h2>
+              <h2>{activeAssembly.name}</h2>
             </div>
             <button type="button" onClick={() => setIsExploded((value) => !value)}>
               {isExploded ? 'Collapse assembly' : 'Explode assembly'}
@@ -154,7 +180,7 @@ function App() {
           <div className="viewer-stage" role="img" aria-label="Mock exploded view of a robot gripper assembly">
             <div className="wire wire-main" />
             <div className="wire wire-left" />
-            {design.assembly.parts.map((part) => (
+            {activeAssembly.parts.map((part) => (
               <button
                 className={`part-shape risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
                 key={part.id}
@@ -177,7 +203,7 @@ function App() {
           <div className="viewer-footer">
             <span>
               Exploded-view progress:{' '}
-              {design.assembly.explodedProgress == null ? 'review required' : `${design.assembly.explodedProgress}%`}
+              {activeAssembly.explodedProgress == null ? 'review required' : `${activeAssembly.explodedProgress}%`}
             </span>
             <span>Blue lines show wiring routes and service-loop review state.</span>
           </div>
@@ -232,6 +258,27 @@ function App() {
         </p>
       </section>
     </main>
+  );
+}
+
+function AssemblySelector({
+  assemblies,
+  selectedAssemblyId,
+  onSelect,
+}: {
+  assemblies: Assembly[];
+  selectedAssemblyId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <label className="assembly-selector">
+      <span>Assembly</span>
+      <select aria-label="Assembly" value={selectedAssemblyId} onChange={(event) => onSelect(event.target.value)}>
+        {assemblies.map((assembly) => (
+          <option key={assembly.id} value={assembly.id}>{assembly.name}</option>
+        ))}
+      </select>
+    </label>
   );
 }
 

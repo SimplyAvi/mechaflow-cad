@@ -30,11 +30,12 @@ def test_apply_project_modification_returns_updated_project_and_advisory_report(
 
     assert part.material_id == "mat-carbon-fiber-nylon"
     assert part.dimensions.thickness_mm == 8
+    assert part.mass_kg is None
     assert part.metadata["preferred_manufacturing_process"] == "additive_fdm"
     assert result.report.project_id == project.id
     assert result.report.risks
     assert result.project.modifications == [modification]
-    assert result.project.reports == [result.report]
+    assert result.project.reports == [*project.reports, result.report]
 
 
 def test_project_panel_collectors_extract_frontend_data() -> None:

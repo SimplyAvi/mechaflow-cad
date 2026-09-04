@@ -187,4 +187,35 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/Data source: backend panel data/i)).toBeInTheDocument();
     expect(screen.queryByText(/Loading MechaFlow cockpit/i)).not.toBeInTheDocument();
   });
+
+  it('defaults past empty assemblies and lets the user select another populated assembly', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
+    const panelData = structuredClone(mockProjectPanelData);
+    const sourceAssembly = panelData.project.assemblies[0]!;
+    const finger = sourceAssembly.parts.find((part) => part.id === 'part-finger-link')!;
+    const controller = sourceAssembly.parts.find((part) => part.id === 'part-controller-pcb')!;
+    panelData.project.assemblies = [
+      { ...structuredClone(sourceAssembly), id: 'assembly-empty', name: 'Empty assembly', parts: [] },
+      { ...structuredClone(sourceAssembly), id: 'assembly-finger', name: 'Finger assembly', parts: [finger] },
+      { ...structuredClone(sourceAssembly), id: 'assembly-controller', name: 'Controller assembly', parts: [controller] },
+    ];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      return new Response('Not found', { status: 404 });
+    }));
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /^Finger link$/i })).toBeInTheDocument();
+    const assemblySelector = screen.getByLabelText(/^Assembly$/i);
+    expect(within(assemblySelector).queryByRole('option', { name: /Empty assembly/i })).not.toBeInTheDocument();
+
+    await user.selectOptions(assemblySelector, 'assembly-controller');
+
+    expect(screen.getByRole('heading', { name: /^Controller PCB placeholder$/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Controller assembly$/i })).toBeInTheDocument();
+  });
 });

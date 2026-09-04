@@ -166,15 +166,15 @@ const explodedViewProgress = (jobs: BackendAnalysisJob[], assemblyId: string): n
   return job?.status === 'completed' ? 100 : null;
 };
 
-const selectedAssembly = (panelData: BackendProjectPanelData): BackendAssembly =>
-  panelData.project.assemblies[0] ?? {
+const projectAssemblies = (panelData: BackendProjectPanelData): BackendAssembly[] =>
+  panelData.project.assemblies.length > 0 ? panelData.project.assemblies : [{
     id: 'empty-assembly',
     name: 'Empty assembly',
     root_node_id: 'root',
     nodes: [],
     parts: [],
     wiring_routes: [],
-  };
+  }];
 
 const costForPart = (part: BackendPart, material?: BackendMaterial): number | null => {
   if (part.mass_kg == null || !material) return null;
@@ -398,14 +398,22 @@ export function mapProjectPanelDataToReferenceDesign(
   apiBaseUrl?: string,
 ): ReferenceDesign {
   const project = panelData.project;
-  const assembly = selectedAssembly(panelData);
+  const backendAssemblies = projectAssemblies(panelData);
   const task = activeTaskFrom(panelData.task_requirements, project.active_task);
   const taskPayload = task.unit === 'lb' && typeof task.target_value === 'number' ? task.target_value : null;
   const taskSafetyFactorMin = typeof task.safety_factor_min === 'number' ? task.safety_factor_min : null;
   const materialsById = new Map(project.materials.map((material) => [material.id, material]));
-  const parts = assembly.parts.map((part, index) =>
-    mapPart(part, index, assembly, materialsById, taskPayload, taskSafetyFactorMin),
-  );
+  const assemblies = backendAssemblies.map((assembly) => ({
+    id: assembly.id,
+    name: assembly.name,
+    explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
+    parts: assembly.parts.map((part, index) =>
+      mapPart(part, index, assembly, materialsById, taskPayload, taskSafetyFactorMin)),
+  }));
+  const defaultAssemblyIndex = Math.max(0, backendAssemblies.findIndex((assembly) => assembly.parts.length > 0));
+  const assembly = assemblies[defaultAssemblyIndex]!;
+  const allBackendParts = backendAssemblies.flatMap((candidate) => candidate.parts);
+  const allParts = assemblies.flatMap((candidate) => candidate.parts);
   const reports = (panelData.reports.length > 0 ? panelData.reports : project.reports).map(mapReport);
   const isDemoReference = project.reference_design_id === 'ref-open-gripper-demo';
 
@@ -424,22 +432,23 @@ export function mapProjectPanelDataToReferenceDesign(
       safetyFactorMin: task.safety_factor_min ?? undefined,
       validationMethod: task.validation_method,
     },
-    assembly: {
-      name: assembly.name,
-      explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
-      parts,
-    },
+    assembly,
+    assemblies,
     materialOptions: mapMaterialOptions(
-      assembly.parts,
+      allBackendParts,
       project.materials,
       taskPayload,
       taskSafetyFactorMin,
       project.id,
     ),
-    bom: mapBOM(panelData.bom_items, parts),
+    bom: mapBOM(panelData.bom_items, allParts),
     manufacturingOptions: mapManufacturing(panelData.manufacturing_options),
     analysisJobs: project.analysis_jobs.map(mapJob),
-    wiringRoutes: mapWiring(panelData.wiring_routes.length > 0 ? panelData.wiring_routes : assembly.wiring_routes),
+    wiringRoutes: mapWiring(
+      panelData.wiring_routes.length > 0
+        ? panelData.wiring_routes
+        : backendAssemblies.flatMap((candidate) => candidate.wiring_routes),
+    ),
     reports,
     backend: {
       source: apiBaseUrl ? 'backend-panel-data' : 'bundled-mock',
@@ -453,6 +462,7 @@ export function mapProjectPanelDataToReferenceDesign(
       integrationStubs: metadata?.integration_stubs.map((stub) => stub.name ?? stub.capability ?? 'unknown-worker') ?? [
         'freecad-worker',
         'calculix-fea-worker',
+        'kicad-electronics-worker',
         'wireviz-harness-worker',
         'supplier-options-worker',
       ],

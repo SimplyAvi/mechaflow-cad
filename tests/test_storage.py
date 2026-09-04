@@ -33,4 +33,9 @@ def test_in_memory_project_store_upsert_uses_path_id() -> None:
     stored = store.upsert_project("server-path-id", sample)
 
     assert stored.id == "server-path-id"
+    assert all(
+        artifact.job_id == job.id
+        for job in stored.analysis_jobs
+        for artifact in job.artifacts
+    )
     assert store.get_project("server-path-id") is not None

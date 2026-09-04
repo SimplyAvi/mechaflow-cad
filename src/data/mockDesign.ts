@@ -27,6 +27,7 @@ export const mockBackendMetadata: BackendApiMetadata = {
   integration_stubs: [
     { name: 'freecad-worker', status: 'stubbed' },
     { name: 'calculix-fea-worker', status: 'stubbed' },
+    { name: 'kicad-electronics-worker', status: 'stubbed' },
     { name: 'wireviz-harness-worker', status: 'stubbed' },
     { name: 'supplier-options-worker', status: 'stubbed' },
   ],

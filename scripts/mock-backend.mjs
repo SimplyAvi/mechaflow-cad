@@ -40,6 +40,9 @@ const modificationValidationError = (modification) => {
   if (modification.material_id != null && typeof modification.material_id !== 'string') {
     return 'material_id must be a string or null';
   }
+  if (typeof modification.material_id === 'string' && !modification.material_id.trim()) {
+    return 'material_id must not be blank';
+  }
   if (
     modification.manufacturing_process != null
     && !manufacturingProcesses.has(modification.manufacturing_process)
@@ -219,8 +222,8 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 404, { error: 'target part not found' });
         return;
       }
-      if (modification.material_id || modification.manufacturing_process) {
-        const materialId = modification.material_id || part.material_id;
+      if (modification.material_id != null || modification.manufacturing_process) {
+        const materialId = modification.material_id ?? part.material_id;
         const material = project.materials.find((candidate) => candidate.id === materialId);
         const partProcesses = new Set(
           part.manufacturing_options.map((option) => option.process).filter((process) => process !== 'unknown'),
@@ -230,7 +233,7 @@ const server = http.createServer(async (request, response) => {
         const currentProcess = typeof part.metadata?.preferred_manufacturing_process === 'string'
           ? part.metadata.preferred_manufacturing_process
           : undefined;
-        const effectiveProcess = modification.manufacturing_process || currentProcess;
+        const effectiveProcess = modification.manufacturing_process ?? currentProcess;
         if (!material) {
           sendJson(response, 422, { error: 'material not found' });
           return;
@@ -239,7 +242,7 @@ const server = http.createServer(async (request, response) => {
           sendJson(response, 422, { error: 'material and process compatibility requires review' });
           return;
         }
-        if (modification.material_id && !effectiveProcess) {
+        if (modification.material_id != null && !effectiveProcess) {
           sendJson(response, 422, { error: 'material changes require an explicit compatible manufacturing process' });
           return;
         }
@@ -278,6 +281,9 @@ const server = http.createServer(async (request, response) => {
           return {
             ...candidate,
             material_id: modification.material_id ?? candidate.material_id,
+            mass_kg: modification.material_id != null || Object.keys(modification.dimension_changes ?? {}).length > 0
+              ? null
+              : candidate.mass_kg,
             dimensions: {
               ...candidate.dimensions,
               ...(modification.dimension_changes ?? {}),

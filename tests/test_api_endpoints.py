@@ -137,14 +137,17 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
     sample["name"] = "Schema validation project"
     for job in sample["analysis_jobs"]:
         job["id"] = f"{job['id']}-project-test"
-        for artifact in job["artifacts"]:
-            artifact["job_id"] = job["id"]
 
     response = client.post("/api/projects", json=sample)
 
     assert response.status_code == 201
     assert response.json()["id"] == "project-test"
     assert {job["project_id"] for job in response.json()["analysis_jobs"]} == {"project-test"}
+    assert all(
+        artifact["job_id"] == job["id"]
+        for job in response.json()["analysis_jobs"]
+        for artifact in job["artifacts"]
+    )
     assert {report["project_id"] for report in response.json()["reports"]} == {"project-test"}
 
     duplicate = client.post("/api/projects", json=sample)
@@ -165,6 +168,11 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
     assert updated.json()["id"] == "project-test"
     assert updated.json()["name"] == "Updated local project"
     assert {job["project_id"] for job in updated.json()["analysis_jobs"]} == {"project-test"}
+    assert all(
+        artifact["job_id"] == job["id"]
+        for job in updated.json()["analysis_jobs"]
+        for artifact in job["artifacts"]
+    )
     assert {report["project_id"] for report in updated.json()["reports"]} == {"project-test"}
 
 
@@ -182,6 +190,27 @@ def test_project_rejects_duplicate_part_ids_across_assemblies() -> None:
 
     assert response.status_code == 422
     assert local_client.get("/api/projects/project-duplicate-parts").status_code == 404
+
+
+def test_project_rejects_invalid_ids_and_duplicate_material_ids() -> None:
+    local_client = TestClient(main_module.create_app())
+    sample = local_client.get("/api/projects/sample").json()
+    sample["analysis_jobs"] = []
+    sample["reports"] = []
+
+    for project_id in ("team/a", "project with spaces", "sample", ".", ".."):
+        invalid = deepcopy(sample)
+        invalid["id"] = project_id
+        assert local_client.post("/api/projects", json=invalid).status_code == 422
+
+    path_authoritative = deepcopy(sample)
+    path_authoritative["id"] = "project-valid-body-id"
+    assert local_client.put("/api/projects/sample", json=path_authoritative).status_code == 422
+
+    duplicate_materials = deepcopy(sample)
+    duplicate_materials["id"] = "project-duplicate-materials"
+    duplicate_materials["materials"].append(deepcopy(duplicate_materials["materials"][0]))
+    assert local_client.post("/api/projects", json=duplicate_materials).status_code == 422
 
 
 def test_project_modification_endpoint_updates_part_and_returns_report() -> None:
@@ -208,11 +237,19 @@ def test_project_modification_endpoint_updates_part_and_returns_report() -> None
     edited_part = payload["project"]["assemblies"][0]["parts"][0]
     assert edited_part["material_id"] == "mat-carbon-fiber-nylon"
     assert edited_part["dimensions"]["thickness_mm"] == 8
+    assert edited_part["mass_kg"] is None
     assert edited_part["metadata"]["preferred_manufacturing_process"] == "additive_fdm"
     assert payload["report"]["status"] == "requires_review"
     assert payload["report"]["task_results"][0]["status"] == "requires_review"
 
     stored = client.get("/api/projects/project-modification-flow").json()
+    stored_part = next(
+        part
+        for assembly in stored["assemblies"]
+        for part in assembly["parts"]
+        if part["id"] == "part-finger-link"
+    )
+    assert stored_part["mass_kg"] is None
     assert stored["modifications"][0]["id"] == "mod-finger-material-thickness"
     assert stored["reports"][0]["id"] == payload["report"]["id"]
 
@@ -233,6 +270,17 @@ def test_project_modification_rejects_unknown_material_and_dimension() -> None:
         },
     )
     assert bad_material.status_code == 422
+
+    blank_material = client.post(
+        "/api/projects/project-invalid-modification-flow/modifications",
+        json={
+            "id": "mod-blank-material",
+            "target_part_id": "part-finger-link",
+            "description": "Reject blank material id.",
+            "material_id": "",
+        },
+    )
+    assert blank_material.status_code == 422
 
     bad_dimension = client.post(
         "/api/projects/project-invalid-modification-flow/modifications",
