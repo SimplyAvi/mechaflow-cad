@@ -1,5 +1,6 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from pathlib import Path
 from threading import Barrier, local
 
@@ -165,6 +166,22 @@ def test_project_endpoints_store_and_return_local_projects() -> None:
     assert updated.json()["name"] == "Updated local project"
     assert {job["project_id"] for job in updated.json()["analysis_jobs"]} == {"project-test"}
     assert {report["project_id"] for report in updated.json()["reports"]} == {"project-test"}
+
+
+def test_project_rejects_duplicate_part_ids_across_assemblies() -> None:
+    local_client = TestClient(main_module.create_app())
+    project = local_client.get("/api/projects/sample").json()
+    project["id"] = "project-duplicate-parts"
+    project["analysis_jobs"] = []
+    project["reports"] = []
+    duplicate_assembly = deepcopy(project["assemblies"][0])
+    duplicate_assembly["id"] = "assembly-duplicate-parts"
+    project["assemblies"].append(duplicate_assembly)
+
+    response = local_client.post("/api/projects", json=project)
+
+    assert response.status_code == 422
+    assert local_client.get("/api/projects/project-duplicate-parts").status_code == 404
 
 
 def test_project_modification_endpoint_updates_part_and_returns_report() -> None:

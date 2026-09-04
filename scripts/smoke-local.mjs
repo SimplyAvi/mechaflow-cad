@@ -112,6 +112,53 @@ try {
   if (incompatibleModification.status !== 422) {
     throw new Error('Mock backend accepted an incompatible part material and process.');
   }
+  const invalidModifications = [
+    {
+      payload: {
+        id: 'smoke-missing-description',
+        target_part_id: 'part-finger-link',
+      },
+      failure: 'missing required modification fields',
+    },
+    {
+      payload: {
+        id: 'smoke-negative-dimension',
+        target_part_id: 'part-finger-link',
+        description: 'Reject a negative dimension.',
+        dimension_changes: { thickness_mm: -1 },
+      },
+      failure: 'a negative dimension',
+    },
+    {
+      payload: {
+        id: 'smoke-unsupported-dimension',
+        target_part_id: 'part-finger-link',
+        description: 'Reject an unsupported dimension.',
+        dimension_changes: { diameter_mm: 10 },
+      },
+      failure: 'an unsupported dimension',
+    },
+  ];
+  for (const invalidModification of invalidModifications) {
+    const response = await fetch(`${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(invalidModification.payload),
+    });
+    if (response.status !== 422) {
+      throw new Error(`Mock backend accepted ${invalidModification.failure}.`);
+    }
+  }
+  const projectAfterRejectedModifications = await waitForJson(
+    `${apiBaseUrl}/api/projects/${panelData.project.id}`,
+  );
+  const unchangedFinger = projectAfterRejectedModifications.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === 'part-finger-link');
+  const originalFinger = panelData.project.assemblies.flatMap((assembly) => assembly.parts)
+    .find((part) => part.id === 'part-finger-link');
+  if (unchangedFinger?.dimensions.thickness_mm !== originalFinger?.dimensions.thickness_mm) {
+    throw new Error('Mock backend mutated project state after rejecting invalid modifications.');
+  }
   const compatibleModification = await fetch(`${apiBaseUrl}/api/projects/${panelData.project.id}/modifications`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

@@ -8,6 +8,7 @@ import type {
   BackendBOMItem,
   BackendManufacturingOption,
   BackendMaterial,
+  BackendMoneyRange,
   BackendPart,
   BackendPartManufacturingOptions,
   BackendProjectPanelData,
@@ -36,18 +37,25 @@ const toTitle = (value: string): string =>
 
 const round = (value: number, decimals = 1): number => Number(value.toFixed(decimals));
 
-const moneyRange = (cost?: { min?: number | null; max?: number | null; currency?: string } | null): string => {
+const usdFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
+
+const usdCostRange = (cost?: BackendMoneyRange | null): BackendMoneyRange | null => {
+  if (!cost || typeof cost.currency !== 'string') return null;
+  return cost.currency.trim().toUpperCase() === 'USD' ? cost : null;
+};
+
+const moneyRange = (cost?: BackendMoneyRange | null): string => {
   if (!cost || (cost.min == null && cost.max == null)) return 'Cost pending supplier adapter';
-  const currency = cost.currency ?? 'USD';
-  let formatter: Intl.NumberFormat;
-  try {
-    formatter = new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 });
-  } catch (error) {
-    if (error instanceof RangeError) return 'Cost review required';
-    throw error;
+  const usdCost = usdCostRange(cost);
+  if (!usdCost) return 'Cost review required';
+  if (usdCost.min != null && usdCost.max != null) {
+    return `${usdFormatter.format(usdCost.min)}-${usdFormatter.format(usdCost.max)}`;
   }
-  if (cost.min != null && cost.max != null) return `${formatter.format(cost.min)}-${formatter.format(cost.max)}`;
-  return formatter.format(cost.min ?? cost.max ?? 0);
+  return usdFormatter.format(usdCost.min ?? usdCost.max ?? 0);
 };
 
 const leadTime = (option: BackendManufacturingOption): string => {
@@ -59,8 +67,9 @@ const leadTime = (option: BackendManufacturingOption): string => {
 };
 
 const materialCost = (material: BackendMaterial): number | null => {
-  const low = material.cost?.min;
-  const high = material.cost?.max;
+  const cost = usdCostRange(material.cost);
+  const low = cost?.min;
+  const high = cost?.max;
   if (low == null && high == null) return null;
   if (low == null) return high ?? null;
   if (high == null) return low;
@@ -85,10 +94,11 @@ const ratingStatus = (
   payloadLb: number | null,
   taskPayload: number | null,
   safetyFactor: number | null,
+  taskSafetyFactorMin: number | null,
 ): RatingStatus => {
   if (payloadLb == null || taskPayload == null || safetyFactor == null) return 'watch';
   if (payloadLb < taskPayload) return 'fails';
-  if (safetyFactor < 2) return 'watch';
+  if (taskSafetyFactorMin == null || safetyFactor < taskSafetyFactorMin) return 'watch';
   return 'passes';
 };
 
@@ -182,6 +192,7 @@ const mapPart = (
   assembly: BackendAssembly,
   materialsById: Map<string, BackendMaterial>,
   taskPayload: number | null,
+  taskSafetyFactorMin: number | null,
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
   const payloadLb = estimatePayload(part, material, taskPayload);
@@ -189,6 +200,18 @@ const mapPart = (
     ? round(payloadLb / taskPayload, 1)
     : null;
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
+  const status = ratingStatus(payloadLb, taskPayload, safetyFactor, taskSafetyFactorMin);
+  const ratingSummary = taskPayload == null
+    ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
+    : payloadLb == null || safetyFactor == null
+      ? `${part.name} has incomplete payload evidence; engineering review is required.`
+      : payloadLb < taskPayload
+        ? `${part.name} falls below the preserved ${taskPayload} lb payload target.`
+        : taskSafetyFactorMin == null
+          ? `${part.name} has no active safety-factor minimum; engineering review is required.`
+          : safetyFactor < taskSafetyFactorMin
+            ? `${part.name} estimates a ${safetyFactor.toFixed(1)} safety factor below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
+            : `${part.name} is heuristically rated against the preserved ${taskPayload} lb task and ${taskSafetyFactorMin.toFixed(1)} safety-factor minimum until real workers run.`;
   return {
     id: part.id,
     name: part.name,
@@ -203,12 +226,10 @@ const mapPart = (
     fasteners: part.related_fasteners,
     relatedWires: part.wiring_route_ids,
     rating: {
-      status: ratingStatus(payloadLb, taskPayload, safetyFactor),
+      status,
       payloadLb,
       safetyFactor,
-      summary: taskPayload == null
-        ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
-        : `${part.name} is heuristically rated against the preserved ${taskPayload} lb task until real workers run.`,
+      summary: ratingSummary,
       warning: part.wiring_route_ids.length > 0 ? 'Linked wiring routes require clearance checks after geometry edits.' : undefined,
     },
     visual: visualFor(part, index, node?.exploded_transform.translation_mm),
@@ -219,6 +240,7 @@ const mapMaterialOptions = (
   parts: BackendPart[],
   materials: BackendMaterial[],
   taskPayload: number | null,
+  taskSafetyFactorMin: number | null,
   projectId: string,
 ): MaterialOption[] =>
   parts.flatMap((part) => {
@@ -236,7 +258,7 @@ const mapMaterialOptions = (
       const safetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
         ? round(payloadLb / taskPayload, 1)
         : null;
-      const status = ratingStatus(payloadLb, taskPayload, safetyFactor);
+      const status = ratingStatus(payloadLb, taskPayload, safetyFactor, taskSafetyFactorMin);
       const manufacturingProcess = compatibleProcesses[0];
       const currentDensity = currentMaterial?.properties.density_kg_m3;
       const nextDensity = material.properties.density_kg_m3;
@@ -260,9 +282,13 @@ const mapMaterialOptions = (
         costDeltaUsd,
         taskImpact: taskPayload == null || payloadLb == null || safetyFactor == null
           ? 'Payload target or rating is unknown; engineering review is required.'
-          : needsGeometryChange
+          : status === 'fails'
             ? `Fails the preserved ${taskPayload} lb task unless geometry or process constraints change.`
-            : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
+            : taskSafetyFactorMin == null
+              ? 'The active safety-factor minimum is unknown; engineering review is required.'
+              : status === 'watch'
+                ? `The ${safetyFactor.toFixed(1)} safety factor estimate is below the preserved ${taskSafetyFactorMin.toFixed(1)} minimum; engineering review is required.`
+                : `Keeps the preserved ${taskPayload} lb task active with a ${safetyFactor.toFixed(1)} safety factor estimate.`,
         wiringImpact: part.wiring_route_ids.length > 0
           ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
           : 'No linked wiring route is known for this part in the sample project.',
@@ -319,7 +345,8 @@ const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
   }
 
   return items.map((item) => {
-    const unitCostUsd = item.price?.min ?? item.price?.max ?? null;
+    const price = usdCostRange(item.price);
+    const unitCostUsd = price?.min ?? price?.max ?? null;
     return {
       id: item.id,
       item: item.name,
@@ -374,8 +401,11 @@ export function mapProjectPanelDataToReferenceDesign(
   const assembly = selectedAssembly(panelData);
   const task = activeTaskFrom(panelData.task_requirements, project.active_task);
   const taskPayload = task.unit === 'lb' && typeof task.target_value === 'number' ? task.target_value : null;
+  const taskSafetyFactorMin = typeof task.safety_factor_min === 'number' ? task.safety_factor_min : null;
   const materialsById = new Map(project.materials.map((material) => [material.id, material]));
-  const parts = assembly.parts.map((part, index) => mapPart(part, index, assembly, materialsById, taskPayload));
+  const parts = assembly.parts.map((part, index) =>
+    mapPart(part, index, assembly, materialsById, taskPayload, taskSafetyFactorMin),
+  );
   const reports = (panelData.reports.length > 0 ? panelData.reports : project.reports).map(mapReport);
   const isDemoReference = project.reference_design_id === 'ref-open-gripper-demo';
 
@@ -399,7 +429,13 @@ export function mapProjectPanelDataToReferenceDesign(
       explodedProgress: explodedViewProgress(project.analysis_jobs, assembly.id),
       parts,
     },
-    materialOptions: mapMaterialOptions(assembly.parts, project.materials, taskPayload, project.id),
+    materialOptions: mapMaterialOptions(
+      assembly.parts,
+      project.materials,
+      taskPayload,
+      taskSafetyFactorMin,
+      project.id,
+    ),
     bom: mapBOM(panelData.bom_items, parts),
     manufacturingOptions: mapManufacturing(panelData.manufacturing_options),
     analysisJobs: project.analysis_jobs.map(mapJob),

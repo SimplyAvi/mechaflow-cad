@@ -17,6 +17,49 @@ const configuredPort = parsePort(
 const port = configuredPort ?? (await getFreePort(host));
 const projectId = mockBackendPanelData.project.id;
 let project = structuredClone(mockBackendPanelData.project);
+const editableDimensionFields = new Set(['length_mm', 'width_mm', 'height_mm', 'thickness_mm']);
+const manufacturingProcesses = new Set([
+  'off_the_shelf',
+  'additive_fdm',
+  'additive_sls',
+  'cnc_machining',
+  'sheet_metal',
+  'pcb_fabrication',
+  'wire_harness',
+  'casting',
+  'unknown',
+]);
+
+const modificationValidationError = (modification) => {
+  if (!modification || typeof modification !== 'object' || Array.isArray(modification)) {
+    return 'request body must be a modification object';
+  }
+  for (const field of ['id', 'target_part_id', 'description']) {
+    if (typeof modification[field] !== 'string') return `${field} is required and must be a string`;
+  }
+  if (modification.material_id != null && typeof modification.material_id !== 'string') {
+    return 'material_id must be a string or null';
+  }
+  if (
+    modification.manufacturing_process != null
+    && !manufacturingProcesses.has(modification.manufacturing_process)
+  ) {
+    return 'manufacturing_process is invalid';
+  }
+  if (Object.hasOwn(modification, 'dimension_changes')) {
+    const changes = modification.dimension_changes;
+    if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
+      return 'dimension_changes must be an object';
+    }
+    for (const [field, value] of Object.entries(changes)) {
+      if (!editableDimensionFields.has(field)) return `dimension_changes contains unsupported field ${field}`;
+      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+        return `${field} must be a positive number`;
+      }
+    }
+  }
+  return null;
+};
 
 const projectManufacturingOptions = () =>
   project.assemblies.flatMap((assembly) =>
@@ -158,7 +201,18 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && isProjectPath(url.pathname, '/modifications')) {
-      const modification = await readJsonBody(request);
+      let modification;
+      try {
+        modification = await readJsonBody(request);
+      } catch {
+        sendJson(response, 422, { error: 'request body must contain valid JSON' });
+        return;
+      }
+      const validationError = modificationValidationError(modification);
+      if (validationError) {
+        sendJson(response, 422, { error: validationError });
+        return;
+      }
       const parts = project.assemblies.flatMap((assembly) => assembly.parts);
       const part = parts.find((candidate) => candidate.id === modification.target_part_id);
       if (!part) {
@@ -214,6 +268,7 @@ const server = http.createServer(async (request, response) => {
       };
       const storedModification = {
         created_at: new Date().toISOString(),
+        dimension_changes: {},
         ...modification,
       };
       const updatedAssemblies = project.assemblies.map((assembly) => ({

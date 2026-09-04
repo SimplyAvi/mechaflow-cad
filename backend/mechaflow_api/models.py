@@ -364,6 +364,19 @@ class Project(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @model_validator(mode="after")
+    def validate_unique_part_ids(self) -> Project:
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for assembly in self.assemblies:
+            for part in assembly.parts:
+                if part.id in seen:
+                    duplicates.add(part.id)
+                seen.add(part.id)
+        if duplicates:
+            raise ValueError(f"part ids must be unique across project assemblies: {sorted(duplicates)}")
+        return self
+
 
 class ProjectModificationResponse(BaseModel):
     project: Project
