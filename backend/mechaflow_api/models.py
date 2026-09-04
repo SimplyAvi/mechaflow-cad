@@ -296,6 +296,8 @@ class ReferenceDesign(BaseModel):
 
 
 class Modification(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     target_part_id: str
     description: str

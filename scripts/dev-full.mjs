@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { getFreePort, parsePort } from './port-utils.mjs';
+import { parsePort, resolvePortPair } from './port-utils.mjs';
 
 const frontendHost = process.env.MECHAFLOW_FRONTEND_HOST || process.env.FRONTEND_HOST || '127.0.0.1';
 const backendHost = process.env.MECHAFLOW_API_HOST || process.env.BACKEND_HOST || '127.0.0.1';
-const backendPort = parsePort(
+const configuredBackendPort = parsePort(
   process.env.MECHAFLOW_API_PORT || process.env.BACKEND_PORT || process.env.API_PORT,
   'MECHAFLOW_API_PORT',
-) ?? (await getFreePort(backendHost));
-const frontendPort = parsePort(
+);
+const configuredFrontendPort = parsePort(
   process.env.MECHAFLOW_FRONTEND_PORT || process.env.FRONTEND_PORT || process.env.PORT,
   'MECHAFLOW_FRONTEND_PORT',
-) ?? (await getFreePort(frontendHost, [backendPort]));
+);
+const { backendPort, frontendPort } = await resolvePortPair({
+  backendHost,
+  frontendHost,
+  backendPort: configuredBackendPort,
+  frontendPort: configuredFrontendPort,
+});
 const apiBaseUrl = `http://${backendHost}:${backendPort}`;
 
 console.log('Starting MechaFlow CAD local stack with explicit ports:');

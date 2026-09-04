@@ -3,12 +3,23 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
-import { getFreePort } from './port-utils.mjs';
+import { parsePort, resolvePortPair } from './port-utils.mjs';
 
 const host = process.env.FRONTEND_HOST || process.env.BACKEND_HOST || process.env.MECHAFLOW_API_HOST || '127.0.0.1';
-const backendPort = Number(process.env.BACKEND_PORT || process.env.MECHAFLOW_API_PORT) || (await getFreePort(host));
-const frontendPort = Number(process.env.FRONTEND_PORT || process.env.MECHAFLOW_FRONTEND_PORT)
-  || (await getFreePort(host, [backendPort]));
+const configuredBackendPort = parsePort(
+  process.env.BACKEND_PORT || process.env.MECHAFLOW_API_PORT,
+  'BACKEND_PORT',
+);
+const configuredFrontendPort = parsePort(
+  process.env.FRONTEND_PORT || process.env.MECHAFLOW_FRONTEND_PORT,
+  'FRONTEND_PORT',
+);
+const { backendPort, frontendPort } = await resolvePortPair({
+  backendHost: host,
+  frontendHost: host,
+  backendPort: configuredBackendPort,
+  frontendPort: configuredFrontendPort,
+});
 const apiBaseUrl = `http://${host}:${backendPort}`;
 const frontendUrl = `http://${host}:${frontendPort}`;
 const children = [];
@@ -153,6 +164,15 @@ try {
         dimension_changes: { diameter_mm: 10 },
       },
       failure: 'an unsupported dimension',
+    },
+    {
+      payload: {
+        id: 'smoke-misspelled-dimension',
+        target_part_id: 'part-finger-link',
+        description: 'Reject a misspelled dimension field.',
+        dimension_change: { thickness_mm: 10 },
+      },
+      failure: 'an unknown modification field',
     },
   ];
   for (const invalidModification of invalidModifications) {

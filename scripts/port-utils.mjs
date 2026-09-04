@@ -53,6 +53,24 @@ export async function getFreePort(host = '127.0.0.1', excludedPorts = []) {
   return (await getFreePorts(1, host, excludedPorts))[0];
 }
 
+export async function resolvePortPair({
+  backendHost = '127.0.0.1',
+  frontendHost = backendHost,
+  backendPort: configuredBackendPort,
+  frontendPort: configuredFrontendPort,
+} = {}) {
+  if (configuredBackendPort !== undefined && configuredBackendPort === configuredFrontendPort) {
+    throw new Error('Backend and frontend ports must be different.');
+  }
+  const backendPort = configuredBackendPort
+    ?? (await getFreePort(backendHost, configuredFrontendPort === undefined ? [] : [configuredFrontendPort]));
+  const frontendPort = configuredFrontendPort ?? (await getFreePort(frontendHost, [backendPort]));
+  if (backendPort === frontendPort) {
+    throw new Error('Backend and frontend ports must be different.');
+  }
+  return { backendPort, frontendPort };
+}
+
 export function assertPortAvailable(port, host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
     const server = net.createServer();

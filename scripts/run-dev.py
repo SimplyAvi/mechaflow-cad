@@ -28,14 +28,14 @@ def find_free_port(host: str, excluded_ports: set[int] | None = None) -> int:
             return port
 
 
-def env_port(name: str, host: str, excluded_ports: set[int] | None = None) -> int:
+def configured_env_port(name: str) -> int | None:
     raw = os.environ.get(name)
-    if raw:
-        value = int(raw)
-        if value < 1 or value > 65535:
-            raise ValueError(f"{name} must be between 1 and 65535 for the dev runner")
-        return value
-    return find_free_port(host, excluded_ports)
+    if not raw:
+        return None
+    value = int(raw)
+    if value < 1 or value > 65535:
+        raise ValueError(f"{name} must be between 1 and 65535 for the dev runner")
+    return value
 
 
 class RuntimeConfigHandler(http.server.SimpleHTTPRequestHandler):
@@ -61,8 +61,15 @@ class RuntimeConfigHandler(http.server.SimpleHTTPRequestHandler):
 def main() -> int:
     api_host = os.environ.get("MECHAFLOW_API_HOST", "127.0.0.1")
     frontend_host = os.environ.get("MECHAFLOW_FRONTEND_HOST", "127.0.0.1")
-    api_port = env_port("MECHAFLOW_API_PORT", api_host)
-    frontend_port = env_port("MECHAFLOW_FRONTEND_PORT", frontend_host, {api_port})
+    configured_api_port = configured_env_port("MECHAFLOW_API_PORT")
+    configured_frontend_port = configured_env_port("MECHAFLOW_FRONTEND_PORT")
+    if configured_api_port is not None and configured_api_port == configured_frontend_port:
+        raise ValueError("MECHAFLOW_API_PORT and MECHAFLOW_FRONTEND_PORT must be different")
+    api_port = configured_api_port or find_free_port(
+        api_host,
+        {configured_frontend_port} if configured_frontend_port is not None else set(),
+    )
+    frontend_port = configured_frontend_port or find_free_port(frontend_host, {api_port})
     api_base_url = f"http://{api_host}:{api_port}"
     frontend_origin = f"http://{frontend_host}:{frontend_port}"
 

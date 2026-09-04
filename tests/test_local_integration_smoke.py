@@ -117,3 +117,26 @@ def test_dev_runner_does_not_start_backend_when_frontend_port_is_busy() -> None:
     assert "Address already in use" in stderr
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as backend_probe:
         backend_probe.bind(("127.0.0.1", api_port))
+
+
+def test_dev_runner_rejects_equal_configured_ports() -> None:
+    port = find_free_port()
+    env = os.environ.copy()
+    env["MECHAFLOW_API_PORT"] = str(port)
+    env["MECHAFLOW_FRONTEND_PORT"] = str(port)
+
+    result = subprocess.run(
+        [sys.executable, "scripts/run-dev.py"],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=5,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "must be different" in result.stderr
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", port))

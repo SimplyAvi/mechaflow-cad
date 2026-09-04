@@ -70,7 +70,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     panelData.project.active_task!.target_value = 50;
     panelData.project.active_task!.safety_factor_min = 2;
     const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
-    finger.dimensions.thickness_mm = 16;
+    finger.dimensions.thickness_mm = 16.5;
     panelData.project.materials.find((material) => material.id === finger.material_id)!.family = 'other';
     panelData.project.materials.find((material) => material.id === 'mat-low-carbon-steel')!.family = 'other';
 
@@ -80,13 +80,39 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
       (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
     );
 
-    expect(mappedFinger?.rating.payloadLb).toBe(98);
+    expect(mappedFinger?.rating.payloadLb).toBe(100);
     expect(mappedFinger?.rating.safetyFactor).toBe(2);
     expect(mappedFinger?.rating.status).toBe('watch');
     expect(mappedFinger?.rating.summary).toMatch(/below the preserved 2\.0 minimum/i);
-    expect(steelOption?.payloadLb).toBe(98);
+    expect(steelOption?.payloadLb).toBe(100);
     expect(steelOption?.safetyFactor).toBe(2);
     expect(steelOption?.status).toBe('watch');
+  });
+
+  it('uses explicit BOM processes and preserves one-sided lead-time bounds', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.manufacturing_options[0]!.process = 'off_the_shelf';
+    panelData.bom_items = [{
+      ...panelData.bom_items[0]!,
+      part_id: finger.id,
+      name: 'Finger replacement',
+      supplier: null,
+      supplier_part_number: null,
+    }];
+    const option = panelData.manufacturing_options[0]!.options[0]!;
+    panelData.manufacturing_options[0]!.options = [
+      { ...option, id: 'minimum-only', lead_time_days_min: 3, lead_time_days_max: null },
+      { ...option, id: 'maximum-only', lead_time_days_min: null, lead_time_days_max: 3 },
+    ];
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+
+    expect(design.bom[0]?.source).toBe('off the shelf');
+    expect(design.manufacturingOptions.find((item) => item.id.endsWith('minimum-only'))?.leadTime)
+      .toBe('From 3 days');
+    expect(design.manufacturingOptions.find((item) => item.id.endsWith('maximum-only'))?.leadTime)
+      .toBe('Up to 3 days');
   });
 
   it('keeps missing values and non-USD costs unknown', () => {

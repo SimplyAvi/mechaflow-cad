@@ -427,6 +427,17 @@ def test_project_modification_rejects_unknown_material_and_dimension() -> None:
     )
     assert bad_dimension.status_code == 422
 
+    misspelled_dimension = client.post(
+        "/api/projects/project-invalid-modification-flow/modifications",
+        json={
+            "id": "mod-misspelled-dimension",
+            "target_part_id": "part-finger-link",
+            "description": "Reject a misspelled dimension field.",
+            "dimension_change": {"thickness_mm": 10},
+        },
+    )
+    assert misspelled_dimension.status_code == 422
+
     original = client.get("/api/projects/project-invalid-modification-flow").json()
     original_thickness = original["assemblies"][0]["parts"][0]["dimensions"]["thickness_mm"]
     nonfinite_dimension = client.post(

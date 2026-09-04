@@ -81,7 +81,8 @@ const leadTime = (option: BackendManufacturingOption): string => {
   if (option.lead_time_days_min != null && option.lead_time_days_max != null) {
     return `${option.lead_time_days_min}-${option.lead_time_days_max} days`;
   }
-  return `${option.lead_time_days_min ?? option.lead_time_days_max} days`;
+  if (option.lead_time_days_min != null) return `From ${option.lead_time_days_min} days`;
+  return `Up to ${option.lead_time_days_max} days`;
 };
 
 const estimatePayload = (
@@ -92,10 +93,10 @@ const estimatePayload = (
   const thickness = part.dimensions.thickness_mm ?? part.dimensions.height_mm;
   if (taskPayload == null || thickness == null || !material) return null;
   const base = taskPayload + thickness * 3;
-  if (material.family.includes('polymer')) return round(base * 0.55, 0);
-  if (material.family.includes('steel')) return round(base * 1.85, 0);
-  if (material.family.includes('aluminum')) return round(base * 1.25, 0);
-  return round(base, 0);
+  if (material.family.includes('polymer')) return base * 0.55;
+  if (material.family.includes('steel')) return base * 1.85;
+  if (material.family.includes('aluminum')) return base * 1.25;
+  return base;
 };
 
 const ratingStatus = (
@@ -201,19 +202,20 @@ const mapPart = (
   taskSafetyFactorMin: number | null,
 ): Part => {
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
-  const payloadLb = estimatePayload(part, material, taskPayload);
-  const rawSafetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
-    ? payloadLb / taskPayload
+  const rawPayloadLb = estimatePayload(part, material, taskPayload);
+  const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 0);
+  const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
+    ? rawPayloadLb / taskPayload
     : null;
   const safetyFactor = rawSafetyFactor == null ? null : round(rawSafetyFactor, 1);
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
   const manufacturingOption = activeManufacturingOption(part);
-  const status = ratingStatus(payloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
+  const status = ratingStatus(rawPayloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
   const ratingSummary = taskPayload == null
     ? `${part.name} has no payload rating because the active task does not provide a pound target; review is required.`
     : payloadLb == null || safetyFactor == null
       ? `${part.name} has incomplete payload evidence; engineering review is required.`
-      : payloadLb < taskPayload
+      : rawPayloadLb != null && rawPayloadLb < taskPayload
         ? `${part.name} falls below the preserved ${taskPayload} lb payload target.`
         : taskSafetyFactorMin == null
           ? `${part.name} has no active safety-factor minimum; engineering review is required.`
@@ -262,12 +264,13 @@ const mapMaterialOptions = (
         (process) => process !== 'unknown' && partProcesses.has(process),
       );
       if (material.id === currentMaterialId || compatibleProcesses.length === 0) return [];
-      const payloadLb = estimatePayload(part, material, taskPayload);
-      const rawSafetyFactor = payloadLb != null && taskPayload != null && taskPayload > 0
-        ? payloadLb / taskPayload
+      const rawPayloadLb = estimatePayload(part, material, taskPayload);
+      const payloadLb = rawPayloadLb == null ? null : round(rawPayloadLb, 0);
+      const rawSafetyFactor = rawPayloadLb != null && taskPayload != null && taskPayload > 0
+        ? rawPayloadLb / taskPayload
         : null;
       const safetyFactor = rawSafetyFactor == null ? null : round(rawSafetyFactor, 1);
-      const status = ratingStatus(payloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
+      const status = ratingStatus(rawPayloadLb, taskPayload, rawSafetyFactor, taskSafetyFactorMin);
       const manufacturingProcess = compatibleProcesses[0];
       const currentDensity = currentMaterial?.properties.density_kg_m3;
       const nextDensity = material.properties.density_kg_m3;
@@ -341,13 +344,20 @@ const mapJob = (job: BackendAnalysisJob): AnalysisJob => {
   };
 };
 
+const bomSourceFromPart = (part?: Part): BOMItem['source'] | null => {
+  if (!part || part.manufacturingProcess === 'Unknown') return null;
+  if (part.manufacturingProcess === 'Off The Shelf') return 'off the shelf';
+  if (part.manufacturingProcess === 'Wire Harness') return 'wire harness';
+  return 'fabricate';
+};
+
 const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
   if (items.length === 0) {
     return parts.map((part) => ({
       id: `bom-${part.id}`,
       item: part.name,
       quantity: 1,
-      source: part.relatedWires.length > 0 ? 'wire harness' : 'fabricate',
+      source: bomSourceFromPart(part) ?? 'open design',
       unitCostRangeUsd: null,
       leadTimeDays: null,
     }));
@@ -355,11 +365,14 @@ const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
 
   return items.map((item) => {
     const price = usdCostRange(item.price);
+    const part = item.part_id ? parts.find((candidate) => candidate.id === item.part_id) : undefined;
+    const source = bomSourceFromPart(part)
+      ?? (item.supplier || item.supplier_part_number ? 'off the shelf' : item.part_id ? 'open design' : 'off the shelf');
     return {
       id: item.id,
       item: item.name,
       quantity: item.quantity,
-      source: item.name.toLowerCase().includes('harness') ? 'wire harness' : item.part_id ? 'fabricate' : 'off the shelf',
+      source,
       unitCostRangeUsd: price,
       leadTimeDays: null,
     };

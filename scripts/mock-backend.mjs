@@ -18,6 +18,15 @@ const port = configuredPort ?? (await getFreePort(host));
 const projectId = mockBackendPanelData.project.id;
 let project = structuredClone(mockBackendPanelData.project);
 const editableDimensionFields = new Set(['length_mm', 'width_mm', 'height_mm', 'thickness_mm']);
+const modificationFields = new Set([
+  'id',
+  'target_part_id',
+  'description',
+  'material_id',
+  'dimension_changes',
+  'manufacturing_process',
+  'created_at',
+]);
 const manufacturingProcesses = new Set([
   'off_the_shelf',
   'additive_fdm',
@@ -34,6 +43,8 @@ const modificationValidationError = (modification) => {
   if (!modification || typeof modification !== 'object' || Array.isArray(modification)) {
     return 'request body must be a modification object';
   }
+  const unknownFields = Object.keys(modification).filter((field) => !modificationFields.has(field));
+  if (unknownFields.length > 0) return `unsupported modification fields: ${unknownFields.sort().join(', ')}`;
   for (const field of ['id', 'target_part_id', 'description']) {
     if (typeof modification[field] !== 'string') return `${field} is required and must be a string`;
   }
