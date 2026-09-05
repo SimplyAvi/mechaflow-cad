@@ -18,6 +18,7 @@ import type {
   BackendWireSegment,
   BackendWiringReviewReport,
   BackendWiringRoute,
+  BackendWiringRuleSet,
   BOMItem,
   DesignCriterion,
   JobStatus,
@@ -723,11 +724,17 @@ const routeLengthMm = (route: BackendWiringRoute): number | null => {
   return round(length, 1);
 };
 
-const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>): WiringRoute['reviewStatus'] => {
+const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>, rules: BackendWiringRuleSet[]): WiringRoute['reviewStatus'] => {
   const componentIds = new Set(components.map((component) => component.id));
   const segmentIds = new Set(segments.map((segment) => segment.id));
+  const rule = rules.find((candidate) => candidate.id === route.rule_set_id) ?? rules[0];
+  const geometryComplete = route.path_points_mm.length >= 2
+    && route.path_points_mm.slice(1).every((point, index) => {
+      const previous = route.path_points_mm[index]!;
+      return point.x !== previous.x || point.y !== previous.y || point.z !== previous.z;
+    });
   const connectorIds = new Set([route.from_connector.id, route.to_connector.id]);
-  const completeEvidence = route.path_points_mm.length >= 2
+  const completeEvidence = geometryComplete
     && route.endpoints?.length === 2
     && route.endpoints.every((endpoint) => connectorIds.has(endpoint.connector_id))
     && route.wire_segment_ids.length > 0
@@ -755,9 +762,16 @@ const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElec
     })
     && route.clearance_min_mm != null
     && route.bend_radius_min_mm != null
-    && route.service_loop_mm != null;
+    && route.service_loop_mm != null
+    && rule?.required_clearance_min_mm != null
+    && rule.required_bend_radius_min_mm != null
+    && rule.required_service_loop_min_mm != null;
   if (!completeEvidence) return 'review_required';
-  if (route.clearance_min_mm < 2 || route.bend_radius_min_mm < 15) return 'warning';
+  if (
+    route.clearance_min_mm < rule.required_clearance_min_mm
+    || route.bend_radius_min_mm < rule.required_bend_radius_min_mm
+    || route.service_loop_mm < rule.required_service_loop_min_mm
+  ) return 'warning';
   return 'pass';
 };
 
@@ -839,11 +853,11 @@ const mapWiringReview = (review?: BackendWiringReviewReport | null) => review ==
   })),
 });
 
-const mapWiring = (routes: BackendWiringRoute[], review: BackendWiringReviewReport | null | undefined, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>): WiringRoute[] => {
+const mapWiring = (routes: BackendWiringRoute[], review: BackendWiringReviewReport | null | undefined, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>, rules: BackendWiringRuleSet[]): WiringRoute[] => {
   const routeReviews = mapWiringEvidence(review);
   return routes.map((route) => {
     const routeReview = routeReviews.get(route.id);
-    const reviewStatus = routeReview?.status ?? fallbackWiringStatus(route, components, segments, bomIds);
+    const reviewStatus = routeReview?.status ?? fallbackWiringStatus(route, components, segments, bomIds, rules);
     return {
       id: route.id,
       name: route.name,
@@ -970,6 +984,7 @@ export function mapProjectPanelDataToReferenceDesign(
       panelData.electronics_components ?? project.electronics_components ?? [],
       panelData.wire_segments ?? project.wire_segments ?? [],
       new Set((panelData.bom_items ?? []).map((item) => item.id)),
+      panelData.wiring_rules ?? [],
     ),
     wiringReview: mapWiringReview(panelData.wiring_review),
     reports,
