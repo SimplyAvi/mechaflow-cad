@@ -434,11 +434,41 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         error = requireString(route.name, `${assemblyPath}.wiring_routes.name`);
         if (error) return error;
+        error = requireArray(route.path_points_mm, `${assemblyPath}.wiring_routes.path_points_mm`);
+        if (error) return error;
+        error = requireArray(route.harness_bom, `${assemblyPath}.wiring_routes.harness_bom`) || requireArray(route.risk_notes, `${assemblyPath}.wiring_routes.risk_notes`);
+        if (error) return error;
+        error = requireString(route.confidence, `${assemblyPath}.wiring_routes.confidence`);
+        if (error) return error;
+        for (const [pointIndex, point] of route.path_points_mm.entries()) {
+          error = requiredFields(point, ['x', 'y', 'z'], `${assemblyPath}.wiring_routes.path_points_mm[${pointIndex}]`);
+          if (error) return error;
+          for (const axis of ['x', 'y', 'z']) {
+            if (typeof point[axis] !== 'number' || !Number.isFinite(point[axis])) {
+              return `${assemblyPath}.wiring_routes.path_points_mm[${pointIndex}].${axis} must be a finite number`;
+            }
+          }
+        }
+        for (const field of ['bend_radius_min_mm', 'clearance_min_mm']) {
+          if (route[field] != null) {
+            error = requireFiniteNumber(route[field], `${assemblyPath}.wiring_routes.${field}`);
+            if (error) return error;
+          }
+        }
         for (const connectorField of ['from_connector', 'to_connector']) {
           error = requiredFields(route[connectorField], ['id', 'name'], `${assemblyPath}.wiring_routes.${connectorField}`);
           if (error) return error;
+          error = requireString(route[connectorField].id, `${assemblyPath}.wiring_routes.${connectorField}.id`);
+          if (error) return error;
           error = requireString(route[connectorField].name, `${assemblyPath}.wiring_routes.${connectorField}.name`);
           if (error) return error;
+          if (route[connectorField].pin_count != null && (!Number.isInteger(route[connectorField].pin_count) || route[connectorField].pin_count < 0)) {
+            return `${assemblyPath}.wiring_routes.${connectorField}.pin_count must be a non-negative integer`;
+          }
+          if (route[connectorField].part_id != null) {
+            error = requireString(route[connectorField].part_id, `${assemblyPath}.wiring_routes.${connectorField}.part_id`);
+            if (error) return error;
+          }
           if (route[connectorField].part_id != null && !partIds.has(route[connectorField].part_id)) {
             return `wiring route ${route.id} references unknown part ${route[connectorField].part_id}`;
           }
@@ -1027,6 +1057,7 @@ const server = http.createServer(async (request, response) => {
         reports: [...project.reports, report],
         updated_at: new Date().toISOString(),
       };
+      analysisReadinessPreviews = [];
       send(200, {
         project,
         report,
