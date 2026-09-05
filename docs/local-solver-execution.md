@@ -74,9 +74,9 @@ curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/ana
   -d '{"target_id":"part-finger-link"}' | python -m json.tool
 ```
 
-If CalculiX is missing, this endpoint returns a persisted `solver_unavailable` job with the generated `.inp` deck manifest and install guidance. If CalculiX is available, it invokes the deterministic fixture and collects stdout, stderr, `.dat`, `.frd`, `.sta`, and `.cvg` files where produced.
+If CalculiX is missing, this endpoint returns a persisted `solver_unavailable` job with the generated `.inp` deck manifest and install guidance. If CalculiX is available, it invokes the deterministic fixture and collects stdout, stderr, and the generated solver files (`.dat`, `.frd`, and `.sta`) where produced.
 
-Fixture files are copied into `.mechaflow-artifacts/<job-id>/` and are downloadable through the `download_url` in each file manifest entry. The local artifact store retains bundles for 7 days and caps storage at 100 bundles, pruning older bundles when a new run starts. Temporary execution directories are removed after collection.
+Fixture files are copied into a versioned `.mechaflow-artifacts/<bundle-id>/` directory and are downloadable through the `download_url` in each file manifest entry. The local artifact store retains bundles for 7 days and caps storage at 100 bundles, pruning older bundles when a new run starts. Temporary execution directories are removed after collection.
 
 ## What is real analysis today
 
