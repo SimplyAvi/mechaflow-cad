@@ -362,7 +362,12 @@ def run_calculix_fixture(
 
     durable_workdir = _persist_fixture_files(fixture, artifact_root, job.id)
     shutil.rmtree(fixture.workdir)
-    file_manifest = _artifact_file_manifest(durable_workdir, api_prefix, artifact_id)
+    file_manifest = _artifact_file_manifest(
+        durable_workdir,
+        api_prefix,
+        artifact_id,
+        fixture.expected_outputs,
+    )
     produced_outputs = [entry["name"] for entry in file_manifest if not entry.get("missing")]
     expected_outputs = {f"{CALCULIX_FIXTURE_DECK_NAME}.{suffix}" for suffix in ("dat", "frd", "sta")}
     solver_succeeded = return_code == 0 and expected_outputs.issubset(produced_outputs)
