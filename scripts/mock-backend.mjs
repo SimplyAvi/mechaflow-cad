@@ -478,14 +478,35 @@ const projectFileValidationError = (file) => {
       [assembly.id, { kind: 'assembly', name: assembly.name }],
       ...assembly.parts.map((part) => [part.id, { kind: 'part', name: part.name }]),
     ]));
+    const partIds = new Set(file.project.assemblies.flatMap((assembly) => assembly.parts.map((part) => part.id)));
     for (const [index, preview] of file.analysis_readiness_previews.entries()) {
       const previewPath = `analysis_readiness_previews[${index}]`;
-      const previewError = requiredFields(preview, ['project_id', 'target_id', 'target_name', 'target_kind'], previewPath);
+      const previewError = requiredFields(preview, ['project_id', 'target_id', 'target_name', 'target_kind', 'state', 'trust_label', 'summary', 'criteria', 'load_cases', 'constraints', 'solver_inputs', 'expected_result_artifacts', 'solver_pipeline', 'demo_estimates', 'review_required', 'generated_at'], previewPath);
       if (previewError) return previewError;
+      for (const field of ['project_id', 'target_id', 'target_name', 'target_kind', 'state', 'trust_label', 'summary', 'generated_at']) {
+        const scalarError = requireString(preview[field], `${previewPath}.${field}`);
+        if (scalarError) return scalarError;
+      }
+      for (const field of ['criteria', 'load_cases', 'constraints', 'expected_result_artifacts', 'solver_pipeline', 'demo_estimates', 'review_required']) {
+        const arrayError = requireArray(preview[field], `${previewPath}.${field}`);
+        if (arrayError) return arrayError;
+      }
+      const solverInputsError = requireObject(preview.solver_inputs, `${previewPath}.solver_inputs`);
+      if (solverInputsError) return solverInputsError;
       if (preview.project_id !== file.project.id) return `${previewPath}.project_id must match project.id`;
       const target = targets.get(preview.target_id);
       if (!target) return `${previewPath}.target_id references an unknown project target`;
       if (preview.target_kind !== target.kind || preview.target_name !== target.name) return `${previewPath} target metadata does not match the project target`;
+      for (const field of ['load_cases', 'constraints']) {
+        for (const [nestedIndex, nested] of preview[field].entries()) {
+          const nestedPath = `${previewPath}.${field}[${nestedIndex}]`;
+          const nestedError = requiredFields(nested, ['id', 'name', 'target_part_ids'], nestedPath);
+          if (nestedError) return nestedError;
+          const targetPartsError = requireArray(nested.target_part_ids, `${nestedPath}.target_part_ids`);
+          if (targetPartsError) return targetPartsError;
+          for (const partId of nested.target_part_ids) if (!partIds.has(partId)) return `${nestedPath}.target_part_ids references an unknown part ${partId}`;
+        }
+      }
     }
   }
   return null;
