@@ -345,7 +345,7 @@ const analysisJobQueue = () => {
     status,
     jobs.filter((job) => job.status === status).length,
   ]));
-  const localReady = jobs.filter((job) => job.recommendation.recommended_target === 'local').length;
+  const localReady = jobs.filter((job) => job.recommendation.recommended_target === 'local' && job.recommendation.status === 'ready').length;
   const cloudPlanning = jobs.filter((job) => job.recommendation.recommended_target === 'cloud_recommended_when_configured').length;
   const reviewRequired = jobs.filter((job) => job.recommendation.status === 'review_required').length;
   return {

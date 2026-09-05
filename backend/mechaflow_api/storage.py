@@ -53,6 +53,7 @@ class ProjectStore(Protocol):
     def update_project(self, project_id: str, update: Callable[[Project], Project]) -> Project | None: ...
 
     def list_analysis_jobs(self, project_id: str | None = None) -> list[AnalysisJob]: ...
+    def get_analysis_artifact(self, artifact_id: str) -> tuple[AnalysisJob, AnalysisArtifact] | None: ...
 
     def get_analysis_job(self, job_id: str) -> AnalysisJob | None: ...
 
@@ -393,6 +394,21 @@ class InMemoryProjectStore:
             if conflict:
                 raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
+    def _ensure_artifact_ids_available(self, project_id: str, project: Project) -> None:
+        incoming_ids = [artifact.id for job in project.analysis_jobs for artifact in job.artifacts]
+        if len(incoming_ids) != len(set(incoming_ids)):
+            raise ValueError("analysis artifact IDs must be unique within a project")
+        existing_ids = {
+            artifact.id
+            for existing_project_id, existing_project in self._projects.items()
+            if existing_project_id != project_id
+            for job in existing_project.analysis_jobs
+            for artifact in job.artifacts
+        }
+        conflict = set(incoming_ids) & existing_ids
+        if conflict:
+            raise ValueError(f"analysis artifact ID already belongs to another project: {next(iter(conflict))!r}")
+
     def _analysis_job_exists(self, job_id: str) -> bool:
         return any(job.id == job_id for project in self._projects.values() for job in project.analysis_jobs)
 
@@ -410,6 +426,7 @@ class InMemoryProjectStore:
             if project.id in self._projects:
                 raise ProjectAlreadyExistsError(project.id)
             self._ensure_job_ids_available(project.id, project)
+            self._ensure_artifact_ids_available(project.id, project)
             stored = normalize_project_references(project.id, project, self._artifact_file_exists)
             self._projects[project.id] = stored
             return stored.model_copy(deep=True)
@@ -417,6 +434,7 @@ class InMemoryProjectStore:
     def upsert_project(self, project_id: str, project: Project) -> Project:
         with self._lock:
             self._ensure_job_ids_available(project_id, project)
+            self._ensure_artifact_ids_available(project_id, project)
             stored = normalize_project_references(project_id, project, self._artifact_file_exists)
             self._projects[project_id] = stored
             return stored.model_copy(deep=True)
@@ -428,6 +446,7 @@ class InMemoryProjectStore:
                 return None
             updated = update(project.model_copy(deep=True))
             self._ensure_job_ids_available(project_id, updated)
+            self._ensure_artifact_ids_available(project_id, updated)
             stored = normalize_project_references(project_id, updated, self._artifact_file_exists)
             self._projects[project_id] = stored
             return stored.model_copy(deep=True)
@@ -449,6 +468,15 @@ class InMemoryProjectStore:
                         return job.model_copy(deep=True)
             return None
 
+    def get_analysis_artifact(self, artifact_id: str) -> tuple[AnalysisJob, AnalysisArtifact] | None:
+        with self._lock:
+            for project in self._projects.values():
+                for job in project.analysis_jobs:
+                    for artifact in job.artifacts:
+                        if artifact.id == artifact_id:
+                            return job.model_copy(deep=True), artifact.model_copy(deep=True)
+            return None
+
     def add_analysis_job(self, job: AnalysisJob) -> AnalysisJob:
         with self._lock:
             if self._analysis_job_exists(job.id):
@@ -456,6 +484,17 @@ class InMemoryProjectStore:
             project = self._projects.get(job.project_id)
             if project is None:
                 raise ProjectNotFoundError(job.project_id)
+            incoming_artifact_ids = [artifact.id for artifact in job.artifacts]
+            if len(incoming_artifact_ids) != len(set(incoming_artifact_ids)):
+                raise ValueError("analysis artifact IDs must be unique within a job")
+            existing_artifact_ids = {
+                artifact.id
+                for existing_project in self._projects.values()
+                for existing_job in existing_project.analysis_jobs
+                for artifact in existing_job.artifacts
+            }
+            if set(incoming_artifact_ids) & existing_artifact_ids:
+                raise ValueError("analysis artifact ID already exists")
             stored = normalize_analysis_job(
                 project.id,
                 job,

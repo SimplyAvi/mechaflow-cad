@@ -212,6 +212,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             or "/" in bundle_id
             or "\\" in bundle_id
             or Path(bundle_id).name != bundle_id
+            or bundle_id != artifact.id
         ):
             return None
         artifact_root = settings.artifact_dir.resolve()
@@ -888,23 +889,22 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def analysis_artifact_file(artifact_id: str, file_name: str) -> FileResponse:
         if Path(file_name).name != file_name:
             raise HTTPException(status_code=404, detail="artifact file not found")
-        for job in project_store.list_analysis_jobs():
-            artifact = next((item for item in job.artifacts if item.id == artifact_id), None)
-            if artifact is None:
-                continue
-            manifest = artifact.payload.get("file_manifest", [])
-            if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
-                raise HTTPException(status_code=404, detail="artifact file not found")
-            bundle_path = artifact_bundle_path(artifact)
-            if bundle_path is None:
-                raise HTTPException(status_code=404, detail="artifact file not found")
-            path = (bundle_path / file_name).resolve()
-            if not path.is_relative_to(bundle_path):
-                raise HTTPException(status_code=404, detail="artifact file not found")
-            if not path.is_file():
-                raise HTTPException(status_code=404, detail="artifact file expired")
-            return FileResponse(path, filename=file_name)
-        raise HTTPException(status_code=404, detail="artifact not found")
+        artifact_owner = project_store.get_analysis_artifact(artifact_id)
+        if artifact_owner is None:
+            raise HTTPException(status_code=404, detail="artifact not found")
+        _, artifact = artifact_owner
+        manifest = artifact.payload.get("file_manifest", [])
+        if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        bundle_path = artifact_bundle_path(artifact)
+        if bundle_path is None:
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        path = (bundle_path / file_name).resolve()
+        if not path.is_relative_to(bundle_path):
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="artifact file expired")
+        return FileResponse(path, filename=file_name)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/plan", response_model=AnalysisJobPlan, tags=["jobs"])
     def analysis_job_plan(job_id: str) -> AnalysisJobPlan:
