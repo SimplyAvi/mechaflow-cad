@@ -172,6 +172,31 @@ def build_execution_target_recommendation(
     if not request.local_compute_preferred:
         reasons.append("User did not prefer local compute, so cloud is considered only as a disabled planning option.")
 
+    if not target_is_known:
+        unavailable_estimate = _estimate_range(
+            "unavailable",
+            None,
+            None,
+            "unavailable",
+            EstimateBasis.unavailable,
+            "No execution estimate is available for an unknown project target.",
+        )
+        return AnalysisExecutionTargetRecommendation(
+            recommended_target=AnalysisExecutionTarget.unavailable,
+            status=AnalysisExecutionRecommendationStatus.unavailable,
+            summary="No execution target is available until the analysis target is corrected.",
+            reasons=[*reasons, "The requested project target does not exist."],
+            missing_local_tools=missing_tools,
+            review_required=[*review_required, "Select an existing project target before execution."],
+            model_complexity_score=complexity,
+            expected_runtime_minutes=unavailable_estimate,
+            cost_estimate=unavailable_estimate,
+            wait_time_estimate=unavailable_estimate,
+            cloud_execution_available=False,
+            cloud_configuration_required=True,
+            cloud_notice=UNCONFIGURED_CLOUD_NOTICE,
+        )
+
     if synthetic_job.adapter_name == "local-pre-solver-runner":
         return AnalysisExecutionTargetRecommendation(
             recommended_target=AnalysisExecutionTarget.local,
@@ -598,6 +623,7 @@ def normalize_cached_references(
     artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
 ) -> AnalysisJob:
     artifact_by_id = {artifact.id: artifact for artifact in job.artifacts}
+    reports = list(reports)
     for artifact in job.artifacts:
         manifest = artifact.payload.get("file_manifest", [])
         if manifest and not isinstance(manifest, list):
@@ -632,6 +658,10 @@ def normalize_cached_references(
             "stale_reason": stale_reason,
         }, deep=True))
     reports_by_id = {report.id: report for report in reports}
+    report_id = job.result_summary.get("report_id")
+    if report_id is not None:
+        if not isinstance(report_id, str) or report_id not in reports_by_id:
+            raise ValueError(f"analysis job {job.id!r} references a missing report")
     normalized_report_refs = []
     for ref in job.cached_report_refs:
         if ref.project_id != project_id:

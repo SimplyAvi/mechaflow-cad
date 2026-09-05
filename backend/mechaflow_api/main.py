@@ -203,7 +203,7 @@ CATALOG_TASKS_PATH = Path(__file__).resolve().parents[2] / "data" / "tasks.seed.
 
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
-    def artifact_file_exists(artifact: AnalysisArtifact, name: str) -> bool:
+    def artifact_bundle_path(artifact: AnalysisArtifact) -> Path | None:
         bundle_id = artifact.payload.get("storage_bundle_id", artifact.id)
         if (
             not isinstance(bundle_id, str)
@@ -213,10 +213,14 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             or "\\" in bundle_id
             or Path(bundle_id).name != bundle_id
         ):
-            return False
+            return None
         artifact_root = settings.artifact_dir.resolve()
         bundle_path = (artifact_root / bundle_id).resolve()
-        if not bundle_path.is_relative_to(artifact_root):
+        return bundle_path if bundle_path.is_relative_to(artifact_root) else None
+
+    def artifact_file_exists(artifact: AnalysisArtifact, name: str) -> bool:
+        bundle_path = artifact_bundle_path(artifact)
+        if bundle_path is None:
             return False
         file_path = (bundle_path / name).resolve()
         return file_path.is_relative_to(bundle_path) and file_path.is_file()
@@ -881,10 +885,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             manifest = artifact.payload.get("file_manifest", [])
             if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
                 raise HTTPException(status_code=404, detail="artifact file not found")
-            artifact_root = settings.artifact_dir.resolve()
-            bundle_id = artifact.payload.get("storage_bundle_id", job.id)
-            path = (artifact_root / bundle_id / file_name).resolve()
-            if not path.is_relative_to(artifact_root):
+            bundle_path = artifact_bundle_path(artifact)
+            if bundle_path is None:
+                raise HTTPException(status_code=404, detail="artifact file not found")
+            path = (bundle_path / file_name).resolve()
+            if not path.is_relative_to(bundle_path):
                 raise HTTPException(status_code=404, detail="artifact file not found")
             if not path.is_file():
                 raise HTTPException(status_code=404, detail="artifact file expired")
