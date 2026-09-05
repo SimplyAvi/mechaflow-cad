@@ -770,11 +770,17 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if project_id == "sample":
             project_id = "project-open-gripper-demo"
         jobs = project_store.list_analysis_jobs(project_id)
-        if project_id is None or not jobs:
+        if not jobs:
             return jobs
-        project = get_project_or_404(project_id)
         tool_statuses = list_local_solver_tool_statuses()
-        return [enrich_analysis_job_for_queue(project, job, tool_statuses, artifact_file_exists) for job in jobs]
+        enriched_jobs = []
+        for job in jobs:
+            project = project_store.get_project(job.project_id)
+            if project is None:
+                enriched_jobs.append(job)
+                continue
+            enriched_jobs.append(enrich_analysis_job_for_queue(project, job, tool_statuses, artifact_file_exists))
+        return enriched_jobs
 
     @app.get(
         f"{settings.api_prefix}/projects/{{project_id}}/analysis-job-queue",

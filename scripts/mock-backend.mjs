@@ -334,12 +334,29 @@ const cachedArtifactRefsFor = (job, sourceProject = project) => (job.artifacts ?
   stale_reason: Array.isArray(artifact.payload?.file_manifest) && artifact.payload.file_manifest.length > 0 ? 'Mock backend does not serve persisted artifact files.' : 'Artifact metadata only.',
 }));
 
+const cachedReportRefsFor = (job, sourceProject = project) => {
+  const reportId = job.result_summary?.report_id;
+  if (typeof reportId !== 'string' || !reportId) return [];
+  const report = (sourceProject.reports ?? []).find((candidate) => candidate.id === reportId);
+  if (!report) return [];
+  return [{
+    report_id: report.id,
+    project_id: sourceProject.id,
+    title: report.title,
+    status: report.status,
+    generated_at: report.generated_at,
+    derived_from_job_id: job.id,
+    current: report.status !== 'superseded',
+    summary: report.summary,
+  }];
+};
+
 const analysisJobQueue = (sourceProject = project) => {
   const jobs = sourceProject.analysis_jobs.map((job) => ({
     ...job,
     recommendation: mockJobRecommendation(job, sourceProject),
     cached_artifact_refs: cachedArtifactRefsFor(job, sourceProject),
-    cached_report_refs: job.cached_report_refs ?? [],
+    cached_report_refs: cachedReportRefsFor(job, sourceProject),
   }));
   for (const job of jobs) {
     if (job.status === 'queued') {
