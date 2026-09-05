@@ -25,6 +25,7 @@
           {
             "id": "node-base",
             "name": "Base and electronics bay",
+            "assembly_id": "asm-open-gripper-demo",
             "part_ids": [
               "part-palm-plate",
               "part-controller-pcb"
@@ -46,6 +47,8 @@
           {
             "id": "node-shoulder",
             "name": "Shoulder joint subassembly",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-shoulder-yoke",
             "part_ids": [
               "part-shoulder-yoke"
             ],
@@ -66,6 +69,8 @@
           {
             "id": "node-upper-arm",
             "name": "Upper arm span",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-upper-arm-link",
             "part_ids": [
               "part-upper-arm-link"
             ],
@@ -86,6 +91,8 @@
           {
             "id": "node-elbow",
             "name": "Elbow joint subassembly",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-elbow-joint",
             "part_ids": [
               "part-elbow-joint"
             ],
@@ -106,6 +113,7 @@
           {
             "id": "node-forearm",
             "name": "Forearm and wrist span",
+            "assembly_id": "asm-open-gripper-demo",
             "part_ids": [
               "part-forearm-link",
               "part-wrist-plate"
@@ -127,6 +135,8 @@
           {
             "id": "node-tool",
             "name": "Wrist gripper tool",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-finger-link",
             "part_ids": [
               "part-finger-link"
             ],

@@ -293,6 +293,8 @@ class Part(StrictModel):
 class AssemblyNode(StrictModel):
     id: str
     name: str
+    assembly_id: str | None = None
+    part_id: str | None = None
     part_ids: list[str] = Field(default_factory=list)
     child_assembly_ids: list[str] = Field(default_factory=list)
     exploded_transform: Transform = Field(default_factory=Transform)

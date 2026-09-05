@@ -518,11 +518,19 @@ const projectFileValidationError = (file) => {
         const nodePath = `${assemblyPath}.nodes[${nodeIndex}]`;
         error = requiredFields(node, ['id', 'name', 'part_ids', 'child_assembly_ids', 'exploded_transform'], nodePath);
         if (error) return error;
-        error = rejectUnknownFields(node, ['id', 'name', 'part_ids', 'child_assembly_ids', 'exploded_transform'], nodePath);
+        error = rejectUnknownFields(node, ['id', 'name', 'assembly_id', 'part_id', 'part_ids', 'child_assembly_ids', 'exploded_transform'], nodePath);
         if (error) return error;
         if (assembly.nodes.findIndex((candidate) => candidate?.id === node.id) !== nodeIndex) return `${assemblyPath}.nodes ids must be unique: ${node.id}`;
         error = requireString(node.name, `${nodePath}.name`);
         if (error) return error;
+        for (const field of ['assembly_id', 'part_id']) {
+          if (node[field] != null) {
+            error = requireString(node[field], `${nodePath}.${field}`);
+            if (error) return error;
+          }
+        }
+        if (node.assembly_id != null && node.assembly_id !== assembly.id) return `${nodePath}.assembly_id must match the containing assembly`;
+        if (node.part_id != null && !partIds.has(node.part_id)) return `${nodePath}.part_id references an unknown part`;
         for (const field of ['part_ids', 'child_assembly_ids']) {
           error = requireArray(node[field], `${nodePath}.${field}`);
           if (error) return error;

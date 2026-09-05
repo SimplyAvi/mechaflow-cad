@@ -365,6 +365,8 @@ export interface BackendAssembly {
 export interface BackendAssemblyNode {
   id: string;
   name: string;
+  assembly_id?: string | null;
+  part_id?: string | null;
   part_ids: string[];
   child_assembly_ids: string[];
   exploded_transform: BackendTransform;

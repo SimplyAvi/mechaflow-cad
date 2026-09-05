@@ -173,12 +173,15 @@ DEFAULT_ASSEMBLY = Assembly(
         AssemblyNode(
             id="node-root",
             name="Gripper root",
+            assembly_id="asm-open-gripper-demo",
             part_ids=["part-palm-plate", "part-actuator-bracket", "part-controller-pcb"],
             child_assembly_ids=[],
         ),
         AssemblyNode(
             id="node-finger",
             name="Finger subassembly",
+            assembly_id="asm-open-gripper-demo",
+            part_id="part-finger-link",
             part_ids=["part-finger-link"],
             exploded_transform={"translation_mm": {"x": 80, "y": 0, "z": 0}},
         ),
