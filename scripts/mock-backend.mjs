@@ -583,6 +583,12 @@ const projectFileValidationError = (file) => {
       if (typeof job.local_compute_preferred !== 'boolean') return `analysis job ${job.id}.local_compute_preferred must be a boolean`;
       error = requireObject(job.input_summary, `analysis job ${job.id}.input_summary`) || requireObject(job.result_summary, `analysis job ${job.id}.result_summary`);
       if (error) return error;
+      for (const field of ['created_at', 'updated_at']) {
+        if (Object.hasOwn(job, field)) {
+          error = requireDateString(job[field], `analysis job ${job.id}.${field}`);
+          if (error) return error;
+        }
+      }
       if (!analysisAdaptersByJobType[job.job_type]?.has(job.adapter_name)) return `adapter ${job.adapter_name} does not support analysis job type ${job.job_type}`;
       error = requireArray(job.artifacts, `analysis job ${job.id}.artifacts`);
       if (error) return error;
@@ -591,8 +597,8 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         error = requiredFields(artifact, ['id', 'job_id', 'kind', 'title', 'summary', 'payload', 'generated_by', 'created_at'], `analysis job ${job.id}.artifacts`);
         if (error) return error;
-        if (artifact.job_id != null && artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
-        error = requireString(artifact.id, `analysis artifact ${artifact.id}.id`) || requireString(artifact.title, `analysis artifact ${artifact.id}.title`) || requireString(artifact.summary, `analysis artifact ${artifact.id}.summary`) || requireString(artifact.generated_by, `analysis artifact ${artifact.id}.generated_by`) || requireObject(artifact.payload, `analysis artifact ${artifact.id}.payload`);
+        if (artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
+        error = requireString(artifact.id, `analysis artifact ${artifact.id}.id`) || requireString(artifact.job_id, `analysis artifact ${artifact.id}.job_id`) || requireString(artifact.title, `analysis artifact ${artifact.id}.title`) || requireString(artifact.summary, `analysis artifact ${artifact.id}.summary`) || requireString(artifact.generated_by, `analysis artifact ${artifact.id}.generated_by`) || requireObject(artifact.payload, `analysis artifact ${artifact.id}.payload`) || requireDateString(artifact.created_at, `analysis artifact ${artifact.id}.created_at`);
         if (error) return error;
         if (!analysisArtifactKinds.has(artifact.kind) && !Object.values(legacyMockArtifactKindsByJobType).some((kinds) => kinds.has(artifact.kind))) return `analysis artifact ${artifact.id}.kind is invalid`;
         if (artifact.confidence != null && !readinessConfidenceValues.has(artifact.confidence)) return `analysis artifact ${artifact.id}.confidence is invalid`;
@@ -661,6 +667,8 @@ const projectFileValidationError = (file) => {
       }
       const solverInputsError = requireObject(preview.solver_inputs, `${previewPath}.solver_inputs`);
       if (solverInputsError) return solverInputsError;
+      error = rejectUnknownFields(preview.solver_inputs, ['geometry_source', 'units', 'mesh_size_mm', 'freecad_document', 'gmsh_model', 'calculix_input_deck', 'notes'], `${previewPath}.solver_inputs`);
+      if (error) return error;
       for (const field of ['geometry_source', 'units', 'freecad_document', 'gmsh_model', 'calculix_input_deck']) {
         if (preview.solver_inputs[field] != null) {
           const scalarError = requireString(preview.solver_inputs[field], `${previewPath}.solver_inputs.${field}`);
@@ -677,6 +685,8 @@ const projectFileValidationError = (file) => {
       if (error) return error;
       for (const [artifactIndex, artifact] of preview.expected_result_artifacts.entries()) {
         const artifactPath = `${previewPath}.expected_result_artifacts[${artifactIndex}]`;
+        error = rejectUnknownFields(artifact, ['kind', 'title', 'file_format', 'produced_by', 'replaces_demo_estimate', 'review_required_before_release'], artifactPath);
+        if (error) return error;
         error = requiredFields(artifact, ['kind', 'title', 'file_format', 'produced_by', 'replaces_demo_estimate', 'review_required_before_release'], artifactPath);
         if (error) return error;
         for (const field of ['kind', 'title', 'file_format', 'produced_by']) {
@@ -690,6 +700,8 @@ const projectFileValidationError = (file) => {
       const pipelineStatuses = new Set(['stub_contract', 'ready_for_worker', 'unavailable_review_required', 'blocked_missing_input', 'completed_by_solver']);
       for (const [stepIndex, step] of preview.solver_pipeline.entries()) {
         const stepPath = `${previewPath}.solver_pipeline[${stepIndex}]`;
+        error = rejectUnknownFields(step, ['order', 'adapter_name', 'open_source_tool', 'action', 'consumes', 'produces', 'status', 'review_notes'], stepPath);
+        if (error) return error;
         error = requiredFields(step, ['order', 'adapter_name', 'open_source_tool', 'action', 'consumes', 'produces', 'status', 'review_notes'], stepPath);
         if (error) return error;
         if (!Number.isInteger(step.order) || step.order < 1) return `${stepPath}.order must be a positive integer`;
