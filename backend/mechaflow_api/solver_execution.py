@@ -71,6 +71,10 @@ Single C3D8 cantilever-like cube. This verifies executable solver plumbing only.
 U
 *EL PRINT,ELSET=EALL
 S
+*NODE FILE,NSET=NALL
+U
+*EL FILE,ELSET=EALL
+S
 *END STEP
 """
 
