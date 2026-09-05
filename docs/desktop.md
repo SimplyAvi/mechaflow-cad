@@ -1,6 +1,6 @@
 # Desktop demo
 
-MechaFlow CAD now has a local desktop-openable path for the MVP cockpit. The first shell uses Electron because it opens from one npm command on the existing Vite and React stack without requiring a Rust toolchain or platform SDK setup. Tauri remains a good later packaging target when the team is ready to add Rust-based desktop builds.
+MechaFlow CAD has a local desktop-openable path for the MVP cockpit. The current shell uses Electron because it opens from the existing Vite and React stack without requiring a Rust toolchain, code signing, or platform SDK setup. Tauri or a signed native installer remains a focused follow-up when the team is ready for release packaging.
 
 ## Install
 
@@ -10,29 +10,31 @@ Use Node.js matching the `engines.node` range in `package.json`, then install de
 npm ci
 ```
 
+If `npm start` says a local `vite` or `electron` executable is missing, rerun `npm ci` from the repository root.
+
 ## Open the desktop demo
 
-Run one command from the repository root:
+Run the captain-friendly command from the repository root:
 
 ```sh
-npm run desktop:dev
+npm start
 ```
 
-This command starts three local pieces:
+`npm run desktop:dev` and `npm run desktop:open` are aliases for the same desktop path. The command starts three local pieces with explicit, non-conflicting ports:
 
 - The Node mock API at a free local port.
 - The Vite React cockpit at a free local port.
-- An Electron desktop window titled `MechaFlow CAD local desktop demo` that loads the local cockpit URL.
+- An Electron desktop window identified as `MechaFlow CAD` that loads the local cockpit URL.
 
-The mock API is enough to open the desktop cockpit and inspect analysis-readiness data. To persist and run the new FastAPI local pre-solver runner, start the Python backend instead, then launch the frontend or desktop shell with `VITE_API_BASE_URL` pointing at it.
+The mock API is enough to open the desktop cockpit and inspect analysis-readiness data. To persist and run the FastAPI local pre-solver runner, start the Python backend instead, then launch the frontend with `VITE_API_BASE_URL` pointing at it.
 
 You can pin ports when needed:
 
 ```sh
-MECHAFLOW_API_PORT=7331 MECHAFLOW_FRONTEND_PORT=7332 npm run desktop:dev
+MECHAFLOW_API_PORT=7331 MECHAFLOW_FRONTEND_PORT=7332 npm start
 ```
 
-Close the desktop window or press `Ctrl+C` in the terminal to stop the local API and frontend.
+If either configured port is already in use, startup fails before orchestration begins and names the busy port. Close the desktop window or press `Ctrl+C` in the terminal to stop the local API and frontend.
 
 ## What to test visually
 
@@ -54,9 +56,25 @@ The desktop demo centers on a robot arm visual MVP with a wrist gripper. The leg
 
 No real FEA solver is running in this slice. The FEA row is a blocked adapter handoff, the readiness panel is pre-solver input only, the local runner artifact is a pre-solver package, and the visible strength criteria are advisory demo seed data only. Material substitution cost and lead-time values are ranged estimates from explicit seed manufacturing options, not exact supplier quotes. Later FEA integration should replace the load-capacity cards with solver artifacts such as stress, deflection, boundary conditions, mesh provenance, and solver logs.
 
+## macOS Finder launcher
+
+For a local double-click path on macOS, install a small `.command` launcher on your Desktop:
+
+```sh
+npm run desktop:macos:shortcut
+```
+
+Then double-click `MechaFlow CAD.command` in Finder. The launcher changes into this checkout, runs `npm ci` if `node_modules` is missing, and then runs `npm start`. Set `MECHAFLOW_DESKTOP_LAUNCHER` before the install command if you want to place it somewhere other than `~/Desktop`, quoting paths that contain spaces:
+
+```sh
+MECHAFLOW_DESKTOP_LAUNCHER="/path/to/MechaFlow CAD.command" npm run desktop:macos:shortcut
+```
+
+This is intentionally the smallest reliable desktop-openable path for the MVP. It is not a signed `.app` bundle yet, so Gatekeeper, signing, auto-update, and native installer polish should be handled in a later packaging slice.
+
 ## Save, share, and reopen a demo project
 
-The desktop shell supports file import and export through the browser-native download and file input controls. With `npm run desktop:dev`, the Electron window uses the Node mock API, which supports the same MVP project file envelope for visual testing.
+The desktop shell supports file import and export through the browser-native download and file input controls. With `npm start`, the Electron window uses the Node mock API, which supports the same MVP project file envelope for visual testing.
 
 For the FastAPI backend path, start the backend and frontend as shown below. Then:
 
@@ -95,11 +113,13 @@ If FreeCAD, Gmsh, or CalculiX are absent, the job still completes the pre-solver
 
 ## Checks
 
-Run the desktop smoke check without opening a window:
+Run the desktop smoke check without opening a visible window:
 
 ```sh
 npm run desktop:smoke
 ```
+
+The smoke check allocates an explicit backend/frontend port pair, launches the mock API, Vite, and Electron shell, verifies the `MechaFlow CAD` app identity appears in the launcher output, and exits through Electron smoke mode.
 
 Use the normal frontend checks for the React app loaded by the desktop shell:
 
@@ -108,5 +128,12 @@ npm test
 npm run build
 npm run smoke
 ```
+
+Troubleshooting quick hits:
+
+- Missing `vite` or `electron`: run `npm ci` again from the repository root.
+- Busy configured port: choose another pair with `npm run ports:find`, then rerun with `MECHAFLOW_API_PORT` and `MECHAFLOW_FRONTEND_PORT`.
+- Window opens but data is stale: quit the window and terminal process, then relaunch with `npm start` so the mock API reloads from the current seed data.
+- Need persisted pre-solver jobs: use the FastAPI demo path above, because the one-command desktop path intentionally uses the Node mock API.
 
 The existing browser and backend workflows remain available. See [Frontend development](frontend.md) and [Local development](local-development.md).

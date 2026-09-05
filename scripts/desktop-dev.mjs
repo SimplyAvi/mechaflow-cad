@@ -1,8 +1,13 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
-import { parsePort, resolvePortPair } from './port-utils.mjs';
+import { fileURLToPath } from 'node:url';
+import { assertPortAvailable, parsePort, resolvePortPair } from './port-utils.mjs';
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const appName = process.env.MECHAFLOW_DESKTOP_APP_NAME || 'MechaFlow CAD';
 const frontendHost = process.env.MECHAFLOW_FRONTEND_HOST || process.env.FRONTEND_HOST || '127.0.0.1';
 const backendHost = process.env.MECHAFLOW_API_HOST || process.env.BACKEND_HOST || '127.0.0.1';
 const configuredBackendPort = parsePort(
@@ -19,10 +24,37 @@ const { backendPort, frontendPort } = await resolvePortPair({
   backendPort: configuredBackendPort,
   frontendPort: configuredFrontendPort,
 });
+
+if (configuredBackendPort !== undefined) await assertPortAvailable(backendPort, backendHost);
+if (configuredFrontendPort !== undefined) await assertPortAvailable(frontendPort, frontendHost);
+
 const apiBaseUrl = `http://${backendHost}:${backendPort}`;
 const frontendOrigin = `http://${frontendHost}:${frontendPort}`;
 const children = [];
 let shuttingDown = false;
+
+const localBin = (name) => {
+  const executable = process.platform === 'win32' ? `${name}.cmd` : name;
+  return path.join(repoRoot, 'node_modules', '.bin', executable);
+};
+
+const requireLocalBin = (name) => {
+  const executable = localBin(name);
+  if (!fs.existsSync(executable)) {
+    throw new Error(`Missing local ${name} executable at ${executable}. Run npm ci, then retry npm start.`);
+  }
+  return executable;
+};
+
+const spawnSpec = (command, args) => {
+  if (process.platform !== 'win32' || !command.endsWith('.cmd')) return { command, args };
+  const quoteCommandArg = (value) => `"${String(value).replaceAll('"', '\\"')}"`;
+  const commandLine = `call ${quoteCommandArg(command)} ${args.map(quoteCommandArg).join(' ')}`;
+  return {
+    command: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', commandLine],
+  };
+};
 
 const waitForUrl = async (url, label) => {
   const deadline = Date.now() + 30_000;
@@ -50,7 +82,9 @@ const shutdown = (code = 0) => {
 };
 
 const start = (name, command, args, env = {}, options = {}) => {
-  const child = spawn(command, args, {
+  const launch = spawnSpec(command, args);
+  const child = spawn(launch.command, launch.args, {
+    cwd: repoRoot,
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
     ...options,
@@ -72,7 +106,11 @@ const start = (name, command, args, env = {}, options = {}) => {
   return child;
 };
 
-console.log('Starting MechaFlow CAD desktop demo with local explicit ports:');
+const viteBin = requireLocalBin('vite');
+const electronBin = requireLocalBin('electron');
+
+console.log(`Starting ${appName} desktop demo with local explicit ports:`);
+console.log(`  app:      ${appName}`);
 console.log(`  backend:  ${apiBaseUrl}`);
 console.log(`  frontend: ${frontendOrigin}`);
 console.log('  desktop: Electron shell loading the frontend URL');
@@ -86,7 +124,7 @@ start('api', process.execPath, ['scripts/mock-backend.mjs'], {
   MECHAFLOW_CORS_ORIGINS: process.env.MECHAFLOW_CORS_ORIGINS || frontendOrigin,
 });
 
-start('web', 'npx', ['vite', '--host', frontendHost, '--port', String(frontendPort), '--strictPort'], {
+start('web', viteBin, ['--host', frontendHost, '--port', String(frontendPort), '--strictPort'], {
   FRONTEND_HOST: frontendHost,
   MECHAFLOW_FRONTEND_HOST: frontendHost,
   FRONTEND_PORT: String(frontendPort),
@@ -97,7 +135,8 @@ start('web', 'npx', ['vite', '--host', frontendHost, '--port', String(frontendPo
 try {
   await waitForUrl(`${apiBaseUrl}/health`, 'mock backend');
   await waitForUrl(frontendOrigin, 'Vite frontend');
-  start('desktop', 'npx', ['electron', 'desktop/main.cjs'], {
+  start('desktop', electronBin, ['desktop/main.cjs'], {
+    MECHAFLOW_DESKTOP_APP_NAME: appName,
     MECHAFLOW_DESKTOP_URL: frontendOrigin,
     MECHAFLOW_DESKTOP_SMOKE: process.env.MECHAFLOW_DESKTOP_SMOKE || '0',
   });

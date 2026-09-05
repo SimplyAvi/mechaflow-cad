@@ -1,7 +1,11 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
+import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { parsePort, resolvePortPair } from './port-utils.mjs';
+import { fileURLToPath } from 'node:url';
+import { assertPortAvailable, parsePort, resolvePortPair } from './port-utils.mjs';
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const frontendHost = process.env.MECHAFLOW_FRONTEND_HOST || process.env.FRONTEND_HOST || '127.0.0.1';
 const backendHost = process.env.MECHAFLOW_API_HOST || process.env.BACKEND_HOST || '127.0.0.1';
 const configuredBackendPort = parsePort(
@@ -18,8 +22,37 @@ const { backendPort, frontendPort } = await resolvePortPair({
   backendPort: configuredBackendPort,
   frontendPort: configuredFrontendPort,
 });
+
+if (configuredBackendPort !== undefined) await assertPortAvailable(backendPort, backendHost);
+if (configuredFrontendPort !== undefined) await assertPortAvailable(frontendPort, frontendHost);
+
 const apiBaseUrl = `http://${backendHost}:${backendPort}`;
 const frontendOrigin = `http://${frontendHost}:${frontendPort}`;
+
+const localBin = (name) => {
+  const executable = process.platform === 'win32' ? `${name}.cmd` : name;
+  return path.join(repoRoot, 'node_modules', '.bin', executable);
+};
+
+const requireLocalBin = (name) => {
+  const executable = localBin(name);
+  if (!fs.existsSync(executable)) {
+    throw new Error(`Missing local ${name} executable at ${executable}. Run npm ci, then retry npm run dev:full.`);
+  }
+  return executable;
+};
+
+const spawnSpec = (command, args) => {
+  if (process.platform !== 'win32' || !command.endsWith('.cmd')) return { command, args };
+  const quoteCommandArg = (value) => `"${String(value).replaceAll('"', '\\"')}"`;
+  const commandLine = `call ${quoteCommandArg(command)} ${args.map(quoteCommandArg).join(' ')}`;
+  return {
+    command: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', commandLine],
+  };
+};
+
+const viteBin = requireLocalBin('vite');
 
 console.log('Starting MechaFlow CAD local stack with explicit ports:');
 console.log(`  backend:  ${apiBaseUrl}`);
@@ -27,9 +60,12 @@ console.log(`  frontend: ${frontendOrigin}`);
 console.log('Override with MECHAFLOW_API_PORT and MECHAFLOW_FRONTEND_PORT, or run npm run ports:find first.');
 
 const children = [];
+let shuttingDown = false;
 
 const start = (name, command, args, env) => {
-  const child = spawn(command, args, {
+  const launch = spawnSpec(command, args);
+  const child = spawn(launch.command, launch.args, {
+    cwd: repoRoot,
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -37,6 +73,7 @@ const start = (name, command, args, env) => {
   child.stdout.on('data', (chunk) => process.stdout.write(`[${name}] ${chunk}`));
   child.stderr.on('data', (chunk) => process.stderr.write(`[${name}] ${chunk}`));
   child.on('exit', (code, signal) => {
+    if (shuttingDown) return;
     if (code !== 0 && signal !== 'SIGTERM') {
       console.error(`[${name}] exited with code ${code ?? signal}`);
       shutdown(code ?? 1);
@@ -45,6 +82,8 @@ const start = (name, command, args, env) => {
 };
 
 const shutdown = (code = 0) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   for (const child of children) {
     if (!child.killed) child.kill('SIGTERM');
   }
@@ -59,7 +98,7 @@ start('api', process.execPath, ['scripts/mock-backend.mjs'], {
   MECHAFLOW_CORS_ORIGINS: process.env.MECHAFLOW_CORS_ORIGINS || frontendOrigin,
 });
 
-start('web', 'npx', ['vite', '--host', frontendHost, '--port', String(frontendPort), '--strictPort'], {
+start('web', viteBin, ['--host', frontendHost, '--port', String(frontendPort), '--strictPort'], {
   FRONTEND_HOST: frontendHost,
   MECHAFLOW_FRONTEND_HOST: frontendHost,
   FRONTEND_PORT: String(frontendPort),
