@@ -19,8 +19,8 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 - Inspecting local FreeCAD, Gmsh, and CalculiX availability through the solver-readiness endpoint, then running a deterministic CalculiX fixture boundary when available or showing exact missing-tool guidance when unavailable.
 - Exporting and importing portable `.mfcad.json` project files when the cockpit is connected to the FastAPI backend or desktop mock API.
 - Reviewing BOM, cost, manufacturing, and lead-time panels where substitutions visibly change ranged estimates without inventing exact quotes.
-- Surfacing wiring routes, bend radius, service loops, and clearance risk.
-- Mirroring the backend project, panel-data, modification preview, report, catalog, and metadata contracts.
+- Surfacing a wiring/electronics workflow with route summaries, connector details, linked electronics, wire segments, harness BOM additions, heuristic clearance and bend-radius evidence, and a simple route diagram.
+- Mirroring the backend project, panel-data, wiring review, modification preview, report, catalog, and metadata contracts.
 
 ## Install
 
@@ -157,7 +157,11 @@ GET /api/projects/project-open-gripper-demo/panel-data
 - `task_requirements`: active task rows for task-preserving UI.
 - `bom_items`: BOM rows for cost and sourcing panels.
 - `manufacturing_options`: part-grouped manufacturing choices.
-- `wiring_routes`: connector-to-connector harness routes.
+- `electronics_components`: PCBs, sensors, service disconnects, and connector accessories linked to parts.
+- `wire_segments`: conductors or cable bundles with length estimates, AWG, endpoint references, and BOM item ids.
+- `wiring_rules`: explicit heuristic thresholds for clearance, bend radius, and service-loop slack.
+- `wiring_routes`: connector-to-connector harness routes with basic geometry and WireViz diagram references.
+- `wiring_review`: deterministic MVP `pass`, `warning`, or `review_required` route evidence. These are heuristic screening results, not exact electrical or CAD validation.
 - `reports`: advisory summaries from local modification previews or workers.
 - `analysis_readiness_previews`: optional pre-solver readiness previews keyed by part or assembly id. When omitted, the frontend derives clearly labeled local previews from the same part, material, and task fields for demo continuity; assembly fallbacks aggregate all included parts and remain review-required when aggregate inputs are incomplete.
 
@@ -171,6 +175,11 @@ POST /api/projects/{project_id}/analysis-readiness/previews
 GET /api/projects/{project_id}/parts/{part_id}/material-substitutions
 POST /api/projects/{project_id}/material-substitutions/preview
 POST /api/projects/{project_id}/material-substitutions/apply
+GET /api/projects/{project_id}/wiring-electronics
+POST /api/projects/{project_id}/wiring-review
+GET /api/projects/{project_id}/electronics-components
+GET /api/projects/{project_id}/wire-segments
+GET /api/projects/{project_id}/wiring-rules
 POST /api/projects/{project_id}/analysis-jobs/pre-solver-runs
 GET /api/local-analysis/tool-boundaries
 GET /api/local-analysis/solver-readiness

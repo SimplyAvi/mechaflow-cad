@@ -29,6 +29,7 @@ from .models import (
     Assembly,
     BOMItem,
     CatalogSeedResponse,
+    ElectronicsComponent,
     ExpectedAnalysisResultArtifact,
     LocalSolverReadinessSummary,
     LocalSolverToolStatus,
@@ -50,6 +51,9 @@ from .models import (
     SolverInputSpec,
     SolverPipelineStep,
     TaskRequirement,
+    WireSegment,
+    WiringReviewReport,
+    WiringRuleSet,
     WiringRoute,
     validate_project_id,
 )
@@ -73,10 +77,14 @@ from .services import (
     build_material_substitution_options,
     build_material_substitution_preview,
     build_project_panel_data,
+    build_wiring_review,
     collect_project_bom_items,
     collect_project_manufacturing_options,
     collect_project_task_requirements,
+    collect_project_wire_segments,
     collect_project_wiring_routes,
+    collect_project_wiring_rules,
+    collect_project_electronics_components,
 )
 from .settings import Settings, get_settings
 from .storage import (
@@ -135,6 +143,10 @@ SCHEMA_MODELS = [
     AnalysisArtifact,
     ManufacturingOption,
     WiringRoute,
+    ElectronicsComponent,
+    WireSegment,
+    WiringRuleSet,
+    WiringReviewReport,
     AnalysisReport,
     AnalysisReadinessPreview,
     AnalysisReadinessRequest,
@@ -171,7 +183,9 @@ CONCEPTS = {
     "analysis_readiness": "Pre-solver load cases, constraints, material provenance, thermal guidance, and expected FEA artifacts without claiming a solve.",
     "manufacturing_options": "Ways to make or buy a part, including cost range, lead time, supplier link, and risk notes.",
     "material_substitutions": "Explicit material and process substitution previews that distinguish non-persisted impact from applied project mutation.",
-    "wiring_routes": "Connector-to-connector harness paths with bend-radius, clearance, and harness BOM metadata.",
+    "wiring_routes": "Connector-to-connector harness paths with bend-radius, clearance, route geometry, service-loop, and harness BOM metadata.",
+    "electronics_components": "PCBs, sensors, controllers, connectors, and cable accessories mounted to mechanical parts or assemblies.",
+    "wiring_reviews": "Deterministic MVP heuristic route checks with pass, warning, and review-required evidence.",
     "reports": "Advisory summaries of task status, payload re-rating, cost, manufacturing, wiring, risks, and unknowns.",
 }
 CATALOG_SEED_PATH = Path(__file__).resolve().parents[2] / "catalog" / "reference-designs" / "reference-designs.seed.json"
@@ -621,12 +635,61 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         )
 
     @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/electronics-components",
+        response_model=list[ElectronicsComponent],
+        tags=["projects"],
+    )
+    def project_electronics_components(project_id: str) -> list[ElectronicsComponent]:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        return collect_project_electronics_components(project)
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/wire-segments",
+        response_model=list[WireSegment],
+        tags=["projects"],
+    )
+    def project_wire_segments(project_id: str) -> list[WireSegment]:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        return collect_project_wire_segments(project)
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/wiring-rules",
+        response_model=list[WiringRuleSet],
+        tags=["projects"],
+    )
+    def project_wiring_rules(project_id: str) -> list[WiringRuleSet]:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        return collect_project_wiring_rules(project)
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/wiring-electronics",
+        response_model=ProjectPanelData,
+        tags=["projects"],
+    )
+    def project_wiring_electronics(project_id: str) -> ProjectPanelData:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        return build_project_panel_data(project).model_copy(
+            update={"analysis_readiness_previews": []},
+            deep=True,
+        )
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/wiring-review",
+        response_model=WiringReviewReport,
+        tags=["projects"],
+    )
+    def project_wiring_review(project_id: str) -> WiringReviewReport:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        return build_wiring_review(project)
+
+    @app.get(
         f"{settings.api_prefix}/projects/{{project_id}}/wiring-routes",
         response_model=list[WiringRoute],
         tags=["projects"],
     )
     def project_wiring_routes(project_id: str) -> list[WiringRoute]:
-        return collect_project_wiring_routes(get_project_or_404(project_id))
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        return collect_project_wiring_routes(project)
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}/reports", response_model=list[AnalysisReport], tags=["projects"])
     def project_reports(project_id: str) -> list[AnalysisReport]:

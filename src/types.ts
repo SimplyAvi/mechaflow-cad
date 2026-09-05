@@ -17,7 +17,10 @@ export interface ReferenceDesign {
   bom: BOMItem[];
   manufacturingOptions: ManufacturingOption[];
   analysisJobs: AnalysisJob[];
+  electronicsComponents: ElectronicsComponent[];
+  wireSegments: WireSegment[];
   wiringRoutes: WiringRoute[];
+  wiringReview: WiringReviewReport | null;
   reports: AdvisoryReport[];
   backend: BackendConnectionSummary;
 }
@@ -320,13 +323,100 @@ export interface ManufacturingOption {
   partName?: string;
 }
 
+export type WiringReviewStatus = 'pass' | 'warning' | 'review_required';
+
+export interface ElectronicsComponent {
+  id: string;
+  name: string;
+  componentType: string;
+  mountedPartId: string | null;
+  connectorIds: string[];
+  bomItemIds: string[];
+  notes: string[];
+  confidence: string;
+}
+
+export interface WireSegment {
+  id: string;
+  name: string;
+  conductorCount: number | null;
+  wireGaugeAwg: number | null;
+  lengthMm: number | null;
+  signalOrPower: string;
+  color: string | null;
+  bomItemId: string | null;
+  notes: string[];
+  confidence: string;
+}
+
+export interface WiringReviewEvidence {
+  check: string;
+  status: WiringReviewStatus;
+  basis: string;
+  message: string;
+  measuredValue: number | null;
+  thresholdValue: number | null;
+  units: string | null;
+  relatedIds: string[];
+}
+
+export interface WiringRouteReview {
+  routeId: string;
+  routeName: string;
+  status: WiringReviewStatus;
+  summary: string;
+  evidence: WiringReviewEvidence[];
+  bomItemIds: string[];
+  endpointPartIds: string[];
+  reviewRequired: string[];
+}
+
+export interface WiringReviewReport {
+  projectId: string;
+  status: WiringReviewStatus;
+  summary: string;
+  routeReviews: WiringRouteReview[];
+  assumptions: string[];
+  generatedAt?: string;
+}
+
+export interface WiringEndpoint {
+  connectorId: string;
+  partId: string | null;
+  pinLabel: string | null;
+  role: string;
+}
+
+export interface WiringConnector {
+  id: string;
+  name: string;
+  pinCount: number | null;
+  partId: string | null;
+  componentId: string | null;
+  gender: string;
+  pinLabels: string[];
+  voltageRatingV: number | null;
+  currentRatingA: number | null;
+}
+
 export interface WiringRoute {
   id: string;
   name: string;
   connectedParts: string[];
+  connectors: WiringConnector[];
+  endpoints: WiringEndpoint[];
   clearanceStatus: RatingStatus;
+  reviewStatus: WiringReviewStatus;
+  reviewSummary: string;
+  evidence: WiringReviewEvidence[];
   bendRadiusMm: number | null;
-  serviceLoop: boolean | null;
+  clearanceMm: number | null;
+  serviceLoopMm: number | null;
+  pathLengthMm: number | null;
+  wireSegmentIds: string[];
+  electronicsComponentIds: string[];
+  harnessBom: string[];
+  diagramRef: string | null;
   note: string;
 }
 
@@ -355,7 +445,11 @@ export interface BackendProjectPanelData {
   task_requirements: BackendTaskRequirement[];
   bom_items: BackendBOMItem[];
   manufacturing_options: BackendPartManufacturingOptions[];
+  electronics_components: BackendElectronicsComponent[];
+  wire_segments: BackendWireSegment[];
+  wiring_rules: BackendWiringRuleSet[];
   wiring_routes: BackendWiringRoute[];
+  wiring_review?: BackendWiringReviewReport | null;
   reports: BackendAnalysisReport[];
   analysis_readiness_previews?: AnalysisReadinessPreview[];
 }
@@ -391,6 +485,9 @@ export interface BackendProject {
   active_task?: BackendTaskRequirement | null;
   assemblies: BackendAssembly[];
   materials: BackendMaterial[];
+  electronics_components: BackendElectronicsComponent[];
+  wire_segments: BackendWireSegment[];
+  wiring_rules: BackendWiringRuleSet[];
   modifications: BackendModification[];
   analysis_jobs: BackendAnalysisJob[];
   reports: BackendAnalysisReport[];
@@ -525,15 +622,67 @@ export interface BackendBOMItem {
   license_or_terms?: string | null;
 }
 
+export interface BackendElectronicsComponent {
+  id: string;
+  name: string;
+  component_type: string;
+  mounted_part_id?: string | null;
+  connector_ids: string[];
+  bom_item_ids: string[];
+  datasheet_url?: string | null;
+  notes: string[];
+  confidence: string;
+}
+
+export interface BackendWireSegment {
+  id: string;
+  name: string;
+  conductor_count?: number | null;
+  wire_gauge_awg?: number | null;
+  length_mm?: number | null;
+  signal_or_power: string;
+  color?: string | null;
+  from_endpoint?: BackendRouteEndpoint | null;
+  to_endpoint?: BackendRouteEndpoint | null;
+  bom_item_id?: string | null;
+  notes: string[];
+  confidence: string;
+}
+
+export interface BackendWiringRuleSet {
+  id: string;
+  name: string;
+  required_clearance_min_mm?: number | null;
+  required_bend_radius_min_mm?: number | null;
+  bend_radius_multiplier?: number | null;
+  required_service_loop_min_mm?: number | null;
+  evidence_basis: string;
+  notes: string[];
+}
+
+export interface BackendRouteEndpoint {
+  connector_id: string;
+  part_id?: string | null;
+  pin_label?: string | null;
+  role: string;
+  notes: string[];
+}
+
 export interface BackendWiringRoute {
   id: string;
   name: string;
   from_connector: BackendConnector;
   to_connector: BackendConnector;
+  endpoints: BackendRouteEndpoint[];
   path_points_mm: BackendVector3[];
+  wire_segment_ids: string[];
+  electronics_component_ids: string[];
   bend_radius_min_mm?: number | null;
   clearance_min_mm?: number | null;
+  service_loop_mm?: number | null;
+  rule_set_id?: string | null;
   harness_bom: string[];
+  diagram_ref?: string | null;
   risk_notes: string[];
   confidence: string;
 }
@@ -543,6 +692,45 @@ export interface BackendConnector {
   name: string;
   pin_count?: number | null;
   part_id?: string | null;
+  component_id?: string | null;
+  kind?: string;
+  gender?: string;
+  pin_labels?: string[];
+  voltage_rating_v?: number | null;
+  current_rating_a?: number | null;
+  mating_connector_id?: string | null;
+  notes?: string[];
+}
+
+export interface BackendWiringReviewEvidence {
+  check: string;
+  status: WiringReviewStatus;
+  basis: string;
+  message: string;
+  measured_value?: number | null;
+  threshold_value?: number | null;
+  units?: string | null;
+  related_ids: string[];
+}
+
+export interface BackendWiringRouteReview {
+  route_id: string;
+  route_name: string;
+  status: WiringReviewStatus;
+  summary: string;
+  evidence: BackendWiringReviewEvidence[];
+  bom_item_ids: string[];
+  endpoint_part_ids: string[];
+  review_required: string[];
+}
+
+export interface BackendWiringReviewReport {
+  project_id: string;
+  status: WiringReviewStatus;
+  summary: string;
+  route_reviews: BackendWiringRouteReview[];
+  generated_at?: string;
+  assumptions: string[];
 }
 
 export interface BackendAnalysisJobRequest {

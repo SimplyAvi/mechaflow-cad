@@ -9,6 +9,7 @@ from mechaflow_api.services import (
     build_material_substitution_options,
     build_material_substitution_preview,
     build_project_panel_data,
+    build_wiring_review,
     collect_project_bom_items,
     collect_project_manufacturing_options,
     collect_project_task_requirements,
@@ -54,6 +55,25 @@ def test_project_panel_collectors_extract_frontend_data() -> None:
     panel = build_project_panel_data(project)
     assert panel.project.id == project.id
     assert panel.bom_items[0].name == "Finger link"
+    assert panel.electronics_components[0].id == "ec-controller-pcb"
+    assert panel.wire_segments[0].bom_item_id == "bom-wire-finger-sensor-lead"
+    assert panel.wiring_review is not None
+    assert panel.wiring_review.status.value == "warning"
+
+
+def test_wiring_review_reports_heuristic_evidence_and_bom_linkage() -> None:
+    review = build_wiring_review(build_sample_project())
+
+    finger_review = next(item for item in review.route_reviews if item.route_id == "route-finger-sensor")
+    main_review = next(item for item in review.route_reviews if item.route_id == "route-main-harness")
+
+    assert review.status.value == "warning"
+    assert finger_review.status.value == "warning"
+    assert main_review.status.value == "pass"
+    assert "not exact electrical or CAD validation" in review.summary
+    assert "bom-wire-finger-sensor-lead" in finger_review.bom_item_ids
+    assert any(item.basis == "heuristic_estimate" for item in finger_review.evidence)
+    assert any(item.check == "BOM linkage" and item.status.value == "pass" for item in finger_review.evidence)
 
 
 def test_material_substitution_options_are_explicit_compatible_and_review_required() -> None:

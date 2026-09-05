@@ -111,6 +111,12 @@ class ReportStatus(str, Enum):
     superseded = "superseded"
 
 
+class WiringReviewStatus(str, Enum):
+    passed = "pass"
+    warning = "warning"
+    review_required = "review_required"
+
+
 class AnalysisReadinessState(str, Enum):
     pre_solver_ready = "pre_solver_ready"
     review_required = "review_required"
@@ -244,6 +250,60 @@ class Connector(StrictModel):
     name: str
     pin_count: int | None = Field(default=None, ge=0)
     part_id: str | None = None
+    component_id: str | None = None
+    kind: str = "connector"
+    gender: Literal["plug", "receptacle", "board", "inline", "unknown"] = "unknown"
+    pin_labels: list[str] = Field(default_factory=list)
+    voltage_rating_v: PositiveFloat | None = None
+    current_rating_a: PositiveFloat | None = None
+    mating_connector_id: str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class RouteEndpoint(StrictModel):
+    connector_id: str
+    part_id: str | None = None
+    pin_label: str | None = None
+    role: Literal["source", "sink", "pass_through", "service_disconnect", "unknown"] = "unknown"
+    notes: list[str] = Field(default_factory=list)
+
+
+class ElectronicsComponent(StrictModel):
+    id: str
+    name: str
+    component_type: Literal["pcb", "sensor", "actuator", "controller", "power", "connector", "cable_accessory", "unknown"] = "unknown"
+    mounted_part_id: str | None = None
+    connector_ids: list[str] = Field(default_factory=list)
+    bom_item_ids: list[str] = Field(default_factory=list)
+    datasheet_url: HttpUrl | None = None
+    notes: list[str] = Field(default_factory=list)
+    confidence: RecommendationConfidence = RecommendationConfidence.unknown
+
+
+class WireSegment(StrictModel):
+    id: str
+    name: str
+    conductor_count: int | None = Field(default=None, ge=1)
+    wire_gauge_awg: int | None = Field(default=None, ge=0, le=40)
+    length_mm: PositiveFloat | None = None
+    signal_or_power: str = "review required"
+    color: str | None = None
+    from_endpoint: RouteEndpoint | None = None
+    to_endpoint: RouteEndpoint | None = None
+    bom_item_id: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    confidence: RecommendationConfidence = RecommendationConfidence.unknown
+
+
+class WiringRuleSet(StrictModel):
+    id: str
+    name: str
+    required_clearance_min_mm: NonNegativeFloat | None = None
+    required_bend_radius_min_mm: PositiveFloat | None = None
+    bend_radius_multiplier: PositiveFloat | None = None
+    required_service_loop_min_mm: NonNegativeFloat | None = None
+    evidence_basis: Literal["user_input", "manufacturer_data", "heuristic", "review_required"] = "review_required"
+    notes: list[str] = Field(default_factory=list)
 
 
 class WiringRoute(StrictModel):
@@ -251,12 +311,49 @@ class WiringRoute(StrictModel):
     name: str
     from_connector: Connector
     to_connector: Connector
+    endpoints: list[RouteEndpoint] = Field(default_factory=list)
     path_points_mm: list[Vector3] = Field(default_factory=list)
+    wire_segment_ids: list[str] = Field(default_factory=list)
+    electronics_component_ids: list[str] = Field(default_factory=list)
     bend_radius_min_mm: PositiveFloat | None = None
     clearance_min_mm: NonNegativeFloat | None = None
+    service_loop_mm: NonNegativeFloat | None = None
+    rule_set_id: str | None = None
     harness_bom: list[str] = Field(default_factory=list)
+    diagram_ref: str | None = None
     risk_notes: list[str] = Field(default_factory=list)
     confidence: RecommendationConfidence = RecommendationConfidence.unknown
+
+
+class WiringReviewEvidence(StrictModel):
+    check: str
+    status: WiringReviewStatus
+    basis: Literal["explicit_data", "heuristic_estimate", "missing_input", "review_required"]
+    message: str
+    measured_value: float | None = None
+    threshold_value: float | None = None
+    units: str | None = None
+    related_ids: list[str] = Field(default_factory=list)
+
+
+class WiringRouteReview(StrictModel):
+    route_id: str
+    route_name: str
+    status: WiringReviewStatus
+    summary: str
+    evidence: list[WiringReviewEvidence] = Field(default_factory=list)
+    bom_item_ids: list[str] = Field(default_factory=list)
+    endpoint_part_ids: list[str] = Field(default_factory=list)
+    review_required: list[str] = Field(default_factory=list)
+
+
+class WiringReviewReport(StrictModel):
+    project_id: str
+    status: WiringReviewStatus
+    summary: str
+    route_reviews: list[WiringRouteReview] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    assumptions: list[str] = Field(default_factory=list)
 
 
 def _reject_nonfinite_number(value: Any) -> Any:
@@ -663,6 +760,9 @@ class Project(StrictModel):
     active_task: TaskRequirement | None = None
     assemblies: list[Assembly] = Field(default_factory=list)
     materials: list[Material] = Field(default_factory=list)
+    electronics_components: list[ElectronicsComponent] = Field(default_factory=list)
+    wire_segments: list[WireSegment] = Field(default_factory=list)
+    wiring_rules: list[WiringRuleSet] = Field(default_factory=list)
     modifications: list[Modification] = Field(default_factory=list)
     analysis_jobs: list[AnalysisJob] = Field(default_factory=list)
     reports: list[AnalysisReport] = Field(default_factory=list)
@@ -698,6 +798,21 @@ class Project(StrictModel):
         if duplicate_routes:
             raise ValueError(f"wiring route ids must be unique across project assemblies: {sorted(duplicate_routes)}")
 
+        electronics_ids = [component.id for component in self.electronics_components]
+        duplicate_electronics = _duplicate_ids(electronics_ids)
+        if duplicate_electronics:
+            raise ValueError(f"electronics component ids must be unique within a project: {sorted(duplicate_electronics)}")
+
+        wire_segment_ids = [segment.id for segment in self.wire_segments]
+        duplicate_wire_segments = _duplicate_ids(wire_segment_ids)
+        if duplicate_wire_segments:
+            raise ValueError(f"wire segment ids must be unique within a project: {sorted(duplicate_wire_segments)}")
+
+        wiring_rule_ids = [rule.id for rule in self.wiring_rules]
+        duplicate_wiring_rules = _duplicate_ids(wiring_rule_ids)
+        if duplicate_wiring_rules:
+            raise ValueError(f"wiring rule ids must be unique within a project: {sorted(duplicate_wiring_rules)}")
+
         material_ids = [material.id for material in self.materials]
         if any(not material_id.strip() for material_id in material_ids):
             raise ValueError("material ids must not be blank")
@@ -731,7 +846,11 @@ class ProjectPanelData(BaseModel):
     task_requirements: list[TaskRequirement] = Field(default_factory=list)
     bom_items: list[BOMItem] = Field(default_factory=list)
     manufacturing_options: list[PartManufacturingOptions] = Field(default_factory=list)
+    electronics_components: list[ElectronicsComponent] = Field(default_factory=list)
+    wire_segments: list[WireSegment] = Field(default_factory=list)
+    wiring_rules: list[WiringRuleSet] = Field(default_factory=list)
     wiring_routes: list[WiringRoute] = Field(default_factory=list)
+    wiring_review: WiringReviewReport | None = None
     reports: list[AnalysisReport] = Field(default_factory=list)
     analysis_readiness_previews: list[AnalysisReadinessPreview] = Field(default_factory=list)
 

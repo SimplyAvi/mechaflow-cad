@@ -14,7 +14,16 @@ from threading import RLock
 from typing import Protocol
 
 from .adapters import artifact_kind_for_job, get_adapter_for_job
-from .catalog import DEFAULT_ASSEMBLY, DEFAULT_FINGER_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
+from .catalog import (
+    DEFAULT_ASSEMBLY,
+    DEFAULT_ELECTRONICS_COMPONENTS,
+    DEFAULT_FINGER_ASSEMBLY,
+    DEFAULT_MATERIALS,
+    DEFAULT_REFERENCE_DESIGNS,
+    DEFAULT_WIRE_SEGMENTS,
+    DEFAULT_WIRING_RULES,
+    GRIPPER_TASK,
+)
 from .models import (
     AnalysisArtifact,
     AnalysisArtifactKind,
@@ -124,6 +133,29 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
     _ensure_json_finite(project.model_dump(mode="python"), "project")
     part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
     material_ids = {material.id for material in project.materials}
+    electronics_component_ids = {component.id for component in project.electronics_components}
+    electronics_connector_ids = {
+        connector_id
+        for component in project.electronics_components
+        for connector_id in component.connector_ids
+    }
+    wire_segment_ids = {segment.id for segment in project.wire_segments}
+    wiring_rule_ids = {rule.id for rule in project.wiring_rules}
+    for component in project.electronics_components:
+        if component.mounted_part_id is not None and component.mounted_part_id not in part_ids:
+            raise InvalidWiringEndpointError(
+                f"electronics component {component.id!r} references unknown mounted part {component.mounted_part_id!r}"
+            )
+    for segment in project.wire_segments:
+        for endpoint in (segment.from_endpoint, segment.to_endpoint):
+            if endpoint is not None and endpoint.part_id is not None and endpoint.part_id not in part_ids:
+                raise InvalidWiringEndpointError(
+                    f"wire segment {segment.id!r} references unknown endpoint part {endpoint.part_id!r}"
+                )
+            if endpoint is not None and endpoint.connector_id not in electronics_connector_ids:
+                raise InvalidWiringEndpointError(
+                    f"wire segment {segment.id!r} references unknown connector {endpoint.connector_id!r}"
+                )
     route_ids_by_part: dict[str, list[str]] = {}
     for assembly in project.assemblies:
         for part in assembly.parts:
@@ -141,6 +173,24 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                     route_ids = route_ids_by_part.setdefault(connector.part_id, [])
                     if route.id not in route_ids:
                         route_ids.append(route.id)
+                if connector.component_id is not None and connector.component_id not in electronics_component_ids:
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} references unknown electronics component {connector.component_id!r}"
+                    )
+            unknown_route_components = sorted(set(route.electronics_component_ids) - electronics_component_ids)
+            if unknown_route_components:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} references unknown electronics components: {unknown_route_components}"
+                )
+            unknown_wire_segments = sorted(set(route.wire_segment_ids) - wire_segment_ids)
+            if unknown_wire_segments:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} references unknown wire segments: {unknown_wire_segments}"
+                )
+            if route.rule_set_id is not None and route.rule_set_id not in wiring_rule_ids:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} references unknown wiring rule set {route.rule_set_id!r}"
+                )
     assemblies = [
         assembly.model_copy(
             update={
@@ -407,6 +457,9 @@ def build_sample_project() -> Project:
         active_task=GRIPPER_TASK,
         assemblies=[DEFAULT_ASSEMBLY, DEFAULT_FINGER_ASSEMBLY],
         materials=DEFAULT_MATERIALS,
+        electronics_components=DEFAULT_ELECTRONICS_COMPONENTS,
+        wire_segments=DEFAULT_WIRE_SEGMENTS,
+        wiring_rules=DEFAULT_WIRING_RULES,
         analysis_jobs=build_sample_analysis_jobs(),
         reports=build_sample_reports(),
         created_at=SEED_TIMESTAMP,

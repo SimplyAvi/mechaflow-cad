@@ -1217,6 +1217,11 @@ function BackendContractPanel({ design }: { design: ReferenceDesign }) {
     design.backend.endpoint,
     `/api/projects/${design.backend.projectId}/analysis-readiness/${design.assembly.parts[0]?.id ?? 'part-id'}`,
     `/api/projects/${design.backend.projectId}/analysis-readiness/previews`,
+    `/api/projects/${design.backend.projectId}/wiring-electronics`,
+    `/api/projects/${design.backend.projectId}/wiring-review`,
+    `/api/projects/${design.backend.projectId}/electronics-components`,
+    `/api/projects/${design.backend.projectId}/wire-segments`,
+    `/api/projects/${design.backend.projectId}/wiring-rules`,
     `/api/projects/${design.backend.projectId}/analysis-jobs/pre-solver-runs`,
     `/api/projects/${design.backend.projectId}/analysis-jobs/solver-readiness-runs`,
     '/api/local-analysis/solver-readiness',
@@ -1242,31 +1247,149 @@ function BackendContractPanel({ design }: { design: ReferenceDesign }) {
   );
 }
 
+const wiringStatusCopy: Record<NonNullable<ReferenceDesign['wiringReview']>['status'], string> = {
+  pass: 'Passes heuristic screen',
+  warning: 'Warning',
+  review_required: 'Review required',
+};
+
 function WiringPanel({ design, selectedPart }: { design: ReferenceDesign; selectedPart: Part }) {
   const relatedRoutes = design.wiringRoutes.filter((route) =>
     route.connectedParts.includes(selectedPart.id) || selectedPart.relatedWires.includes(route.id),
   );
+  const relatedComponentIds = new Set(relatedRoutes.flatMap((route) => route.electronicsComponentIds));
+  const relatedComponents = design.electronicsComponents.filter((component) =>
+    component.mountedPartId === selectedPart.id || relatedComponentIds.has(component.id),
+  );
+  const relatedSegmentIds = new Set(relatedRoutes.flatMap((route) => route.wireSegmentIds));
+  const relatedSegments = design.wireSegments.filter((segment) => relatedSegmentIds.has(segment.id));
+  const relatedBomIds = new Set([
+    ...relatedRoutes.flatMap((route) => route.harnessBom),
+    ...relatedSegments.map((segment) => segment.bomItemId).filter((value): value is string => value != null),
+    ...relatedComponents.flatMap((component) => component.bomItemIds),
+  ]);
+  const relatedBom = design.bom.filter((item) => relatedBomIds.has(item.id));
+  const selectedRoute = relatedRoutes[0] ?? design.wiringRoutes[0];
 
   return (
-    <article className="panel">
-      <p className="eyebrow">Wiring awareness</p>
-      <h2>Harness constraints</h2>
+    <article className="panel wiring-workflow-panel" aria-label="Wiring and electronics workflow">
+      <p className="eyebrow">Wiring and electronics</p>
+      <h2>{design.wiringReview ? wiringStatusCopy[design.wiringReview.status] : 'Harness review required'}</h2>
+      <p className="muted">
+        {design.wiringReview?.summary
+          ?? 'Harness routes are visible, but the backend has not supplied a deterministic review result yet.'}
+      </p>
+      <div className="wiring-diagram" aria-label="Simple wiring route diagram">
+        <div className="diagram-node controller">Controller</div>
+        <div className="diagram-node joint">Joint service</div>
+        <div className="diagram-node tool">Tool</div>
+        {design.wiringRoutes.slice(0, 4).map((route, index) => (
+          <span
+            className={`diagram-route route-${index} status-${route.reviewStatus}`}
+            key={route.id}
+            title={`${route.name}: ${wiringStatusCopy[route.reviewStatus]}`}
+          />
+        ))}
+      </div>
+      {selectedRoute ? (
+        <div className={`wiring-card featured-route status-${selectedRoute.clearanceStatus}`}>
+          <strong>{selectedRoute.name}</strong>
+          <small>{wiringStatusCopy[selectedRoute.reviewStatus]} - {selectedRoute.reviewSummary}</small>
+          <dl className="meta-grid compact">
+            <div>
+              <dt>Route length</dt>
+              <dd>{selectedRoute.pathLengthMm == null ? 'review required' : `${formatMeasurement(selectedRoute.pathLengthMm)} mm polyline estimate`}</dd>
+            </div>
+            <div>
+              <dt>Clearance</dt>
+              <dd>{selectedRoute.clearanceMm == null ? 'review required' : `${formatMeasurement(selectedRoute.clearanceMm)} mm heuristic`}</dd>
+            </div>
+            <div>
+              <dt>Bend radius</dt>
+              <dd>{selectedRoute.bendRadiusMm == null ? 'review required' : `${formatMeasurement(selectedRoute.bendRadiusMm)} mm heuristic`}</dd>
+            </div>
+            <div>
+              <dt>Service loop</dt>
+              <dd>{selectedRoute.serviceLoopMm == null ? 'review required' : `${formatMeasurement(selectedRoute.serviceLoopMm)} mm recorded slack`}</dd>
+            </div>
+          </dl>
+          <div className="connector-list">
+            {selectedRoute.connectors.map((connector) => (
+              <div key={connector.id}>
+                <strong>{connector.name}</strong>
+                <small>
+                  {connector.pinCount ?? '?'} pins - {connector.gender} - {connector.voltageRatingV ?? '?'} V - {connector.currentRatingA ?? '?'} A
+                </small>
+                <small>{connector.pinLabels.slice(0, 6).join(', ') || 'pin labels review required'}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {relatedRoutes.length > 0 ? (
         <div className="option-stack">
           {relatedRoutes.map((route) => (
             <div className={`wiring-card status-${route.clearanceStatus}`} key={route.id}>
               <strong>{route.name}</strong>
               <small>
-                {route.bendRadiusMm == null ? 'Bend radius review required' : `Bend radius ${route.bendRadiusMm} mm`} - service loop{' '}
-                {route.serviceLoop == null ? 'review required' : route.serviceLoop ? 'planned' : 'missing'}
+                {wiringStatusCopy[route.reviewStatus]} - {route.bendRadiusMm == null ? 'bend radius review required' : `${route.bendRadiusMm} mm bend`} -{' '}
+                {route.clearanceMm == null ? 'clearance review required' : `${route.clearanceMm} mm clearance`}
               </small>
               <p>{route.note}</p>
+              <details>
+                <summary>Evidence</summary>
+                <ul>
+                  {route.evidence.slice(0, 6).map((item) => (
+                    <li key={`${route.id}-${item.check}`}>
+                      <strong>{item.check}</strong>: {item.status.replaceAll('_', ' ')} - {item.message}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </div>
           ))}
         </div>
       ) : (
         <p>No directly related wiring constraints for this selected part.</p>
       )}
+      <div className="wiring-context-grid">
+        <section>
+          <h3>Linked electronics</h3>
+          {relatedComponents.length > 0 ? relatedComponents.map((component) => (
+            <p key={component.id}>
+              <strong>{component.name}</strong><br />
+              <small>{component.componentType} on {component.mountedPartId ?? 'assembly'} - {component.confidence.replaceAll('_', ' ')}</small>
+            </p>
+          )) : <p className="muted">No electronics component is directly linked to this part yet.</p>}
+        </section>
+        <section>
+          <h3>Wire segments</h3>
+          {relatedSegments.length > 0 ? relatedSegments.map((segment) => (
+            <p key={segment.id}>
+              <strong>{segment.name}</strong><br />
+              <small>
+                {segment.conductorCount ?? '?'} conductors, {segment.wireGaugeAwg == null ? 'AWG review required' : `${segment.wireGaugeAwg} AWG`},{' '}
+                {segment.lengthMm == null ? 'length review required' : `${formatMeasurement(segment.lengthMm)} mm estimated`}
+              </small>
+            </p>
+          )) : <p className="muted">No wire segment is directly linked to this part yet.</p>}
+        </section>
+        <section>
+          <h3>BOM additions</h3>
+          {relatedBom.length > 0 ? relatedBom.map((item) => (
+            <p key={item.id}>
+              <strong>{item.quantity}x {item.item}</strong><br />
+              <small>{item.source} - {item.unitCostRangeUsd == null ? 'cost review required' : `${formatUsdRange(item.unitCostRangeUsd)} heuristic`}</small>
+            </p>
+          )) : <p className="muted">Harness BOM linkage is review-required for this selection.</p>}
+        </section>
+      </div>
+      {design.wiringReview ? (
+        <details className="review-assumptions">
+          <summary>Heuristic scope and review-required checks</summary>
+          <ul>{design.wiringReview.assumptions.map((item) => <li key={item}>{item}</li>)}</ul>
+        </details>
+      ) : null}
     </article>
   );
 }
