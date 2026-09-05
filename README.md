@@ -130,10 +130,10 @@ Use Node.js matching the `engines.node` requirement in `package.json`.
 To open the local desktop demo after installing npm dependencies:
 
 ```bash
-npm run desktop:dev
+npm start
 ```
 
-This starts the mock API, Vite frontend, and an Electron desktop window for the interactive robot arm visual MVP with exploded-view, orbit, part-selection controls, and pre-solver analysis readiness panels. See [Desktop demo](docs/desktop.md).
+This starts the mock API, Vite frontend, and an Electron desktop window identified as MechaFlow CAD for the interactive robot arm visual MVP with exploded-view, orbit, part-selection controls, and pre-solver analysis readiness panels. On macOS, `npm run desktop:macos:shortcut` installs a double-clickable Finder launcher. See [Desktop demo](docs/desktop.md).
 
 ```bash
 python3 -m venv .venv
@@ -149,12 +149,13 @@ Run backend checks:
 pytest
 ```
 
-Run frontend checks:
+Run frontend and desktop checks:
 
 ```bash
 npm test
 npm run build
 npm run smoke
+npm run desktop:smoke
 ```
 
 Run the backend on an explicit local port:

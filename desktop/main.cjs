@@ -1,13 +1,33 @@
-const { app, BrowserWindow, shell } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+const { app, BrowserWindow, nativeImage, shell } = require('electron');
 
+const appName = process.env.MECHAFLOW_DESKTOP_APP_NAME || 'MechaFlow CAD';
 const desktopUrl = process.env.MECHAFLOW_DESKTOP_URL;
 const smokeMode = process.env.MECHAFLOW_DESKTOP_SMOKE === '1';
+const iconPath = path.resolve(__dirname, '..', 'resources', 'mechaflow-icon.svg');
+const appIcon = nativeImage.createFromPath(iconPath);
 
 if (!desktopUrl) {
-  throw new Error('MECHAFLOW_DESKTOP_URL must point to the local Vite demo URL. Use npm run desktop:dev.');
+  throw new Error('MECHAFLOW_DESKTOP_URL must point to the local Vite demo URL. Use npm start or npm run desktop:dev.');
 }
 
 const desktopOrigin = new URL(desktopUrl).origin;
+
+app.setName(appName);
+app.setAppUserModelId('com.mechaflow.cad.local-demo');
+
+if (process.platform === 'darwin' && !appIcon.isEmpty()) {
+  app.dock.setIcon(appIcon);
+}
+
+app.setAboutPanelOptions({
+  applicationName: appName,
+  applicationVersion: app.getVersion(),
+  copyright: 'MIT licensed open-source MVP demo',
+  website: 'https://github.com/SimplyAvi/mechaflow-cad',
+  ...(fs.existsSync(iconPath) ? { iconPath } : {}),
+});
 
 const isDesktopOrigin = (url) => {
   try {
@@ -23,10 +43,11 @@ const createWindow = async () => {
     height: 980,
     minWidth: 1180,
     minHeight: 760,
-    title: 'MechaFlow CAD local desktop demo',
+    title: appName,
     backgroundColor: '#08111f',
     show: !smokeMode,
     autoHideMenuBar: true,
+    ...(appIcon.isEmpty() ? {} : { icon: appIcon }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -48,7 +69,10 @@ const createWindow = async () => {
   });
 
   await window.loadURL(desktopUrl);
-  if (smokeMode) app.quit();
+  if (smokeMode) {
+    console.log(`${appName} Electron shell loaded ${desktopUrl}`);
+    app.quit();
+  }
 };
 
 app.whenReady().then(createWindow);

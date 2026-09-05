@@ -73,10 +73,10 @@ PORT_COUNT=4 npm run ports:find
 The captain-friendly desktop path starts the mock API, Vite frontend, and Electron shell in one command:
 
 ```sh
-npm run desktop:dev
+npm start
 ```
 
-See [Desktop demo](desktop.md) for visual test steps, toolchain rationale, and the smoke check.
+`npm run desktop:macos:shortcut` installs a double-clickable macOS `.command` launcher for the same path. See [Desktop demo](desktop.md) for visual test steps, toolchain rationale, and the smoke check.
 
 ## Run only the frontend
 
