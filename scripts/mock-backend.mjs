@@ -267,6 +267,7 @@ const projectFileValidationError = (file) => {
   const requireObject = (value, path) => isObject(value) ? null : `${path} must be an object`;
   const requireArray = (value, path) => Array.isArray(value) ? null : `${path} must be an array`;
   const requireString = (value, path) => typeof value === 'string' && value.trim() ? null : `${path} is required and must be a non-blank string`;
+  const requireFiniteNumber = (value, path, minimum = 0) => typeof value === 'number' && Number.isFinite(value) && value >= minimum ? null : `${path} must be a finite number greater than or equal to ${minimum}`;
   const uniqueIds = (items, path) => {
     const seen = new Set();
     for (const [index, item] of items.entries()) {
@@ -346,9 +347,34 @@ const projectFileValidationError = (file) => {
           error = requireObject(part[field], `${assemblyPath}.parts.${field}`);
           if (error) return error;
         }
+        for (const field of ['length_mm', 'width_mm', 'height_mm', 'thickness_mm']) {
+          if (part.dimensions[field] != null) {
+            error = requireFiniteNumber(part.dimensions[field], `${assemblyPath}.parts.dimensions.${field}`, Number.MIN_VALUE);
+            if (error) return error;
+          }
+        }
+        if (part.mass_kg != null) {
+          error = requireFiniteNumber(part.mass_kg, `${assemblyPath}.parts.mass_kg`);
+          if (error) return error;
+        }
         for (const field of ['manufacturing_options', 'related_fasteners', 'wiring_route_ids']) {
           error = requireArray(part[field], `${assemblyPath}.parts.${field}`);
           if (error) return error;
+        }
+        for (const [optionIndex, option] of part.manufacturing_options.entries()) {
+          const optionPath = `${assemblyPath}.parts.manufacturing_options[${optionIndex}]`;
+          error = requiredFields(option, ['id', 'process', 'description', 'risk_notes'], optionPath);
+          if (error) return error;
+          error = requireString(option.process, `${optionPath}.process`) || requireString(option.description, `${optionPath}.description`);
+          if (error) return error;
+          if (option.lead_time_days_min != null) {
+            error = requireFiniteNumber(option.lead_time_days_min, `${optionPath}.lead_time_days_min`);
+            if (error) return error;
+          }
+          if (option.lead_time_days_max != null) {
+            error = requireFiniteNumber(option.lead_time_days_max, `${optionPath}.lead_time_days_max`);
+            if (error) return error;
+          }
         }
       }
       error = uniqueIds(assembly.wiring_routes, `${assemblyPath}.wiring_routes`);
@@ -377,10 +403,36 @@ const projectFileValidationError = (file) => {
       if (error) return error;
       error = requireObject(material.properties, 'project.materials.properties') || requireArray(material.compatible_processes, 'project.materials.compatible_processes') || requireArray(material.notes, 'project.materials.notes');
       if (error) return error;
+      for (const field of ['density_kg_m3', 'elastic_modulus_gpa', 'yield_strength_mpa', 'ultimate_strength_mpa', 'thermal_conductivity_w_mk', 'heat_deflection_temp_c', 'max_service_temp_c']) {
+        if (material.properties[field] != null) {
+          error = requireFiniteNumber(material.properties[field], `project.materials.properties.${field}`, 0);
+          if (error) return error;
+        }
+      }
+      if (material.properties.poisson_ratio != null) {
+        error = typeof material.properties.poisson_ratio === 'number' && Number.isFinite(material.properties.poisson_ratio) && material.properties.poisson_ratio >= 0 && material.properties.poisson_ratio < 0.5 ? null : 'project.materials.properties.poisson_ratio is invalid';
+        if (error) return error;
+      }
     }
     for (const assembly of candidate.assemblies) {
       for (const part of assembly.parts) {
         if (part.material_id != null && !materialIds.has(part.material_id)) return `part ${part.id} references unknown project material ${part.material_id}`;
+      }
+    }
+    for (const [modificationIndex, modification] of candidate.modifications.entries()) {
+      const modificationPath = `project.modifications[${modificationIndex}]`;
+      error = requiredFields(modification, ['id', 'target_part_id', 'description', 'dimension_changes'], modificationPath);
+      if (error) return error;
+      for (const field of ['id', 'target_part_id', 'description']) {
+        error = requireString(modification[field], `${modificationPath}.${field}`);
+        if (error) return error;
+      }
+      error = requireObject(modification.dimension_changes, `${modificationPath}.dimension_changes`);
+      if (error) return error;
+      for (const [field, value] of Object.entries(modification.dimension_changes)) {
+        if (!['length_mm', 'width_mm', 'height_mm', 'thickness_mm'].includes(field)) return `${modificationPath}.dimension_changes contains unsupported field ${field}`;
+        error = requireFiniteNumber(value, `${modificationPath}.dimension_changes.${field}`, Number.MIN_VALUE);
+        if (error) return error;
       }
     }
     error = uniqueIds(candidate.analysis_jobs, 'project.analysis_jobs');
@@ -422,13 +474,18 @@ const projectFileValidationError = (file) => {
   if (projectError) return projectError;
   if (file.analysis_readiness_previews != null) {
     if (!Array.isArray(file.analysis_readiness_previews)) return 'analysis_readiness_previews must be an array';
-    const targetIds = new Set(file.project.assemblies.flatMap((assembly) => [assembly.id, ...assembly.parts.map((part) => part.id)]));
+    const targets = new Map(file.project.assemblies.flatMap((assembly) => [
+      [assembly.id, { kind: 'assembly', name: assembly.name }],
+      ...assembly.parts.map((part) => [part.id, { kind: 'part', name: part.name }]),
+    ]));
     for (const [index, preview] of file.analysis_readiness_previews.entries()) {
       const previewPath = `analysis_readiness_previews[${index}]`;
       const previewError = requiredFields(preview, ['project_id', 'target_id', 'target_name', 'target_kind'], previewPath);
       if (previewError) return previewError;
       if (preview.project_id !== file.project.id) return `${previewPath}.project_id must match project.id`;
-      if (!targetIds.has(preview.target_id)) return `${previewPath}.target_id references an unknown project target`;
+      const target = targets.get(preview.target_id);
+      if (!target) return `${previewPath}.target_id references an unknown project target`;
+      if (preview.target_kind !== target.kind || preview.target_name !== target.name) return `${previewPath} target metadata does not match the project target`;
     }
   }
   return null;

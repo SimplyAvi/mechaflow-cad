@@ -165,6 +165,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     settings = settings or get_settings()
     project_store = project_store or build_default_project_store()
     readiness_previews_by_project: dict[str, list[AnalysisReadinessPreview]] = {}
+
+    def invalidate_readiness(project_id: str) -> None:
+        readiness_previews_by_project.pop(project_id, None)
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -226,6 +229,27 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 }
             },
         )
+
+    def validate_readiness_previews(project: Project, previews: list[AnalysisReadinessPreview]) -> None:
+        targets = {
+            **{assembly.id: ("assembly", assembly.name) for assembly in project.assemblies},
+            **{part.id: ("part", part.name) for assembly in project.assemblies for part in assembly.parts},
+        }
+        part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
+        for preview in previews:
+            target = targets.get(preview.target_id)
+            if target is None:
+                raise ValueError(f"analysis readiness target {preview.target_id!r} is not in the imported project")
+            if preview.target_kind != target[0] or preview.target_name != target[1]:
+                raise ValueError(f"analysis readiness metadata does not match target {preview.target_id!r}")
+            for load_case in preview.load_cases:
+                unknown = set(load_case.target_part_ids) - part_ids
+                if unknown:
+                    raise ValueError(f"analysis readiness load case {load_case.id!r} references unknown parts: {sorted(unknown)}")
+            for constraint in preview.constraints:
+                unknown = set(constraint.target_part_ids) - part_ids
+                if unknown:
+                    raise ValueError(f"analysis readiness constraint {constraint.id!r} references unknown parts: {sorted(unknown)}")
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:
@@ -355,6 +379,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         resolved_project_id = project_id or project_file.project.id
         try:
             validate_project_id(resolved_project_id)
+            validate_readiness_previews(project_file.project, project_file.analysis_readiness_previews)
             stored_project = project_store.upsert_project(resolved_project_id, project_file.project)
         except AnalysisJobAlreadyExistsError as exc:
             raise HTTPException(
@@ -386,7 +411,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.post(f"{settings.api_prefix}/projects", response_model=Project, status_code=201, tags=["projects"])
     def create_project(project: Project) -> Project:
         try:
-            return project_store.create_project(project)
+            created = project_store.create_project(project)
+            invalidate_readiness(created.id)
+            return created
         except ProjectAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="project already exists") from exc
         except AnalysisJobAlreadyExistsError as exc:
@@ -404,7 +431,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def upsert_project(project_id: str, project: Project) -> Project:
         try:
             validate_project_id(project_id)
-            return project_store.upsert_project(project_id, project)
+            updated = project_store.upsert_project(project_id, project)
+            invalidate_readiness(updated.id)
+            return updated
         except AnalysisJobAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
         except ValueError as exc:
@@ -509,6 +538,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if stored_project is None or result is None:
             raise HTTPException(status_code=404, detail="project not found")
+        invalidate_readiness(stored_project.id)
         return result.model_copy(update={"project": stored_project}, deep=True)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
@@ -561,7 +591,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 updated_at=now,
             )
             try:
-                return project_store.add_analysis_job(job)
+                stored_job = project_store.add_analysis_job(job)
+                invalidate_readiness(stored_job.project_id)
+                return stored_job
             except AnalysisJobAlreadyExistsError:
                 continue
             except ProjectNotFoundError as exc:
@@ -600,6 +632,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             )
 
         running_job = project_store.update_analysis_job(job_id, mark_running)
+        if running_job is not None:
+            invalidate_readiness(running_job.project_id)
         if running_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         project = get_project_or_404(running_job.project_id)
@@ -616,9 +650,13 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                     deep=True,
                 )
 
-            project_store.update_analysis_job(job_id, mark_failed)
+            failed_job = project_store.update_analysis_job(job_id, mark_failed)
+            if failed_job is not None:
+                invalidate_readiness(failed_job.project_id)
             raise HTTPException(status_code=404, detail="analysis target not found") from exc
         stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
+        if stored_job is not None:
+            invalidate_readiness(stored_job.project_id)
         if stored_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return stored_job
@@ -690,6 +728,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             )
 
         job = project_store.update_analysis_job(job_id, run_stub)
+        if job is not None:
+            invalidate_readiness(job.project_id)
         if job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return job
