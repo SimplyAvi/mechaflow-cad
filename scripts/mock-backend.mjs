@@ -268,6 +268,7 @@ const projectFileValidationError = (file) => {
   const requireArray = (value, path) => Array.isArray(value) ? null : `${path} must be an array`;
   const requireString = (value, path) => typeof value === 'string' && value.trim() ? null : `${path} is required and must be a non-blank string`;
   const requireFiniteNumber = (value, path, minimum = 0) => typeof value === 'number' && Number.isFinite(value) && value >= minimum ? null : `${path} must be a finite number greater than or equal to ${minimum}`;
+  const requireDateString = (value, path) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? null : `${path} must be a valid datetime string`;
   const uniqueIds = (items, path) => {
     const seen = new Set();
     for (const [index, item] of items.entries()) {
@@ -292,6 +293,18 @@ const projectFileValidationError = (file) => {
     error = requireString(candidate.id, 'project.id') || requireString(candidate.name, 'project.name');
     if (error) return error;
     if (candidate.id === 'sample' || candidate.id === '.' || candidate.id === '..' || !projectIdPattern.test(candidate.id)) return 'project.id must be a URL-safe path segment';
+    for (const field of ['description', 'reference_design_id']) {
+      if (candidate[field] != null) {
+        error = requireString(candidate[field], `project.${field}`);
+        if (error) return error;
+      }
+    }
+    for (const field of ['created_at', 'updated_at']) {
+      if (candidate[field] != null) {
+        error = requireDateString(candidate[field], `project.${field}`);
+        if (error) return error;
+      }
+    }
     if (candidate.active_task != null) {
       error = requiredFields(candidate.active_task, ['id', 'kind', 'description'], 'project.active_task');
       if (error) return error;
@@ -316,6 +329,7 @@ const projectFileValidationError = (file) => {
     const partIds = new Set(
       candidate.assemblies.flatMap((assembly) => (Array.isArray(assembly?.parts) ? assembly.parts.map((part) => part?.id) : [])),
     );
+    if (partIds.size !== candidate.assemblies.flatMap((assembly) => (Array.isArray(assembly?.parts) ? assembly.parts.map((part) => part?.id) : [])).length) return 'part ids must be unique across project assemblies';
     const routeIds = new Set();
     for (const [assemblyIndex, assembly] of candidate.assemblies.entries()) {
       const assemblyPath = `project.assemblies[${assemblyIndex}]`;
@@ -490,6 +504,8 @@ const projectFileValidationError = (file) => {
       [assembly.id, { kind: 'assembly', name: assembly.name }],
       ...assembly.parts.map((part) => [part.id, { kind: 'part', name: part.name }]),
     ]));
+    const targetIds = file.project.assemblies.flatMap((assembly) => [assembly.id, ...assembly.parts.map((part) => part.id)]);
+    if (targetIds.length !== new Set(targetIds).size) return 'readiness target ids must be unique across assemblies and parts';
     const partIds = new Set(file.project.assemblies.flatMap((assembly) => assembly.parts.map((part) => part.id)));
     for (const [index, preview] of file.analysis_readiness_previews.entries()) {
       const previewPath = `analysis_readiness_previews[${index}]`;
