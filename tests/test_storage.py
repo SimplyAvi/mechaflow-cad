@@ -82,3 +82,22 @@ def test_cached_reports_require_explicit_job_association() -> None:
     job = sample.analysis_jobs[0]
 
     assert build_cached_report_refs(sample, job) == []
+
+
+def test_analysis_job_storage_rejects_report_from_another_job() -> None:
+    sample = build_sample_project()
+    source_job = sample.analysis_jobs[0]
+    report = sample.reports[0]
+    job = source_job.model_copy(update={
+        "cached_report_refs": [CachedAnalysisReportReference(
+            report_id=report.id,
+            project_id=sample.id,
+            title=report.title,
+            status=report.status,
+            generated_at=report.generated_at,
+            derived_from_job_id="other-job",
+        )],
+    }, deep=True)
+
+    with pytest.raises(ValueError, match="does not belong to job"):
+        InMemoryProjectStore(seed_projects=[sample]).update_analysis_job(source_job.id, lambda _: job)

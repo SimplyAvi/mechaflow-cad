@@ -605,8 +605,6 @@ def normalize_cached_references(
         for item in manifest if isinstance(manifest, list) else []:
             if not isinstance(item, dict):
                 raise ValueError(f"analysis artifact {artifact.id!r} has malformed file_manifest item")
-            if item.get("missing"):
-                continue
             name = item.get("name")
             download_url = item.get("download_url")
             if not isinstance(name, str) or not name.strip() or name in {".", ".."} or "/" in name or "\\" in name:
@@ -638,6 +636,8 @@ def normalize_cached_references(
     for ref in job.cached_report_refs:
         if ref.project_id != project_id:
             raise ValueError(f"cached report reference {ref.report_id!r} belongs to another project")
+        if ref.derived_from_job_id != job.id:
+            raise ValueError(f"cached report reference {ref.report_id!r} does not belong to job {job.id!r}")
         report = reports_by_id.get(ref.report_id)
         if report is None:
             raise ValueError(f"cached report reference {ref.report_id!r} does not exist in project {project_id!r}")

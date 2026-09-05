@@ -1313,16 +1313,14 @@ const projectFileValidationError = (file) => {
         if (manifest != null) {
           if (!Array.isArray(manifest)) return `analysis artifact ${artifact.id}.payload.file_manifest must be an array`;
           for (const item of manifest) {
-            if (item?.missing) continue;
             if (!item || typeof item.name !== 'string' || !item.name.trim() || item.name === '.' || item.name === '..' || item.name.includes('/') || item.name.includes('\\')) return `analysis artifact ${artifact.id} has an unsafe file name`;
-            if (item.download_url !== `/api/analysis-artifacts/${artifact.id}/${item.name}`) return `analysis artifact ${artifact.id} has stale or impossible download_url metadata`;
+            if (item.download_url != null && item.download_url !== `/api/analysis-artifacts/${artifact.id}/${item.name}`) return `analysis artifact ${artifact.id} has stale or impossible download_url metadata`;
           }
         }
       }
       const artifactById = new Map(job.artifacts.map((artifact) => [artifact.id, artifact]));
       for (const ref of job.cached_artifact_refs ?? []) {
         if (!ref || ref.job_id !== job.id || ref.project_id !== candidate.id || !artifactById.has(ref.artifact_id) || ref.kind !== artifactById.get(ref.artifact_id).kind) return `cached artifact reference for analysis job ${job.id} is invalid`;
-        if (ref.status === 'current') return `cached artifact reference for analysis job ${job.id} cannot be current in the mock backend`;
       }
     }
     error = uniqueIds(candidate.reports, 'project.reports');
@@ -1863,6 +1861,17 @@ const server = http.createServer(async (request, response) => {
       importedProject.id = resolvedProjectId;
       for (const job of importedProject.analysis_jobs) {
         if (job.project_id === sourceProjectId) job.project_id = resolvedProjectId;
+        for (const ref of job.cached_artifact_refs ?? []) {
+          if (ref.project_id === sourceProjectId) ref.project_id = resolvedProjectId;
+          if (ref.status === 'current') {
+            ref.status = 'stale_missing_files';
+            ref.stale_reason = 'Mock backend cannot verify retained artifact files.';
+            ref.download_urls = [];
+          }
+        }
+        for (const ref of job.cached_report_refs ?? []) {
+          if (ref.project_id === sourceProjectId) ref.project_id = resolvedProjectId;
+        }
       }
       for (const report of importedProject.reports) {
         if (report.project_id === sourceProjectId) report.project_id = resolvedProjectId;
