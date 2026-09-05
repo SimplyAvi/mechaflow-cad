@@ -275,30 +275,73 @@ const projectFile = () => ({
 
 const normalizeProjectFileDefaults = (file) => {
   const withDefault = (value, fallback) => value === undefined ? fallback : value;
+  const now = new Date().toISOString();
   return {
-  ...file,
-  metadata: withDefault(file.metadata, {}),
-  extensions: withDefault(file.extensions, {}),
-  project: {
-    ...file.project,
-    assemblies: withDefault(file.project.assemblies, []).map((assembly) => ({
-      ...assembly,
-      nodes: withDefault(assembly.nodes, []),
-      parts: withDefault(assembly.parts, []).map((part) => ({
-        ...part,
-        dimensions: withDefault(part.dimensions, {}),
-        manufacturing_options: withDefault(part.manufacturing_options, []),
-        related_fasteners: withDefault(part.related_fasteners, []),
-        wiring_route_ids: withDefault(part.wiring_route_ids, []),
-        metadata: withDefault(part.metadata, {}),
+    ...file,
+    metadata: withDefault(file.metadata, {}),
+    extensions: withDefault(file.extensions, {}),
+    project: {
+      ...file.project,
+      assemblies: withDefault(file.project.assemblies, []).map((assembly) => ({
+        ...assembly,
+        nodes: withDefault(assembly.nodes, []).map((node) => ({
+          ...node,
+          part_ids: withDefault(node.part_ids, []),
+          child_assembly_ids: withDefault(node.child_assembly_ids, []),
+          exploded_transform: withDefault(node.exploded_transform, {}),
+        })),
+        parts: withDefault(assembly.parts, []).map((part) => ({
+          ...part,
+          dimensions: withDefault(part.dimensions, {}),
+          manufacturing_options: withDefault(part.manufacturing_options, []),
+          related_fasteners: withDefault(part.related_fasteners, []),
+          wiring_route_ids: withDefault(part.wiring_route_ids, []),
+          metadata: withDefault(part.metadata, {}),
+        })),
+        wiring_routes: withDefault(assembly.wiring_routes, []).map((route) => ({
+          ...route,
+          path_points_mm: withDefault(route.path_points_mm, []),
+          harness_bom: withDefault(route.harness_bom, []),
+          risk_notes: withDefault(route.risk_notes, []),
+        })),
       })),
-      wiring_routes: withDefault(assembly.wiring_routes, []),
-    })),
-    materials: withDefault(file.project.materials, []),
-    modifications: withDefault(file.project.modifications, []),
-    analysis_jobs: withDefault(file.project.analysis_jobs, []),
-    reports: withDefault(file.project.reports, []),
-  },
+      materials: withDefault(file.project.materials, []).map((material) => ({
+        ...material,
+        properties: withDefault(material.properties, {}),
+        compatible_processes: withDefault(material.compatible_processes, []),
+        notes: withDefault(material.notes, []),
+      })),
+      modifications: withDefault(file.project.modifications, []).map((modification) => ({
+        ...modification,
+        dimension_changes: withDefault(modification.dimension_changes, {}),
+        created_at: withDefault(modification.created_at, now),
+      })),
+      analysis_jobs: withDefault(file.project.analysis_jobs, []).map((job) => ({
+        ...job,
+        local_compute_preferred: withDefault(job.local_compute_preferred, true),
+        input_summary: withDefault(job.input_summary, {}),
+        result_summary: withDefault(job.result_summary, {}),
+        artifacts: withDefault(job.artifacts, []).map((artifact) => ({
+          ...artifact,
+          payload: withDefault(artifact.payload, {}),
+          created_at: withDefault(artifact.created_at, now),
+        })),
+        created_at: withDefault(job.created_at, now),
+        updated_at: withDefault(job.updated_at, now),
+      })),
+      reports: withDefault(file.project.reports, []).map((report) => ({
+        ...report,
+        status: withDefault(report.status, 'advisory'),
+        task_results: withDefault(report.task_results, []),
+        manufacturing_impacts: withDefault(report.manufacturing_impacts, []),
+        wiring_impacts: withDefault(report.wiring_impacts, []),
+        risks: withDefault(report.risks, []),
+        unknowns: withDefault(report.unknowns, []),
+        recommendations: withDefault(report.recommendations, []),
+        assumptions: withDefault(report.assumptions, []),
+        generated_at: withDefault(report.generated_at, now),
+      })),
+    },
   };
 };
 
