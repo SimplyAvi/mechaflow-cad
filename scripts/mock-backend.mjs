@@ -218,6 +218,27 @@ const projectPanelData = () => ({
   reports: project.reports,
 });
 
+const projectFileProject = () => {
+  const exportedProject = structuredClone(project);
+  exportedProject.analysis_jobs = exportedProject.analysis_jobs.map((job) => ({
+    ...job,
+    created_at: job.created_at ?? new Date().toISOString(),
+    updated_at: job.updated_at ?? new Date().toISOString(),
+    artifacts: job.artifacts.map((artifact, index) => ({
+      ...artifact,
+      id: artifact.id ?? `artifact-${job.id}-${index + 1}`,
+      job_id: artifact.job_id ?? job.id,
+      kind: artifact.kind,
+      title: artifact.title,
+      summary: artifact.summary ?? artifact.title,
+      payload: artifact.payload ?? {},
+      generated_by: artifact.generated_by ?? job.adapter_name,
+      created_at: artifact.created_at ?? job.created_at ?? new Date().toISOString(),
+    })),
+  }));
+  return exportedProject;
+};
+
 const projectFile = () => ({
   format: 'mechaflow-cad.project',
   schema_version: '1.0',
@@ -230,7 +251,7 @@ const projectFile = () => ({
       'Real STEP and FreeCAD imports are future extensions.',
     ],
   },
-  project,
+  project: projectFileProject(),
   analysis_readiness_previews: currentReadinessPreviews(),
   extensions: {
     future_imports: {
@@ -302,7 +323,9 @@ const projectFileValidationError = (file) => {
         error = requireObject(node.exploded_transform, `${nodePath}.exploded_transform`);
         if (error) return error;
         for (const partId of node.part_ids) if (!partIds.has(partId)) return `assembly node ${node.id} references unknown part ${partId}`;
-        for (const childNodeId of node.child_assembly_ids) if (!nodeIds.has(childNodeId)) return `assembly node ${node.id} references unknown child node ${childNodeId}`;
+        for (const childAssemblyId of node.child_assembly_ids) {
+          if (!assemblyIds.has(childAssemblyId) && !nodeIds.has(childAssemblyId)) return `assembly node ${node.id} references unknown child assembly ${childAssemblyId}`;
+        }
       }
       if (!nodeIds.has(assembly.root_node_id)) return `assembly ${assembly.id} references unknown root node ${assembly.root_node_id}`;
       error = uniqueIds(assembly.parts, `${assemblyPath}.parts`);
@@ -358,7 +381,7 @@ const projectFileValidationError = (file) => {
       error = requireArray(job.artifacts, `analysis job ${job.id}.artifacts`);
       if (error) return error;
       for (const artifact of job.artifacts) {
-        error = requiredFields(artifact, ['kind', 'title'], `analysis job ${job.id}.artifacts`);
+        error = requiredFields(artifact, ['id', 'job_id', 'kind', 'title', 'summary', 'payload', 'generated_by', 'created_at'], `analysis job ${job.id}.artifacts`);
         if (error) return error;
         if (artifact.job_id != null && artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
         if (artifact.kind !== analysisArtifactKindByJobType[job.job_type] && !legacyMockArtifactKindsByJobType[job.job_type]?.has(artifact.kind)) return `analysis job type ${job.job_type} requires a compatible artifact kind`;
@@ -583,9 +606,7 @@ const server = http.createServer(async (request, response) => {
         updated_at: new Date().toISOString(),
       };
       projectId = project.id;
-      analysisReadinessPreviews = Array.isArray(body.analysis_readiness_previews)
-        ? structuredClone(body.analysis_readiness_previews)
-        : [];
+      analysisReadinessPreviews = [];
       send(200, {
         status: 'imported',
         project_id: projectId,
