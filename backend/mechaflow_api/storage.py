@@ -113,6 +113,7 @@ def normalize_analysis_job(
     job: AnalysisJob,
     job_id: str | None = None,
     reports: list[AnalysisReport] | None = None,
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
 ) -> AnalysisJob:
     _ensure_json_finite(job.model_dump(mode="python"), "analysis_job")
     if get_adapter_for_job(job) is None:
@@ -128,14 +129,8 @@ def normalize_analysis_job(
             )
     normalized_job_id = job.id if job_id is None else job_id
     artifacts = [artifact.model_copy(update={"job_id": normalized_job_id}, deep=True) for artifact in job.artifacts]
-    cached_artifact_refs = [
-        ref.model_copy(update={"job_id": normalized_job_id, "project_id": project_id}, deep=True)
-        for ref in job.cached_artifact_refs
-    ]
-    cached_report_refs = [
-        ref.model_copy(update={"project_id": project_id}, deep=True)
-        for ref in job.cached_report_refs
-    ]
+    cached_artifact_refs = [ref.model_copy(deep=True) for ref in job.cached_artifact_refs]
+    cached_report_refs = [ref.model_copy(deep=True) for ref in job.cached_report_refs]
     normalized = job.model_copy(
         update={
             "id": normalized_job_id,
@@ -146,10 +141,14 @@ def normalize_analysis_job(
         },
         deep=True,
     )
-    return normalize_cached_references(project_id, normalized, reports or [])
+    return normalize_cached_references(project_id, normalized, reports or [], artifact_file_exists)
 
 
-def normalize_project_references(project_id: str, project: Project) -> Project:
+def normalize_project_references(
+    project_id: str,
+    project: Project,
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
+) -> Project:
     project_id = validate_project_id(project_id)
     _ensure_json_finite(project.model_dump(mode="python"), "project")
     part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
@@ -339,7 +338,15 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
         for assembly in project.assemblies
     ]
     reports = [report.model_copy(update={"project_id": project_id}, deep=True) for report in project.reports]
-    analysis_jobs = [normalize_analysis_job(project_id, job, reports=reports) for job in project.analysis_jobs]
+    analysis_jobs = [
+        normalize_analysis_job(
+            project_id,
+            job,
+            reports=reports,
+            artifact_file_exists=artifact_file_exists,
+        )
+        for job in project.analysis_jobs
+    ]
     return project.model_copy(
         update={"id": project_id, "assemblies": assemblies, "analysis_jobs": analysis_jobs, "reports": reports},
         deep=True,
@@ -347,9 +354,14 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
 
 
 class InMemoryProjectStore:
-    def __init__(self, seed_projects: list[Project] | None = None) -> None:
+    def __init__(
+        self,
+        seed_projects: list[Project] | None = None,
+        artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
+    ) -> None:
         self._lock = RLock()
         self._projects: dict[str, Project] = {}
+        self._artifact_file_exists = artifact_file_exists
         for project in seed_projects or []:
             self.create_project(project)
 
@@ -384,14 +396,14 @@ class InMemoryProjectStore:
             if project.id in self._projects:
                 raise ProjectAlreadyExistsError(project.id)
             self._ensure_job_ids_available(project.id, project)
-            stored = normalize_project_references(project.id, project)
+            stored = normalize_project_references(project.id, project, self._artifact_file_exists)
             self._projects[project.id] = stored
             return stored.model_copy(deep=True)
 
     def upsert_project(self, project_id: str, project: Project) -> Project:
         with self._lock:
             self._ensure_job_ids_available(project_id, project)
-            stored = normalize_project_references(project_id, project)
+            stored = normalize_project_references(project_id, project, self._artifact_file_exists)
             self._projects[project_id] = stored
             return stored.model_copy(deep=True)
 
@@ -402,7 +414,7 @@ class InMemoryProjectStore:
                 return None
             updated = update(project.model_copy(deep=True))
             self._ensure_job_ids_available(project_id, updated)
-            stored = normalize_project_references(project_id, updated)
+            stored = normalize_project_references(project_id, updated, self._artifact_file_exists)
             self._projects[project_id] = stored
             return stored.model_copy(deep=True)
 
@@ -430,7 +442,12 @@ class InMemoryProjectStore:
             project = self._projects.get(job.project_id)
             if project is None:
                 raise ProjectNotFoundError(job.project_id)
-            stored = normalize_analysis_job(project.id, job, reports=project.reports)
+            stored = normalize_analysis_job(
+                project.id,
+                job,
+                reports=project.reports,
+                artifact_file_exists=self._artifact_file_exists,
+            )
             self._projects[project.id] = project.model_copy(
                 update={"analysis_jobs": [*project.analysis_jobs, stored]},
                 deep=True,
@@ -452,6 +469,7 @@ class InMemoryProjectStore:
                         update(job.model_copy(deep=True)),
                         job_id,
                         reports=project.reports,
+                        artifact_file_exists=self._artifact_file_exists,
                     )
                     jobs = list(project.analysis_jobs)
                     jobs[index] = stored
@@ -607,5 +625,7 @@ def build_sample_project() -> Project:
     )
 
 
-def build_default_project_store() -> InMemoryProjectStore:
-    return InMemoryProjectStore(seed_projects=[build_sample_project()])
+def build_default_project_store(
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
+) -> InMemoryProjectStore:
+    return InMemoryProjectStore(seed_projects=[build_sample_project()], artifact_file_exists=artifact_file_exists)

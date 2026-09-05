@@ -1,6 +1,6 @@
 import pytest
 
-from mechaflow_api.job_queue import build_cached_artifact_refs
+from mechaflow_api.job_queue import build_cached_artifact_refs, build_cached_report_refs
 from mechaflow_api.models import CachedAnalysisReportReference, CachedArtifactStatus
 from mechaflow_api.storage import InMemoryProjectStore, ProjectAlreadyExistsError, build_sample_project
 
@@ -75,3 +75,10 @@ def test_analysis_job_storage_rejects_missing_report_cache_reference() -> None:
 
     with pytest.raises(ValueError, match="does not exist in project"):
         InMemoryProjectStore(seed_projects=[sample]).update_analysis_job(source_job.id, lambda _: job)
+
+
+def test_cached_reports_require_explicit_job_association() -> None:
+    sample = build_sample_project()
+    job = sample.analysis_jobs[0]
+
+    assert build_cached_report_refs(sample, job) == []

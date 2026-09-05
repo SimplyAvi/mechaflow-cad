@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import Callable, Iterable
 
 from .adapters import choose_adapter, get_adapter_for_job
 from .models import (
@@ -443,12 +443,22 @@ def _manifest_download_urls(artifact: AnalysisArtifact) -> list[str]:
             continue
         download_url = item.get("download_url")
         name = item.get("name")
-        if isinstance(download_url, str) and isinstance(name, str) and f"/analysis-artifacts/{artifact.id}/" in download_url:
+        if (
+            isinstance(download_url, str)
+            and isinstance(name, str)
+            and name not in {".", ".."}
+            and "/" not in name
+            and "\\" not in name
+            and download_url == f"/api/analysis-artifacts/{artifact.id}/{name}"
+        ):
             urls.append(download_url)
     return urls
 
 
-def _artifact_cache_status(artifact: AnalysisArtifact) -> tuple[CachedArtifactStatus, str | None]:
+def _artifact_cache_status(
+    artifact: AnalysisArtifact,
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
+) -> tuple[CachedArtifactStatus, str | None]:
     manifest = artifact.payload.get("file_manifest", [])
     if not manifest:
         return CachedArtifactStatus.metadata_only, "Artifact metadata is cached, but no downloadable local files are attached."
@@ -457,15 +467,29 @@ def _artifact_cache_status(artifact: AnalysisArtifact) -> tuple[CachedArtifactSt
     produced = [item for item in manifest if isinstance(item, dict) and not item.get("missing")]
     if not produced:
         return CachedArtifactStatus.stale_missing_files, "Artifact manifest has no currently downloadable files."
+    if any(
+        not isinstance(item.get("name"), str)
+        or not item["name"].strip()
+        or item["name"] in {".", ".."}
+        or "/" in item["name"]
+        or "\\" in item["name"]
+        for item in produced
+    ):
+        return CachedArtifactStatus.stale_missing_files, "Artifact manifest contains an unsafe file name."
     if len(_manifest_download_urls(artifact)) != len(produced):
         return CachedArtifactStatus.stale_missing_files, "Artifact manifest download URLs do not match the current artifact boundary."
+    if artifact_file_exists is None or any(not artifact_file_exists(artifact, item["name"]) for item in produced):
+        return CachedArtifactStatus.stale_missing_files, "Retained artifact files cannot be confirmed at the local storage boundary."
     return CachedArtifactStatus.current, None
 
 
-def build_cached_artifact_refs(job: AnalysisJob) -> list[CachedAnalysisArtifactReference]:
+def build_cached_artifact_refs(
+    job: AnalysisJob,
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
+) -> list[CachedAnalysisArtifactReference]:
     refs = []
     for artifact in job.artifacts:
-        status, stale_reason = _artifact_cache_status(artifact)
+        status, stale_reason = _artifact_cache_status(artifact, artifact_file_exists)
         refs.append(CachedAnalysisArtifactReference(
             artifact_id=artifact.id,
             job_id=job.id,
@@ -484,11 +508,11 @@ def build_cached_artifact_refs(job: AnalysisJob) -> list[CachedAnalysisArtifactR
 
 def build_cached_report_refs(project: Project, job: AnalysisJob) -> list[CachedAnalysisReportReference]:
     report_id = job.result_summary.get("report_id")
+    if not isinstance(report_id, str) or not report_id:
+        return []
     refs = []
     for report in project.reports:
-        if report_id is not None and report.id != report_id:
-            continue
-        if report.generated_at < job.created_at and report_id is None:
+        if report.id != report_id:
             continue
         refs.append(CachedAnalysisReportReference(
             report_id=report.id,
@@ -520,6 +544,7 @@ def enrich_analysis_job_for_queue(
     project: Project,
     job: AnalysisJob,
     tool_statuses: list[LocalSolverToolStatus],
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
 ) -> AnalysisJob:
     request = AnalysisJobRequest(
         job_type=job.job_type,
@@ -533,15 +558,19 @@ def enrich_analysis_job_for_queue(
         update={
             "status": _status_for_recommendation(job.status, recommendation),
             "recommendation": recommendation,
-            "cached_artifact_refs": build_cached_artifact_refs(job),
+            "cached_artifact_refs": build_cached_artifact_refs(job, artifact_file_exists),
             "cached_report_refs": build_cached_report_refs(project, job),
         },
         deep=True,
     )
 
 
-def build_analysis_job_queue(project: Project, tool_statuses: list[LocalSolverToolStatus]) -> AnalysisJobQueue:
-    jobs = [enrich_analysis_job_for_queue(project, job, tool_statuses) for job in project.analysis_jobs]
+def build_analysis_job_queue(
+    project: Project,
+    tool_statuses: list[LocalSolverToolStatus],
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
+) -> AnalysisJobQueue:
+    jobs = [enrich_analysis_job_for_queue(project, job, tool_statuses, artifact_file_exists) for job in project.analysis_jobs]
     counts = Counter(job.status.value for job in jobs)
     local_ready_count = sum(1 for job in jobs if job.recommendation and job.recommendation.recommended_target == AnalysisExecutionTarget.local)
     cloud_planning_count = sum(1 for job in jobs if job.recommendation and job.recommendation.recommended_target == AnalysisExecutionTarget.cloud_recommended_when_configured)
@@ -566,6 +595,7 @@ def normalize_cached_references(
     project_id: str,
     job: AnalysisJob,
     reports: Iterable[AnalysisReport],
+    artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
 ) -> AnalysisJob:
     artifact_by_id = {artifact.id: artifact for artifact in job.artifacts}
     for artifact in job.artifacts:
@@ -579,9 +609,9 @@ def normalize_cached_references(
                 continue
             name = item.get("name")
             download_url = item.get("download_url")
-            if not isinstance(name, str) or not name.strip():
+            if not isinstance(name, str) or not name.strip() or name in {".", ".."} or "/" in name or "\\" in name:
                 raise ValueError(f"analysis artifact {artifact.id!r} has a file reference without a stable name")
-            if download_url is not None and (not isinstance(download_url, str) or f"/analysis-artifacts/{artifact.id}/{name}" not in download_url):
+            if download_url is not None and download_url != f"/api/analysis-artifacts/{artifact.id}/{name}":
                 raise ValueError(f"analysis artifact {artifact.id!r} has stale or impossible download_url metadata")
     normalized_artifact_refs = []
     for ref in job.cached_artifact_refs:
@@ -590,7 +620,7 @@ def normalize_cached_references(
             raise ValueError(f"cached artifact reference {ref.artifact_id!r} is not attached to job {job.id!r}")
         if ref.job_id != job.id or ref.project_id != project_id or ref.kind != artifact.kind:
             raise ValueError(f"cached artifact reference {ref.artifact_id!r} does not match its current job")
-        status, stale_reason = _artifact_cache_status(artifact)
+        status, stale_reason = _artifact_cache_status(artifact, artifact_file_exists)
         normalized_artifact_refs.append(ref.model_copy(update={
             "project_id": project_id,
             "job_id": job.id,
