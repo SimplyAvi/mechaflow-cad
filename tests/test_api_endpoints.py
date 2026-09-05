@@ -1196,8 +1196,9 @@ def test_analysis_recommendation_prefers_cloud_planning_when_local_tools_are_mis
     )
 
     assert local_response.status_code == 200
-    assert local_response.json()["recommended_target"] == "local"
-    assert local_response.json()["cost_estimate"]["notice"].endswith("not a paid compute quote.")
+    assert local_response.json()["recommended_target"] == "unavailable"
+    assert local_response.json()["cloud_execution_available"] is False
+    assert local_response.json()["cloud_configuration_required"] is True
     assert cloud_response.status_code == 200
     cloud_payload = cloud_response.json()
     assert cloud_payload["recommended_target"] == "cloud_recommended_when_configured"
@@ -1221,12 +1222,8 @@ def test_existing_analysis_job_can_run_local_pre_solver_boundary() -> None:
 
     completed = local_client.post(f"/api/analysis-jobs/{created['id']}/run-local")
 
-    assert completed.status_code == 200
-    payload = completed.json()
-    assert payload["adapter_name"] == "calculix-fea-worker"
-    assert payload["status"] == "completed"
-    assert payload["artifacts"][-1]["title"] == "Local pre-solver screening package, not FEA"
-    assert payload["artifacts"][-1]["payload"]["result_label"] == "review_required_not_fea"
+    assert completed.status_code == 409
+    assert completed.json()["detail"] == "local execution is unavailable for this analysis job adapter"
 
 
 def test_project_pre_solver_run_rejects_unknown_targets_and_unsupported_jobs() -> None:
@@ -1487,6 +1484,7 @@ def test_persisted_job_artifacts_must_match_their_job_type() -> None:
     job["job_type"] = AnalysisJobType.run_fea.value
     job["adapter_name"] = "calculix-fea-worker"
     job["artifacts"][0]["job_id"] = job["id"]
+    job["artifacts"][0]["id"] = "artifact-invalid-job-kind"
     job["artifacts"][0]["kind"] = "bom"
 
     response = local_client.post("/api/projects", json=project)

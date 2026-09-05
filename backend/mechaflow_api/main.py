@@ -530,6 +530,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             NonFiniteStorageValueError,
         ) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
