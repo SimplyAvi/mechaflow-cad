@@ -310,6 +310,7 @@ const normalizeProjectFileDefaults = (file) => {
           path_points_mm: withDefault(route.path_points_mm, []),
           harness_bom: withDefault(route.harness_bom, []),
           risk_notes: withDefault(route.risk_notes, []),
+          confidence: withDefault(route.confidence, 'unknown_or_needs_review'),
         })),
       })),
       materials: mapObjects(file.project.materials, (material) => ({

@@ -174,7 +174,7 @@ DEFAULT_ASSEMBLY = Assembly(
             id="node-root",
             name="Gripper root",
             part_ids=["part-palm-plate", "part-actuator-bracket", "part-controller-pcb"],
-            child_assembly_ids=["node-finger"],
+            child_assembly_ids=[],
         ),
         AssemblyNode(
             id="node-finger",
