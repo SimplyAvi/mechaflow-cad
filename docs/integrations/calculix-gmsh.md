@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use FreeCAD, Gmsh, and CalculiX as separable future workers for geometry preparation, mesh generation, and static structural checks that support advisory capability re-rating. The current MVP records pre-solver inputs and expected artifacts only; it does not run FEA.
+Use FreeCAD, Gmsh, and CalculiX as separable future workers for geometry preparation, mesh generation, and static structural checks that support advisory capability re-rating. The local runner can package pre-solver inputs and a review-required demo screening artifact, but it does not run FEA. See [Backend development](../backend.md) for the runner contract and invocation.
 
 ## Initial capabilities
 

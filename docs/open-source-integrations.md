@@ -82,7 +82,7 @@ Use:
 
 ## FEA and meshing
 
-Current MVP status: the app records pre-solver load cases, constraints, material provenance, thermal guidance, and expected artifacts only. It does not run a solver. Demo estimates must be replaced by real solver and review artifacts before engineering use.
+Current MVP status: the app records pre-solver load cases, constraints, material provenance, thermal guidance, and expected artifacts, and can package a review-required demo screening artifact. It does not run a solver. Demo estimates must be replaced by real solver and review artifacts before engineering use. See [Backend development](backend.md) for the runner contract and invocation.
 
 ### FreeCAD FEM preparation
 
