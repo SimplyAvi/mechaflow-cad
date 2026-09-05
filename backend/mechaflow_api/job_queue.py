@@ -146,7 +146,7 @@ def build_execution_target_recommendation(
     elif request.job_type in {AnalysisJobType.rerate_payload_capability}:
         required_tools = {"CalculiX"}
     elif request.job_type in {AnalysisJobType.quick_load_heuristic}:
-        required_tools = set()
+        required_tools = set() if synthetic_job.adapter_name in PRESOLVER_LOCAL_RUNNERS else {"CalculiX"}
     elif adapter and adapter.status.open_source_candidate:
         candidate = adapter.status.open_source_candidate.lower()
         if "freecad" in candidate:
@@ -377,7 +377,12 @@ def build_execution_target_recommendation(
             cloud_notice=UNCONFIGURED_CLOUD_NOTICE,
         )
 
-    if missing_tools or expected_runtime > 90 or not request.local_compute_preferred:
+    if (
+        missing_tools
+        or expected_runtime > 90
+        or not request.local_compute_preferred
+        or (request.job_type in STRUCTURAL_JOB_TYPES and synthetic_job.adapter_name not in PRESOLVER_LOCAL_RUNNERS)
+    ):
         cloud_min = max(3, expected_runtime * 0.2)
         cloud_max = max(cloud_min + 5, expected_runtime * 0.5)
         return AnalysisExecutionTargetRecommendation(

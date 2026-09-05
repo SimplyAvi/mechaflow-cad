@@ -266,7 +266,7 @@ const mockJobRecommendation = (job, sourceProject = project) => {
       cloud_notice: 'Cloud execution is not configured in the mock backend.',
     };
   }
-  const isSafeLocal = job.adapter_name === 'local-pre-solver-runner' || job.job_type === 'quick_load_heuristic';
+  const isSafeLocal = job.adapter_name === 'local-pre-solver-runner';
   const needsCloudPlanning = ['freecad-worker', 'calculix-fea-worker'].includes(job.adapter_name) && !isSafeLocal;
   const complexity = target?.kind === 'assembly' ? Math.max(1, target.partIds.length * 3) : 3;
   if (isSafeLocal) {
@@ -326,12 +326,12 @@ const cachedArtifactRefsFor = (job, sourceProject = project) => (job.artifacts ?
   project_id: sourceProject.id,
   kind: artifact.kind,
   title: artifact.title,
-  status: Array.isArray(artifact.payload?.file_manifest) ? 'stale_missing_files' : 'metadata_only',
+  status: Array.isArray(artifact.payload?.file_manifest) && artifact.payload.file_manifest.length > 0 ? 'stale_missing_files' : 'metadata_only',
   generated_by: artifact.generated_by,
   generated_at: artifact.created_at ?? new Date().toISOString(),
   download_urls: [],
   summary: artifact.summary,
-  stale_reason: Array.isArray(artifact.payload?.file_manifest) ? 'Mock backend does not serve persisted artifact files.' : 'Artifact metadata only.',
+  stale_reason: Array.isArray(artifact.payload?.file_manifest) && artifact.payload.file_manifest.length > 0 ? 'Mock backend does not serve persisted artifact files.' : 'Artifact metadata only.',
 }));
 
 const analysisJobQueue = (sourceProject = project) => {
