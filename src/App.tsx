@@ -59,30 +59,6 @@ const totalBomCost = (items: ReferenceDesign['bom']): UsdRange | null => {
   };
 };
 
-const formatUsdRange = (range: UsdRange): string => {
-  if (range.min != null && range.max != null) {
-    if (range.min === range.max) return formatCurrency(range.min);
-    return `${formatCurrency(range.min)}-${formatCurrency(range.max)}`;
-  }
-  if (range.min != null) return `From ${formatCurrency(range.min)}`;
-  return `Up to ${formatCurrency(range.max ?? 0)}`;
-};
-
-const totalBomCost = (items: ReferenceDesign['bom']): UsdRange | null => {
-  if (items.length === 0 || items.some((item) => item.unitCostRangeUsd == null)) return null;
-  const hasMin = items.every((item) => item.unitCostRangeUsd?.min != null);
-  const hasMax = items.every((item) => item.unitCostRangeUsd?.max != null);
-  if (!hasMin && !hasMax) return null;
-  return {
-    min: hasMin
-      ? items.reduce((sum, item) => sum + item.quantity * (item.unitCostRangeUsd?.min ?? 0), 0)
-      : null,
-    max: hasMax
-      ? items.reduce((sum, item) => sum + item.quantity * (item.unitCostRangeUsd?.max ?? 0), 0)
-      : null,
-  };
-};
-
 const statusLabel = {
   passes: 'Passes',
   watch: 'Watch',

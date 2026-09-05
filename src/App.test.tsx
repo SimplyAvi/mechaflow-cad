@@ -183,8 +183,9 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(8);
   });
 
-  it('renders near-threshold safety estimates without contradicting watch status', async () => {
+  it('keeps unsupported safety estimates review-required for a selected part', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
     const panelData = structuredClone(mockProjectPanelData);
     panelData.project.active_task!.target_value = 50;
     panelData.project.active_task!.safety_factor_min = 2;
@@ -200,8 +201,12 @@ describe('MechaFlow cockpit', () => {
     }));
 
     render(<App />);
+    const partTree = await screen.findByText('Selectable parts');
+    const treeContainer = partTree.closest('.part-tree');
+    expect(treeContainer).not.toBeNull();
+    await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Parallel gripper jaw link/i }));
 
-    expect(await screen.findByText(/Safety factor < 2\.0/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Payload rating review required/i)).toBeInTheDocument();
     expect(screen.queryByText(/2\.0 safety factor below the preserved 2\.0 minimum/i)).not.toBeInTheDocument();
   });
 
