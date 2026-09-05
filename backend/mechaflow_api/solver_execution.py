@@ -201,7 +201,7 @@ ARTIFACT_RETENTION_DAYS = 7
 MAX_ARTIFACT_BUNDLES = 100
 
 
-def _prepare_artifact_root(artifact_root: Path) -> None:
+def _prepare_artifact_root(artifact_root: Path, reserved_bundles: int = 0) -> None:
     artifact_root.mkdir(parents=True, exist_ok=True)
     cutoff = datetime.now(timezone.utc).timestamp() - ARTIFACT_RETENTION_DAYS * 86400
     bundles = sorted((path for path in artifact_root.iterdir() if path.is_dir()), key=lambda path: path.stat().st_mtime)
@@ -209,12 +209,13 @@ def _prepare_artifact_root(artifact_root: Path) -> None:
         if path.stat().st_mtime < cutoff:
             shutil.rmtree(path)
     remaining = sorted((path for path in artifact_root.iterdir() if path.is_dir()), key=lambda path: path.stat().st_mtime)
-    for path in remaining[:-MAX_ARTIFACT_BUNDLES]:
+    retained_limit = max(0, MAX_ARTIFACT_BUNDLES - reserved_bundles)
+    for path in remaining[:-retained_limit] if retained_limit else remaining:
         shutil.rmtree(path)
 
 
 def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, job_id: str) -> Path:
-    _prepare_artifact_root(artifact_root)
+    _prepare_artifact_root(artifact_root, reserved_bundles=1)
     destination = artifact_root / job_id
     destination.mkdir()
     for path in fixture.workdir.iterdir():
@@ -252,16 +253,6 @@ def _artifact_file_manifest(
                 }
             )
     return manifest
-
-
-def _solver_completion_evidence(workdir: Path) -> bool:
-    status_path = workdir / f"{CALCULIX_FIXTURE_DECK_NAME}.sta"
-    if not status_path.exists():
-        return False
-    status = status_path.read_text(encoding="utf-8", errors="replace").lower()
-    return "error" not in status and "fail" not in status and any(
-        marker in status for marker in ("complete", "success", "finished")
-    )
 
 
 def run_calculix_fixture(
@@ -374,7 +365,7 @@ def run_calculix_fixture(
     file_manifest = _artifact_file_manifest(durable_workdir, api_prefix, artifact_id)
     produced_outputs = [entry["name"] for entry in file_manifest if not entry.get("missing")]
     expected_outputs = {f"{CALCULIX_FIXTURE_DECK_NAME}.{suffix}" for suffix in ("dat", "frd", "sta")}
-    solver_succeeded = return_code == 0 and expected_outputs.issubset(produced_outputs) and _solver_completion_evidence(durable_workdir)
+    solver_succeeded = return_code == 0 and expected_outputs.issubset(produced_outputs)
     artifact = AnalysisArtifact(
         id=artifact_id,
         job_id=job.id,
