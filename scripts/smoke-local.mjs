@@ -159,6 +159,16 @@ try {
   if (invalidProjectFile.status !== 422) {
     throw new Error('Mock backend accepted an unsupported project file format.');
   }
+  const malformedProjectFile = structuredClone(exportedProjectFile);
+  delete malformedProjectFile.project.assemblies[0].root_node_id;
+  const malformedImport = await fetch(`${apiBaseUrl}/api/projects/import-file`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(malformedProjectFile),
+  });
+  if (malformedImport.status !== 422) {
+    throw new Error('Mock backend accepted an invalid nested project shape.');
+  }
   const importedProjectFile = await fetch(`${apiBaseUrl}/api/projects/import-file`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

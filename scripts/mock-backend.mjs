@@ -199,16 +199,127 @@ const projectFile = () => ({
 });
 
 const projectFileValidationError = (file) => {
+  const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const requireObject = (value, path) => isObject(value) ? null : `${path} must be an object`;
+  const requireArray = (value, path) => Array.isArray(value) ? null : `${path} must be an array`;
+  const requireString = (value, path) => typeof value === 'string' && value.trim() ? null : `${path} is required and must be a non-blank string`;
+  const uniqueIds = (items, path) => {
+    const seen = new Set();
+    for (const [index, item] of items.entries()) {
+      const error = requireString(item?.id, `${path}[${index}].id`);
+      if (error) return error;
+      if (seen.has(item.id)) return `${path} ids must be unique: ${item.id}`;
+      seen.add(item.id);
+    }
+    return null;
+  };
+  const requiredFields = (value, fields, path) => {
+    const objectError = requireObject(value, path);
+    if (objectError) return objectError;
+    for (const field of fields) {
+      if (!Object.hasOwn(value, field)) return `${path}.${field} is required`;
+    }
+    return null;
+  };
+  const validateProject = (candidate) => {
+    let error = requiredFields(candidate, ['id', 'name', 'assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports'], 'project');
+    if (error) return error;
+    error = requireString(candidate.id, 'project.id') || requireString(candidate.name, 'project.name');
+    if (error) return error;
+    for (const field of ['assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports']) {
+      error = requireArray(candidate[field], `project.${field}`);
+      if (error) return error;
+    }
+    error = uniqueIds(candidate.assemblies, 'project.assemblies');
+    if (error) return error;
+    error = uniqueIds(candidate.materials, 'project.materials');
+    if (error) return error;
+    const assemblyIds = new Set(candidate.assemblies.map((assembly) => assembly?.id));
+    const partIds = new Set(
+      candidate.assemblies.flatMap((assembly) => (Array.isArray(assembly?.parts) ? assembly.parts.map((part) => part?.id) : [])),
+    );
+    const routeIds = new Set();
+    for (const [assemblyIndex, assembly] of candidate.assemblies.entries()) {
+      const assemblyPath = `project.assemblies[${assemblyIndex}]`;
+      error = requiredFields(assembly, ['id', 'name', 'root_node_id', 'nodes', 'parts', 'wiring_routes'], assemblyPath);
+      if (error) return error;
+      for (const field of ['nodes', 'parts', 'wiring_routes']) {
+        error = requireArray(assembly[field], `${assemblyPath}.${field}`);
+        if (error) return error;
+      }
+      error = uniqueIds(assembly.parts, `${assemblyPath}.parts`);
+      if (error) return error;
+      for (const part of assembly.parts) {
+        if (assemblyIds.has(part?.id)) return `part id overlaps another project target: ${part?.id}`;
+        error = requiredFields(part, ['id', 'name', 'category', 'dimensions', 'manufacturing_options', 'related_fasteners', 'wiring_route_ids', 'metadata'], `${assemblyPath}.parts`);
+        if (error) return error;
+        for (const field of ['dimensions', 'metadata']) {
+          error = requireObject(part[field], `${assemblyPath}.parts.${field}`);
+          if (error) return error;
+        }
+        for (const field of ['manufacturing_options', 'related_fasteners', 'wiring_route_ids']) {
+          error = requireArray(part[field], `${assemblyPath}.parts.${field}`);
+          if (error) return error;
+        }
+      }
+      error = uniqueIds(assembly.wiring_routes, `${assemblyPath}.wiring_routes`);
+      if (error) return error;
+      for (const route of assembly.wiring_routes) {
+        if (routeIds.has(route?.id)) return `wiring route ids must be unique: ${route?.id}`;
+        routeIds.add(route?.id);
+        error = requiredFields(route, ['id', 'name', 'from_connector', 'to_connector', 'path_points_mm', 'harness_bom', 'risk_notes'], `${assemblyPath}.wiring_routes`);
+        if (error) return error;
+        for (const connectorField of ['from_connector', 'to_connector']) {
+          error = requiredFields(route[connectorField], ['id', 'name'], `${assemblyPath}.wiring_routes.${connectorField}`);
+          if (error) return error;
+          if (route[connectorField].part_id != null && !partIds.has(route[connectorField].part_id)) {
+            return `wiring route ${route.id} references unknown part ${route[connectorField].part_id}`;
+          }
+        }
+      }
+    }
+    const materialIds = new Set(candidate.materials.map((material) => material?.id));
+    for (const material of candidate.materials) {
+      error = requiredFields(material, ['id', 'name', 'family', 'properties', 'compatible_processes', 'notes'], 'project.materials');
+      if (error) return error;
+      error = requireObject(material.properties, 'project.materials.properties') || requireArray(material.compatible_processes, 'project.materials.compatible_processes') || requireArray(material.notes, 'project.materials.notes');
+      if (error) return error;
+    }
+    for (const assembly of candidate.assemblies) {
+      for (const part of assembly.parts) {
+        if (part.material_id != null && !materialIds.has(part.material_id)) return `part ${part.id} references unknown project material ${part.material_id}`;
+        for (const routeId of part.wiring_route_ids) if (!routeIds.has(routeId)) return `part ${part.id} references unknown wiring route ${routeId}`;
+      }
+    }
+    error = uniqueIds(candidate.analysis_jobs, 'project.analysis_jobs');
+    if (error) return error;
+    for (const job of candidate.analysis_jobs) {
+      error = requiredFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'input_summary', 'result_summary', 'artifacts', 'created_at', 'updated_at'], 'project.analysis_jobs');
+      if (error) return error;
+      if (job.project_id !== candidate.id) return `analysis job ${job.id} belongs to another project`;
+      if (!assemblyIds.has(job.target_id) && !partIds.has(job.target_id)) return `analysis job ${job.id} references unknown target ${job.target_id}`;
+      error = requireArray(job.artifacts, `analysis job ${job.id}.artifacts`);
+      if (error) return error;
+      for (const artifact of job.artifacts) {
+        error = requiredFields(artifact, ['id', 'job_id', 'kind', 'title', 'summary', 'payload', 'generated_by', 'created_at'], `analysis job ${job.id}.artifacts`);
+        if (error) return error;
+        if (artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
+      }
+    }
+    error = uniqueIds(candidate.reports, 'project.reports');
+    if (error) return error;
+    for (const report of candidate.reports) {
+      error = requiredFields(report, ['id', 'project_id', 'title', 'summary', 'task_results', 'manufacturing_impacts', 'wiring_impacts', 'risks', 'unknowns', 'recommendations', 'assumptions', 'generated_at'], 'project.reports');
+      if (error) return error;
+      if (report.project_id !== candidate.id) return `report ${report.id} belongs to another project`;
+    }
+    return null;
+  };
   if (!file || typeof file !== 'object' || Array.isArray(file)) return 'project file must be a JSON object';
   if (file.format !== 'mechaflow-cad.project') return 'unsupported project file format';
   if (file.schema_version !== '1.0') return 'unsupported MechaFlow project file schema_version';
   if (!file.project || typeof file.project !== 'object' || Array.isArray(file.project)) return 'project is required';
-  if (typeof file.project.id !== 'string' || !file.project.id.trim()) return 'project.id is required';
-  if (!Array.isArray(file.project.assemblies)) return 'project.assemblies must be an array';
-  if (!Array.isArray(file.project.materials)) return 'project.materials must be an array';
-  if (!Array.isArray(file.project.analysis_jobs)) return 'project.analysis_jobs must be an array';
-  if (!Array.isArray(file.project.reports)) return 'project.reports must be an array';
-  return null;
+  return validateProject(file.project);
 };
 
 const findTarget = (targetId) => {
