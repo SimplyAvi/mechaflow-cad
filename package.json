@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "lint": "oxlint src --react-plugin --deny-warnings",
     "smoke": "node scripts/smoke-local.mjs",
+    "captain:smoke": "node scripts/captain-demo-smoke.mjs",
     "ports:find": "node scripts/find-ports.mjs",
     "mock:api": "node scripts/mock-backend.mjs"
   },

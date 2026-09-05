@@ -394,18 +394,35 @@ class InMemoryProjectStore:
             if conflict:
                 raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
+    @staticmethod
+    def _artifact_has_downloadable_file(artifact: AnalysisArtifact) -> bool:
+        if isinstance(artifact.payload.get("storage_bundle_id"), str):
+            return True
+        file_manifest = artifact.payload.get("file_manifest")
+        if not isinstance(file_manifest, list):
+            return False
+        return any(isinstance(item, dict) and isinstance(item.get("download_url"), str) for item in file_manifest)
+
     def _ensure_artifact_ids_available(self, project_id: str, project: Project) -> None:
-        incoming_ids = [artifact.id for job in project.analysis_jobs for artifact in job.artifacts]
+        incoming_artifacts = [artifact for job in project.analysis_jobs for artifact in job.artifacts]
+        incoming_ids = [artifact.id for artifact in incoming_artifacts]
         if len(incoming_ids) != len(set(incoming_ids)):
             raise ValueError("analysis artifact IDs must be unique within a project")
-        existing_ids = {
-            artifact.id
+        existing_artifacts = [
+            artifact
             for existing_project_id, existing_project in self._projects.items()
             if existing_project_id != project_id
             for job in existing_project.analysis_jobs
             for artifact in job.artifacts
+        ]
+        existing_ids = {artifact.id for artifact in existing_artifacts}
+        incoming_downloadable_ids = {
+            artifact.id for artifact in incoming_artifacts if self._artifact_has_downloadable_file(artifact)
         }
-        conflict = set(incoming_ids) & existing_ids
+        existing_downloadable_ids = {
+            artifact.id for artifact in existing_artifacts if self._artifact_has_downloadable_file(artifact)
+        }
+        conflict = (set(incoming_ids) & existing_downloadable_ids) | (incoming_downloadable_ids & existing_ids)
         if conflict:
             raise ValueError(f"analysis artifact ID already belongs to another project: {next(iter(conflict))!r}")
 

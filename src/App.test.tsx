@@ -17,6 +17,11 @@ describe('MechaFlow cockpit', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Robot arm CAD review cockpit/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Guided end-to-end MVP flow');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('1/8');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Open reference robot');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Try material substitution');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Run local-safe analysis path');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('50 lb');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('8s cycle');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('0.65m reach');

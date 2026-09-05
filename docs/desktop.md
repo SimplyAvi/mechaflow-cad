@@ -36,6 +36,31 @@ MECHAFLOW_API_PORT=7331 MECHAFLOW_FRONTEND_PORT=7332 npm start
 
 If either configured port is already in use, startup fails before orchestration begins and names the busy port. Close the desktop window or press `Ctrl+C` in the terminal to stop the local API and frontend.
 
+## Captain demo script
+
+Use this path for a fresh captain test with no paid services and no privileged solver install:
+
+1. Run `npm ci`, then `npm start` from the repo root.
+2. In the `MechaFlow CAD` window, start with the `Captain demo checklist`. It shows the full flow, completion count, ready steps, unavailable backend-dependent actions, and review-required engineering states.
+3. Click `Review project source`, confirm the robot reference project, license, backend handoff, and portable project controls are visible.
+4. Click `Open viewer`, collapse or explode the robot arm, orbit with yaw and pitch, then select a highlighted part or a part-list entry. The part inspector should update and show demo estimate, heuristic, provenance, and review-required labels.
+5. Click `Open material controls`, choose a compatible material or process option, and read the projected weight, stiffness, heat, cost, lead time, manufacturing, and wiring impacts. Use `Preview backend impact` before `Apply validated substitution`; preview is non-persisted and apply remains validated and review-required.
+6. Click `Open downstream panels`, then review BOM, manufacturing, wiring, and electronics. Cost and lead time are estimates, wiring checks are deterministic MVP heuristics, and exact electrical or CAD validation remains review-required.
+7. Click `Open analysis queue`, then inspect selected target readiness, local solver tool availability, queued jobs, recommendations, runtime or cost estimates, cached artifacts, and reports. Cloud compute is planning-only. Full project FEA is unavailable until provider approvals and real worker tooling exist.
+8. With the one-command desktop mock API or the FastAPI backend connected, run `Run pre-solver screening for ...`. The new job should say `not FEA` and produce a review-required package. Run the solver-readiness fixture if desired; without CalculiX it should produce input artifacts and a solver-unavailable state.
+9. Click `Open reports`, verify cached report and artifact provenance. Stale or metadata-only artifacts must not appear as current downloadable solver results.
+10. Click `Open file controls`, export `project-open-gripper-demo.mfcad.json`, import it again, and confirm the selected assembly, materials, wiring, analysis queue, cached evidence, and review-required labels survive the round trip.
+
+A bundled import fixture is available at `data/captain-demo-project.mfcad.json`. It exercises the same integrated path: visual selection, material substitution, BOM and manufacturing, wiring and electronics, solver readiness, local job queue, cached artifact metadata, and project-file import/export.
+
+Run the automated captain smoke before handing off evidence:
+
+```sh
+npm run captain:smoke
+```
+
+The smoke script launches the Electron desktop smoke path, imports the bundled captain fixture into the local mock API, previews a material substitution, runs local-safe analysis endpoints, confirms solver-unavailable boundaries, and exports the resulting `.mfcad.json` evidence package.
+
 ## What to test visually
 
 The desktop demo centers on a robot arm visual MVP with a wrist gripper. The legacy local project id is still `project-open-gripper-demo` so the backend and smoke-test contracts stay compatible, but the bundled visual seed now shows a base, shoulder, upper arm, elbow, forearm, wrist plate, gripper jaw, and controller PCB. In the window, verify that you can:

@@ -1,0 +1,2235 @@
+{
+  "format": "mechaflow-cad.project",
+  "schema_version": "1.0",
+  "metadata": {
+    "exported_at": "2026-09-05T00:00:00Z",
+    "source_api_version": "0.1.0-local-mock",
+    "exported_by": "mechaflow-cad-captain-demo-fixture",
+    "notes": [
+      "Bundled captain demo fixture for import, export, BOM, wiring, material substitution, analysis queue, and cached artifact review.",
+      "Contains seed and heuristic data only. It is not FEA, a supplier quote, or electrical validation."
+    ]
+  },
+  "project": {
+    "id": "project-open-gripper-demo",
+    "name": "Robot arm visual MVP task-preserving edit demo",
+    "description": "Local seed project for a desktop-openable robot arm visual MVP before solver-backed CAD workers are added.",
+    "reference_design_id": "ref-open-gripper-demo",
+    "active_task": {
+      "id": "task-lift-50lb",
+      "kind": "lift_payload",
+      "description": "Lift and place a 50 lb payload at 0.65 m reach with advisory safety-factor tracking.",
+      "target_value": 50,
+      "unit": "lb",
+      "safety_factor_min": 2,
+      "validation_method": "heuristic",
+      "assumptions": [
+        "Static payload approximation until FEA, actuator torque, and motion workers are wired."
+      ]
+    },
+    "assemblies": [
+      {
+        "id": "asm-open-gripper-demo",
+        "name": "Six-part robot arm with wrist gripper visual MVP",
+        "root_node_id": "node-base",
+        "nodes": [
+          {
+            "id": "node-base",
+            "name": "Base and electronics bay",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_ids": [
+              "part-palm-plate",
+              "part-controller-pcb"
+            ],
+            "child_assembly_ids": [
+              "asm-finger"
+            ],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": -90,
+                "y": 70,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          },
+          {
+            "id": "node-shoulder",
+            "name": "Shoulder joint subassembly",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-shoulder-yoke",
+            "part_ids": [
+              "part-shoulder-yoke"
+            ],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": -48,
+                "y": 42,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          },
+          {
+            "id": "node-upper-arm",
+            "name": "Upper arm span",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-upper-arm-link",
+            "part_ids": [
+              "part-upper-arm-link"
+            ],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": -12,
+                "y": -26,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": -18
+              }
+            }
+          },
+          {
+            "id": "node-elbow",
+            "name": "Elbow joint subassembly",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-elbow-joint",
+            "part_ids": [
+              "part-elbow-joint"
+            ],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": 44,
+                "y": -48,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          },
+          {
+            "id": "node-forearm",
+            "name": "Forearm and wrist span",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_ids": [
+              "part-forearm-link",
+              "part-wrist-plate"
+            ],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": 84,
+                "y": -62,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": -8
+              }
+            }
+          },
+          {
+            "id": "node-tool",
+            "name": "Wrist gripper tool",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-finger-link",
+            "part_ids": [
+              "part-finger-link"
+            ],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": 152,
+                "y": -88,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          }
+        ],
+        "parts": [
+          {
+            "id": "part-palm-plate",
+            "name": "Base pedestal plate",
+            "category": "fixed base",
+            "purpose": "Bolts the robot arm to the bench and reacts overturning torque from the shoulder and payload.",
+            "material_id": "mat-low-carbon-steel",
+            "dimensions": {
+              "length_mm": 220,
+              "width_mm": 180,
+              "height_mm": null,
+              "thickness_mm": 10,
+              "metadata": {
+                "bolt_pattern_mm": "140 x 110"
+              }
+            },
+            "mass_kg": 1.15,
+            "manufacturing_options": [
+              {
+                "id": "mfg-base-steel-cnc",
+                "process": "cnc_machining",
+                "description": "CNC cut or waterjet plate with drilled mounting pattern.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 42,
+                  "max": 130,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Base is intentionally heavy for the visual MVP; anchor pull-out is review-required."
+                ],
+                "confidence": "estimated_from_heuristic"
+              },
+              {
+                "id": "mfg-base-steel-sheet",
+                "process": "sheet_metal",
+                "description": "Laser cut plate with tapped inserts or welded standoffs.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 32,
+                  "max": 95,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Flatness and anchor pattern need supplier review."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m8-anchor-1",
+              "m8-anchor-2",
+              "m8-anchor-3",
+              "m8-anchor-4"
+            ],
+            "wiring_route_ids": [
+              "route-main-harness"
+            ],
+            "source_file": "robot-arm-demo.step#base-pedestal-plate",
+            "metadata": {
+              "preferred_manufacturing_process": "cnc_machining",
+              "demo_design_criteria": {
+                "load_capacity_lb": 140,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Demo estimate for base reaction load. It is not FEA; anchor bolts, bench stiffness, and tip-over checks require engineering review."
+              },
+              "mvp_visual": {
+                "x": 11,
+                "y": 72,
+                "width": 28,
+                "height": 13,
+                "explodeX": -22,
+                "explodeY": 22,
+                "shape": "base",
+                "color": "#64748b",
+                "rotationDeg": 0,
+                "zIndex": 2
+              }
+            }
+          },
+          {
+            "id": "part-shoulder-yoke",
+            "name": "Shoulder yoke joint",
+            "category": "rotating joint bracket",
+            "purpose": "Holds the shoulder bearing and transfers the first arm link load into the base.",
+            "material_id": "mat-aluminum-6061-t6",
+            "dimensions": {
+              "length_mm": 116,
+              "width_mm": 86,
+              "height_mm": 92,
+              "thickness_mm": 8,
+              "metadata": {
+                "bearing_bore_mm": 32
+              }
+            },
+            "mass_kg": 0.42,
+            "manufacturing_options": [
+              {
+                "id": "mfg-shoulder-yoke-cnc",
+                "process": "cnc_machining",
+                "description": "CNC machined yoke with bearing bore left undersized for finishing.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 85,
+                  "max": 240,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Bearing bore alignment and shoulder bolt preload are review-required."
+                ],
+                "confidence": "estimated_from_heuristic"
+              },
+              {
+                "id": "mfg-shoulder-yoke-print",
+                "process": "additive_fdm",
+                "description": "Printed yoke for packaging and fit checks only.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 18,
+                  "max": 46,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 1,
+                "lead_time_days_max": 4,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Printed yoke is not trusted for the 50 lb lift task without re-rating."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m6-shoulder-pin",
+              "m5-yoke-left",
+              "m5-yoke-right"
+            ],
+            "wiring_route_ids": [
+              "route-main-harness",
+              "route-shoulder-encoder"
+            ],
+            "source_file": "robot-arm-demo.step#shoulder-yoke",
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": 96,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Seeded shoulder reaction estimate for demo triage only. Bearing life, motor torque, fatigue, and deflection are review-required."
+              },
+              "mvp_visual": {
+                "x": 27,
+                "y": 57,
+                "width": 15,
+                "height": 17,
+                "explodeX": -12,
+                "explodeY": 10,
+                "shape": "joint",
+                "color": "#38bdf8",
+                "rotationDeg": 0,
+                "zIndex": 6
+              }
+            }
+          },
+          {
+            "id": "part-upper-arm-link",
+            "name": "Upper arm link",
+            "category": "load-bearing link",
+            "purpose": "Spans from the shoulder to elbow and is the main bending member for the 0.65 m reach task.",
+            "material_id": "mat-aluminum-6061-t6",
+            "dimensions": {
+              "length_mm": 285,
+              "width_mm": 42,
+              "height_mm": 36,
+              "thickness_mm": 6,
+              "metadata": {
+                "rib_count": 3
+              }
+            },
+            "mass_kg": 0.36,
+            "manufacturing_options": [
+              {
+                "id": "mfg-upper-arm-cnc",
+                "process": "cnc_machining",
+                "description": "Pocketed aluminum link with ribs left visible for inspection.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 70,
+                  "max": 210,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Rib depth and pin hole edge distance are demo estimates and need CAD review."
+                ],
+                "confidence": "estimated_from_heuristic"
+              },
+              {
+                "id": "mfg-upper-arm-sls",
+                "process": "additive_sls",
+                "description": "SLS composite nylon prototype link.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 38,
+                  "max": 120,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Useful for reach mockup; payload capability is review-required."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m6-shoulder-pin",
+              "m6-elbow-pin"
+            ],
+            "wiring_route_ids": [
+              "route-main-harness"
+            ],
+            "source_file": "robot-arm-demo.step#upper-arm-link",
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": 72,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Demo estimate for bending under the preserved lift role. This is not FEA; deflection at reach and fatigue life need solver-backed review."
+              },
+              "mvp_visual": {
+                "x": 38,
+                "y": 45,
+                "width": 30,
+                "height": 10,
+                "explodeX": -3,
+                "explodeY": -8,
+                "shape": "link",
+                "color": "#60a5fa",
+                "rotationDeg": -21,
+                "zIndex": 4
+              }
+            }
+          },
+          {
+            "id": "part-elbow-joint",
+            "name": "Elbow joint hub",
+            "category": "rotating joint hub",
+            "purpose": "Connects upper arm and forearm links while carrying the wrist and gripper moment.",
+            "material_id": "mat-aluminum-6061-t6",
+            "dimensions": {
+              "length_mm": 88,
+              "width_mm": 74,
+              "height_mm": 74,
+              "thickness_mm": 8,
+              "metadata": {
+                "bearing_bore_mm": 26
+              }
+            },
+            "mass_kg": 0.28,
+            "manufacturing_options": [
+              {
+                "id": "mfg-elbow-hub-cnc",
+                "process": "cnc_machining",
+                "description": "CNC hub with bearing pocket and serviceable cover.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 62,
+                  "max": 180,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Bearing fit, set-screw retention, and cover clearance require review."
+                ],
+                "confidence": "estimated_from_heuristic"
+              },
+              {
+                "id": "mfg-elbow-hub-print",
+                "process": "additive_fdm",
+                "description": "Printed hub for motion envelope mockup.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 14,
+                  "max": 36,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 1,
+                "lead_time_days_max": 3,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Printed hub should be labeled fit-check only for this lift task."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m6-elbow-pin",
+              "m5-hub-cover"
+            ],
+            "wiring_route_ids": [
+              "route-main-harness",
+              "route-wrist-tool"
+            ],
+            "source_file": "robot-arm-demo.step#elbow-joint-hub",
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": 68,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Seeded elbow hub capacity for the visual review only. Bearing contact pressure and dynamic shock are not solved."
+              },
+              "mvp_visual": {
+                "x": 61,
+                "y": 36,
+                "width": 14,
+                "height": 14,
+                "explodeX": 12,
+                "explodeY": -12,
+                "shape": "joint",
+                "color": "#a78bfa",
+                "rotationDeg": 0,
+                "zIndex": 7
+              }
+            }
+          },
+          {
+            "id": "part-forearm-link",
+            "name": "Forearm link",
+            "category": "load-bearing link",
+            "purpose": "Carries the wrist plate and tool head to the target object while keeping harness routing accessible.",
+            "material_id": "mat-aluminum-6061-t6",
+            "dimensions": {
+              "length_mm": 230,
+              "width_mm": 34,
+              "height_mm": 28,
+              "thickness_mm": 5,
+              "metadata": {
+                "cable_channel_mm": 10
+              }
+            },
+            "mass_kg": 0.24,
+            "manufacturing_options": [
+              {
+                "id": "mfg-forearm-cnc",
+                "process": "cnc_machining",
+                "description": "Machined link with a shallow cable channel.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 55,
+                  "max": 160,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Cable-channel fillets and fastener edge distance need CAD review."
+                ],
+                "confidence": "estimated_from_heuristic"
+              },
+              {
+                "id": "mfg-forearm-sls",
+                "process": "additive_sls",
+                "description": "SLS composite forearm for fit and routing evaluation.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 30,
+                  "max": 98,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Composite forearm requires print orientation and payload review."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m6-elbow-pin",
+              "m5-wrist-bolts"
+            ],
+            "wiring_route_ids": [
+              "route-wrist-tool"
+            ],
+            "source_file": "robot-arm-demo.step#forearm-link",
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": 60,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Demo estimate for wrist-side bending. Not a solver result; real FEA will replace it with stress and deflection maps."
+              },
+              "mvp_visual": {
+                "x": 70,
+                "y": 30,
+                "width": 22,
+                "height": 9,
+                "explodeX": 20,
+                "explodeY": -16,
+                "shape": "link",
+                "color": "#34d399",
+                "rotationDeg": -11,
+                "zIndex": 5
+              }
+            }
+          },
+          {
+            "id": "part-wrist-plate",
+            "name": "Wrist tool plate",
+            "category": "tool interface plate",
+            "purpose": "Adapts the forearm to the gripper and gives the tool harness a controlled service loop.",
+            "material_id": "mat-aluminum-6061-t6",
+            "dimensions": {
+              "length_mm": 82,
+              "width_mm": 70,
+              "height_mm": null,
+              "thickness_mm": 6,
+              "metadata": {
+                "pattern": "ISO-like demo pattern"
+              }
+            },
+            "mass_kg": 0.13,
+            "manufacturing_options": [
+              {
+                "id": "mfg-wrist-plate-cnc",
+                "process": "cnc_machining",
+                "description": "CNC or waterjet adapter plate with counterbored holes.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 26,
+                  "max": 82,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Bolt pattern is a demo placeholder and needs interface review."
+                ],
+                "confidence": "estimated_from_heuristic"
+              },
+              {
+                "id": "mfg-wrist-plate-sheet",
+                "process": "sheet_metal",
+                "description": "Laser cut plate with standoffs.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 18,
+                  "max": 58,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Standoff stiffness and gripper fit need review."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m5-wrist-bolts",
+              "m4-tool-bolts"
+            ],
+            "wiring_route_ids": [
+              "route-wrist-tool"
+            ],
+            "source_file": "robot-arm-demo.step#wrist-tool-plate",
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": 54,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Seeded tool plate estimate for the 50 lb lift role. Gripper bolt shear and wrist torque remain review-required."
+              },
+              "mvp_visual": {
+                "x": 84,
+                "y": 24,
+                "width": 10,
+                "height": 12,
+                "explodeX": 28,
+                "explodeY": -18,
+                "shape": "plate",
+                "color": "#f97316",
+                "rotationDeg": 2,
+                "zIndex": 8
+              }
+            }
+          },
+          {
+            "id": "part-finger-link",
+            "name": "Parallel gripper jaw link",
+            "category": "end effector load path",
+            "purpose": "Closes on the workpiece at the wrist so the arm demo still has a selectable end-effector load path.",
+            "material_id": "mat-aluminum-6061-t6",
+            "dimensions": {
+              "length_mm": 132,
+              "width_mm": 22,
+              "height_mm": null,
+              "thickness_mm": 6,
+              "metadata": {
+                "pin_hole_diameter_mm": 4
+              }
+            },
+            "mass_kg": 0.11,
+            "manufacturing_options": [
+              {
+                "id": "mfg-finger-cnc",
+                "process": "cnc_machining",
+                "description": "2.5D CNC machined gripper jaw link with deburred edges.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 25,
+                  "max": 80,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 10,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Best current demo fit for the preserved 50 lb lift task, but real jaw contact checks are missing."
+                ],
+                "confidence": "estimated_from_heuristic"
+              },
+              {
+                "id": "mfg-finger-print",
+                "process": "additive_fdm",
+                "description": "Prototype print for fit checks only unless re-rated.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 3,
+                  "max": 12,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 1,
+                "lead_time_days_max": 3,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Layer direction can make payload rating much lower."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m4-jaw-pin-a",
+              "m4-jaw-pin-b"
+            ],
+            "wiring_route_ids": [
+              "route-finger-sensor",
+              "route-wrist-tool"
+            ],
+            "source_file": "robot-arm-demo.step#parallel-gripper-jaw-link",
+            "metadata": {
+              "service_minutes": 10,
+              "demo_design_criteria": {
+                "load_capacity_lb": 58,
+                "load_capacity_status": "estimated_from_heuristic",
+                "load_capacity_note": "Seeded quick-check limit for the demo gripper jaw. This is not FEA and needs review before the 50 lb lift task is trusted."
+              },
+              "mvp_visual": {
+                "x": 91,
+                "y": 17,
+                "width": 9,
+                "height": 22,
+                "explodeX": 32,
+                "explodeY": -22,
+                "shape": "tool",
+                "color": "#f472b6",
+                "rotationDeg": 4,
+                "zIndex": 9
+              }
+            }
+          },
+          {
+            "id": "part-controller-pcb",
+            "name": "Controller PCB placeholder",
+            "category": "electronics placeholder",
+            "purpose": "Represents the motor, encoder, and tool IO board so electrical constraints stay visible in the mechanical demo.",
+            "material_id": "mat-fr4-generic",
+            "dimensions": {
+              "length_mm": 96,
+              "width_mm": 58,
+              "height_mm": null,
+              "thickness_mm": 1.6,
+              "metadata": {
+                "layers": 4
+              }
+            },
+            "mass_kg": 0.045,
+            "manufacturing_options": [
+              {
+                "id": "mfg-controller-pcb",
+                "process": "pcb_fabrication",
+                "description": "4-layer PCB fabrication placeholder with connector keepouts.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 18,
+                  "max": 70,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 5,
+                "lead_time_days_max": 12,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Board support, connector strain relief, and thermal dissipation are review-required."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m3-standoff-a",
+              "m3-standoff-b",
+              "m3-standoff-c",
+              "m3-standoff-d"
+            ],
+            "wiring_route_ids": [
+              "route-finger-sensor",
+              "route-main-harness",
+              "route-shoulder-encoder"
+            ],
+            "source_file": "robot-arm-demo.step#controller-pcb-placeholder",
+            "metadata": {
+              "demo_design_criteria": {
+                "load_capacity_lb": null,
+                "load_capacity_status": "review-required",
+                "load_capacity_note": "The PCB is not a load-bearing part in this seed assembly. Board support, connector loads, and heat dissipation need review."
+              },
+              "mvp_visual": {
+                "x": 17,
+                "y": 86,
+                "width": 22,
+                "height": 9,
+                "explodeX": -26,
+                "explodeY": 24,
+                "shape": "pcb",
+                "color": "#22c55e",
+                "rotationDeg": 0,
+                "zIndex": 3
+              }
+            }
+          }
+        ],
+        "wiring_routes": [
+          {
+            "id": "route-finger-sensor",
+            "name": "Finger force sensor lead",
+            "from_connector": {
+              "id": "conn-controller-tool",
+              "name": "Controller tool IO connector",
+              "pin_count": 8,
+              "part_id": "part-controller-pcb",
+              "component_id": "ec-controller-pcb",
+              "kind": "connector",
+              "gender": "board",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-finger",
+              "name": "Finger sensor connector",
+              "pin_count": 4,
+              "part_id": "part-finger-link",
+              "component_id": "ec-finger-force-sensor",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 1,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              {
+                "x": 200,
+                "y": -120,
+                "z": 0
+              },
+              {
+                "x": 650,
+                "y": -220,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 18,
+            "clearance_min_mm": 1.5,
+            "harness_bom": [
+              "bom-wire-finger-sensor-lead"
+            ],
+            "risk_notes": [
+              "Runs through wrist rotation and needs slack validation once CAD geometry exists."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-finger-sensor-lead"
+            ],
+            "electronics_component_ids": [
+              "ec-controller-pcb",
+              "ec-finger-force-sensor"
+            ],
+            "service_loop_mm": 20,
+            "diagram_ref": "wireviz://robot-arm/finger-sensor",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-controller-tool",
+                "part_id": "part-controller-pcb",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-finger",
+                "part_id": "part-finger-link",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          },
+          {
+            "id": "route-main-harness",
+            "name": "Main arm harness",
+            "from_connector": {
+              "id": "conn-controller-main",
+              "name": "Controller main harness connector",
+              "pin_count": 16,
+              "part_id": "part-controller-pcb",
+              "component_id": "ec-controller-pcb",
+              "kind": "connector",
+              "gender": "board",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8",
+                "P9",
+                "P10",
+                "P11",
+                "P12",
+                "P13",
+                "P14",
+                "P15",
+                "P16"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-elbow-service",
+              "name": "Elbow service loop connector",
+              "pin_count": 12,
+              "part_id": "part-elbow-joint",
+              "component_id": "ec-elbow-service-disconnect",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8",
+                "P9",
+                "P10",
+                "P11",
+                "P12"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              {
+                "x": 240,
+                "y": -100,
+                "z": 0
+              },
+              {
+                "x": 430,
+                "y": -170,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 25,
+            "clearance_min_mm": 3,
+            "harness_bom": [
+              "bom-wire-main-arm-harness"
+            ],
+            "risk_notes": [
+              "Service loop review required at shoulder and elbow before motion is trusted."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-main-arm-harness"
+            ],
+            "electronics_component_ids": [
+              "ec-controller-pcb",
+              "ec-elbow-service-disconnect"
+            ],
+            "service_loop_mm": 45,
+            "diagram_ref": "wireviz://robot-arm/main-harness",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-controller-main",
+                "part_id": "part-controller-pcb",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-elbow-service",
+                "part_id": "part-elbow-joint",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          },
+          {
+            "id": "route-shoulder-encoder",
+            "name": "Shoulder encoder pigtail",
+            "from_connector": {
+              "id": "conn-controller-encoder",
+              "name": "Controller encoder connector",
+              "pin_count": 6,
+              "part_id": "part-controller-pcb",
+              "component_id": "ec-controller-pcb",
+              "kind": "connector",
+              "gender": "board",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 1,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-shoulder-encoder",
+              "name": "Shoulder encoder connector",
+              "pin_count": 6,
+              "part_id": "part-shoulder-yoke",
+              "component_id": "ec-shoulder-encoder",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 1,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              {
+                "x": 160,
+                "y": -40,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 12,
+            "clearance_min_mm": 2,
+            "harness_bom": [
+              "bom-wire-shoulder-encoder"
+            ],
+            "risk_notes": [
+              "Encoder pigtail is visible so electrical review is not hidden by the mechanical model."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-shoulder-encoder"
+            ],
+            "electronics_component_ids": [
+              "ec-controller-pcb",
+              "ec-shoulder-encoder"
+            ],
+            "service_loop_mm": null,
+            "diagram_ref": "wireviz://robot-arm/shoulder-encoder",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-controller-encoder",
+                "part_id": "part-controller-pcb",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-shoulder-encoder",
+                "part_id": "part-shoulder-yoke",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          },
+          {
+            "id": "route-wrist-tool",
+            "name": "Wrist tool harness",
+            "from_connector": {
+              "id": "conn-elbow-service",
+              "name": "Elbow service loop connector",
+              "pin_count": 12,
+              "part_id": "part-elbow-joint",
+              "component_id": "ec-elbow-service-disconnect",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8",
+                "P9",
+                "P10",
+                "P11",
+                "P12"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-wrist-tool",
+              "name": "Wrist tool connector",
+              "pin_count": 8,
+              "part_id": "part-wrist-plate",
+              "component_id": "ec-wrist-tool-connector",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 430,
+                "y": -170,
+                "z": 0
+              },
+              {
+                "x": 580,
+                "y": -200,
+                "z": 0
+              },
+              {
+                "x": 650,
+                "y": -220,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 20,
+            "clearance_min_mm": null,
+            "harness_bom": [
+              "bom-wire-wrist-tool"
+            ],
+            "risk_notes": [
+              "Wrist route needs rotation sweep clearance after real geometry import."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-wrist-tool"
+            ],
+            "electronics_component_ids": [
+              "ec-elbow-service-disconnect",
+              "ec-wrist-tool-connector"
+            ],
+            "service_loop_mm": 30,
+            "diagram_ref": "wireviz://robot-arm/wrist-tool",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-elbow-service",
+                "part_id": "part-elbow-joint",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-wrist-tool",
+                "part_id": "part-wrist-plate",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          }
+        ],
+        "assembly_structure_confidence": "unknown_or_needs_review"
+      },
+      {
+        "id": "asm-finger",
+        "name": "Finger subassembly",
+        "root_node_id": "node-finger-assembly",
+        "nodes": [
+          {
+            "id": "node-finger-assembly",
+            "name": "Finger subassembly visual",
+            "assembly_id": "asm-finger",
+            "part_id": "part-finger-link",
+            "part_ids": [],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": 80,
+                "y": 0,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          }
+        ],
+        "parts": [],
+        "wiring_routes": [],
+        "assembly_structure_confidence": "unknown_or_needs_review"
+      }
+    ],
+    "materials": [
+      {
+        "id": "mat-aluminum-6061-t6",
+        "name": "Aluminum 6061-T6",
+        "family": "aluminum",
+        "properties": {
+          "density_kg_m3": 2700,
+          "elastic_modulus_gpa": 68.9,
+          "yield_strength_mpa": 276,
+          "ultimate_strength_mpa": 310,
+          "poisson_ratio": 0.33,
+          "thermal_conductivity_w_mk": 167,
+          "max_service_temp_c": 120
+        },
+        "compatible_processes": [
+          "cnc_machining",
+          "sheet_metal"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 6,
+          "max": 18,
+          "confidence": "estimated_from_heuristic"
+        },
+        "source": {
+          "label": "Seeded handbook range",
+          "url": null
+        },
+        "confidence": "unknown_or_needs_review",
+        "notes": [
+          "Common robot arm prototype material. Values are generic seeds, not supplier-certified data."
+        ]
+      },
+      {
+        "id": "mat-carbon-fiber-nylon",
+        "name": "Carbon-fiber reinforced nylon",
+        "family": "polymer_composite",
+        "properties": {
+          "density_kg_m3": 1250,
+          "elastic_modulus_gpa": 7.5,
+          "yield_strength_mpa": 85,
+          "ultimate_strength_mpa": 110,
+          "poisson_ratio": 0.38,
+          "thermal_conductivity_w_mk": 0.3,
+          "heat_deflection_temp_c": 150
+        },
+        "compatible_processes": [
+          "additive_fdm",
+          "additive_sls"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 12,
+          "max": 42,
+          "confidence": "estimated_from_heuristic"
+        },
+        "source": {
+          "label": "Seeded manufacturer-like range",
+          "url": null
+        },
+        "confidence": "unknown_or_needs_review",
+        "notes": [
+          "Layer direction and print settings dominate real strength. Use as demo material guidance only."
+        ]
+      },
+      {
+        "id": "mat-low-carbon-steel",
+        "name": "Low-carbon steel",
+        "family": "steel",
+        "properties": {
+          "density_kg_m3": 7850,
+          "elastic_modulus_gpa": 200,
+          "yield_strength_mpa": 250,
+          "ultimate_strength_mpa": 400,
+          "poisson_ratio": 0.29,
+          "thermal_conductivity_w_mk": 45,
+          "max_service_temp_c": 300
+        },
+        "compatible_processes": [
+          "cnc_machining",
+          "sheet_metal"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 4,
+          "max": 16,
+          "confidence": "estimated_from_heuristic"
+        },
+        "source": {
+          "label": "Seeded handbook range",
+          "url": null
+        },
+        "confidence": "unknown_or_needs_review",
+        "notes": [
+          "Strong and stiff but heavier; payload and motor torque need review after substitution."
+        ]
+      },
+      {
+        "id": "mat-pla-generic",
+        "name": "Generic PLA printed polymer",
+        "family": "polymer",
+        "properties": {
+          "density_kg_m3": 1240,
+          "elastic_modulus_gpa": 3.5,
+          "yield_strength_mpa": 55,
+          "ultimate_strength_mpa": 65,
+          "poisson_ratio": 0.36,
+          "thermal_conductivity_w_mk": 0.13,
+          "heat_deflection_temp_c": 55
+        },
+        "compatible_processes": [
+          "additive_fdm"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 2,
+          "max": 8,
+          "confidence": "estimated_from_heuristic"
+        },
+        "source": {
+          "label": "Seeded hobby material range",
+          "url": null
+        },
+        "confidence": "unknown_or_needs_review",
+        "notes": [
+          "Fit-check material only for load-bearing arm parts in this demo."
+        ]
+      },
+      {
+        "id": "mat-petg-generic",
+        "name": "Generic PETG printed polymer",
+        "family": "polymer",
+        "properties": {
+          "density_kg_m3": 1270,
+          "elastic_modulus_gpa": 2.1,
+          "yield_strength_mpa": 50,
+          "ultimate_strength_mpa": 58,
+          "poisson_ratio": 0.38,
+          "thermal_conductivity_w_mk": 0.2,
+          "heat_deflection_temp_c": 75
+        },
+        "compatible_processes": [
+          "additive_fdm"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 2,
+          "max": 10,
+          "confidence": "estimated_from_heuristic"
+        },
+        "source": {
+          "label": "Seeded hobby material range",
+          "url": null
+        },
+        "confidence": "unknown_or_needs_review",
+        "notes": [
+          "Useful for covers and cable guides, not trusted for the 50 lb arm task without review."
+        ]
+      },
+      {
+        "id": "mat-fr4-generic",
+        "name": "Generic FR-4 PCB laminate",
+        "family": "pcb_laminate",
+        "properties": {
+          "density_kg_m3": 1850,
+          "elastic_modulus_gpa": 20,
+          "yield_strength_mpa": null,
+          "ultimate_strength_mpa": null,
+          "poisson_ratio": 0.13,
+          "thermal_conductivity_w_mk": 0.3,
+          "max_service_temp_c": 130
+        },
+        "compatible_processes": [
+          "pcb_fabrication"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 8,
+          "max": 35,
+          "confidence": "estimated_from_heuristic"
+        },
+        "source": {
+          "label": "Seeded PCB material guidance",
+          "url": null
+        },
+        "confidence": "unknown_or_needs_review",
+        "notes": [
+          "PCB values are not load ratings; board mounting and connectors need review."
+        ]
+      }
+    ],
+    "modifications": [],
+    "analysis_jobs": [
+      {
+        "id": "job-import-design",
+        "job_type": "import_design",
+        "status": "completed",
+        "target_id": "ref-open-gripper-demo",
+        "project_id": "project-open-gripper-demo",
+        "adapter_name": "freecad-worker",
+        "local_compute_preferred": true,
+        "input_summary": {
+          "files": [
+            "robot-arm-demo.step",
+            "robot-arm-demo.FCStd"
+          ]
+        },
+        "result_summary": {
+          "message": "Demo robot arm assembly metadata is normalized into selectable parts.",
+          "progress": 100
+        },
+        "artifacts": [
+          {
+            "kind": "assembly_tree",
+            "title": "Selectable robot arm assembly tree",
+            "id": "artifact-job-import-design-1",
+            "job_id": "job-import-design",
+            "summary": "Selectable robot arm assembly tree",
+            "payload": {},
+            "generated_by": "freecad-worker",
+            "created_at": "2026-09-05T23:49:55.172Z"
+          }
+        ],
+        "created_at": "2026-09-05T23:49:55.172Z",
+        "updated_at": "2026-09-05T23:49:55.172Z"
+      },
+      {
+        "id": "job-exploded-view",
+        "job_type": "generate_exploded_view",
+        "status": "completed",
+        "target_id": "asm-open-gripper-demo",
+        "project_id": "project-open-gripper-demo",
+        "adapter_name": "freecad-worker",
+        "local_compute_preferred": true,
+        "input_summary": {
+          "assembly": "asm-open-gripper-demo"
+        },
+        "result_summary": {
+          "message": "Demo exploded transforms are available for visual interaction.",
+          "progress": 100
+        },
+        "artifacts": [
+          {
+            "kind": "exploded_view",
+            "title": "Robot arm demo exploded transforms",
+            "id": "artifact-job-exploded-view-1",
+            "job_id": "job-exploded-view",
+            "summary": "Robot arm demo exploded transforms",
+            "payload": {},
+            "generated_by": "freecad-worker",
+            "created_at": "2026-09-05T23:49:55.172Z"
+          }
+        ],
+        "created_at": "2026-09-05T23:49:55.172Z",
+        "updated_at": "2026-09-05T23:49:55.172Z"
+      },
+      {
+        "id": "job-rerate-payload",
+        "job_type": "rerate_payload_capability",
+        "status": "running",
+        "target_id": "part-upper-arm-link",
+        "project_id": "project-open-gripper-demo",
+        "adapter_name": "capability-heuristic-worker",
+        "local_compute_preferred": true,
+        "input_summary": {
+          "load_lb": 50,
+          "reach_m": 0.65
+        },
+        "result_summary": {
+          "message": "Quick heuristic is labeling review areas only; no worker-supplied payload rating is available.",
+          "progress": 58
+        },
+        "artifacts": [
+          {
+            "kind": "advisory_note",
+            "title": "Heuristic payload triage",
+            "id": "artifact-job-rerate-payload-1",
+            "job_id": "job-rerate-payload",
+            "summary": "Heuristic payload triage",
+            "payload": {},
+            "generated_by": "capability-heuristic-worker",
+            "created_at": "2026-09-05T23:49:55.172Z"
+          }
+        ],
+        "created_at": "2026-09-05T23:49:55.172Z",
+        "updated_at": "2026-09-05T23:49:55.172Z"
+      },
+      {
+        "id": "job-future-fea",
+        "job_type": "run_fea",
+        "status": "blocked_missing_adapter",
+        "target_id": "part-upper-arm-link",
+        "project_id": "project-open-gripper-demo",
+        "adapter_name": "calculix-fea-worker",
+        "local_compute_preferred": true,
+        "input_summary": {
+          "planned_load_case": "50 lb payload at 0.65 m reach"
+        },
+        "result_summary": {
+          "message": "FEA is not running in this MVP. Demo criteria will be replaced by solver artifacts later.",
+          "progress": 0
+        },
+        "artifacts": [
+          {
+            "kind": "future_fea_result",
+            "title": "Future stress and deflection plots",
+            "id": "artifact-job-future-fea-1",
+            "job_id": "job-future-fea",
+            "summary": "Future stress and deflection plots",
+            "payload": {},
+            "generated_by": "calculix-fea-worker",
+            "created_at": "2026-09-05T23:49:55.172Z"
+          }
+        ],
+        "created_at": "2026-09-05T23:49:55.172Z",
+        "updated_at": "2026-09-05T23:49:55.172Z"
+      },
+      {
+        "id": "job-wire-clearance",
+        "job_type": "check_wire_routing",
+        "status": "queued",
+        "target_id": "route-wrist-tool",
+        "project_id": "project-open-gripper-demo",
+        "adapter_name": "wireviz-harness-worker",
+        "local_compute_preferred": true,
+        "input_summary": {
+          "routes": [
+            "route-main-harness",
+            "route-wrist-tool"
+          ]
+        },
+        "result_summary": {
+          "message": "Wiring route check is queued behind CAD geometry extraction.",
+          "progress": 18
+        },
+        "artifacts": [
+          {
+            "kind": "wiring_review",
+            "title": "Wrist and elbow harness review",
+            "id": "artifact-job-wire-clearance-1",
+            "job_id": "job-wire-clearance",
+            "summary": "Wrist and elbow harness review",
+            "payload": {},
+            "generated_by": "wireviz-harness-worker",
+            "created_at": "2026-09-05T23:49:55.172Z"
+          }
+        ],
+        "created_at": "2026-09-05T23:49:55.172Z",
+        "updated_at": "2026-09-05T23:49:55.172Z"
+      },
+      {
+        "id": "job-manufacturing-report",
+        "job_type": "generate_manufacturing_report",
+        "status": "queued",
+        "target_id": "project-open-gripper-demo",
+        "project_id": "project-open-gripper-demo",
+        "adapter_name": "supplier-options-worker",
+        "local_compute_preferred": false,
+        "input_summary": {
+          "selected_part_ids": [
+            "part-upper-arm-link",
+            "part-forearm-link",
+            "part-finger-link"
+          ]
+        },
+        "result_summary": {
+          "message": "Supplier and fabrication estimates are ready for a low-cost worker handoff.",
+          "progress": 28
+        },
+        "artifacts": [
+          {
+            "kind": "manufacturing_report",
+            "title": "Manufacturing options report",
+            "id": "artifact-job-manufacturing-report-1",
+            "job_id": "job-manufacturing-report",
+            "summary": "Manufacturing options report",
+            "payload": {},
+            "generated_by": "supplier-options-worker",
+            "created_at": "2026-09-05T23:49:55.172Z"
+          }
+        ],
+        "created_at": "2026-09-05T23:49:55.172Z",
+        "updated_at": "2026-09-05T23:49:55.172Z"
+      }
+    ],
+    "reports": [
+      {
+        "id": "report-visual-mvp-readiness",
+        "project_id": "project-open-gripper-demo",
+        "title": "Visual MVP readiness advisory",
+        "status": "requires_review",
+        "summary": "Robot arm demo is visually inspectable with seeded material guidance, clickable parts, and no claim of real FEA.",
+        "task_results": [],
+        "weight_delta_kg": null,
+        "cost_delta": null,
+        "manufacturing_impacts": [
+          "Arm links are shown with plausible CNC and additive options, but supplier quotes are not connected."
+        ],
+        "wiring_impacts": [
+          "Harness routes are visible and linked to selected parts, but motion sweep clearance is not computed."
+        ],
+        "risks": [
+          "Demo load limits are seeded estimates, not certified payload ratings.",
+          "Future FEA and actuator torque checks must replace visual triage before engineering release."
+        ],
+        "unknowns": [
+          "Real CAD geometry, actuator torque curves, fastener preload, fatigue life, heat dissipation, and supplier pricing."
+        ],
+        "recommendations": [
+          "Use this MVP for visual review and UX feedback.",
+          "Next work order should attach real geometry import and FEA artifact plumbing."
+        ],
+        "assumptions": [
+          "Static lift task is preserved at 50 lb for demonstration only."
+        ],
+        "generated_at": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:00:00Z",
+    "electronics_components": [
+      {
+        "id": "ec-controller-pcb",
+        "name": "Controller PCB and IO headers",
+        "component_type": "pcb",
+        "mounted_part_id": "part-controller-pcb",
+        "connector_ids": [
+          "conn-controller-tool",
+          "conn-controller-main",
+          "conn-controller-encoder"
+        ],
+        "bom_item_ids": [
+          "bom-part-controller-pcb"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "KiCad placement is a seed placeholder and needs ECAD review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-finger-force-sensor",
+        "name": "Finger force sensor",
+        "component_type": "sensor",
+        "mounted_part_id": "part-finger-link",
+        "connector_ids": [
+          "conn-finger"
+        ],
+        "bom_item_ids": [
+          "bom-finger-force-sensor"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Sensor electrical load and attachment are review-required."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-elbow-service-disconnect",
+        "name": "Elbow service loop disconnect",
+        "component_type": "connector",
+        "mounted_part_id": "part-elbow-joint",
+        "connector_ids": [
+          "conn-elbow-service"
+        ],
+        "bom_item_ids": [
+          "bom-elbow-service-disconnect"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Service disconnect placement is heuristic until CAD sweep review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-shoulder-encoder",
+        "name": "Shoulder encoder",
+        "component_type": "sensor",
+        "mounted_part_id": "part-shoulder-yoke",
+        "connector_ids": [
+          "conn-shoulder-encoder"
+        ],
+        "bom_item_ids": [
+          "bom-shoulder-encoder"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Encoder pinout and shielding need ECAD review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-wrist-tool-connector",
+        "name": "Wrist tool connector",
+        "component_type": "connector",
+        "mounted_part_id": "part-wrist-plate",
+        "connector_ids": [
+          "conn-wrist-tool"
+        ],
+        "bom_item_ids": [
+          "bom-wrist-tool-connector"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Wrist connector needs rotation sweep clearance."
+        ],
+        "confidence": "estimated_from_heuristic"
+      }
+    ],
+    "wire_segments": [
+      {
+        "id": "wire-finger-sensor-lead",
+        "name": "4-conductor silicone finger sensor lead",
+        "conductor_count": 4,
+        "wire_gauge_awg": 26,
+        "length_mm": 720,
+        "signal_or_power": "finger force sensor signal",
+        "color": "blue",
+        "from_endpoint": {
+          "connector_id": "conn-controller-tool",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-finger",
+          "part_id": "part-finger-link",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-finger-sensor-lead",
+        "notes": [
+          "Length is estimated from route points and service slack."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "wire-main-arm-harness",
+        "name": "16-conductor robot flex main arm harness",
+        "conductor_count": 16,
+        "wire_gauge_awg": 24,
+        "length_mm": 520,
+        "signal_or_power": "low-voltage power and IO",
+        "color": "black",
+        "from_endpoint": {
+          "connector_id": "conn-controller-main",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-elbow-service",
+          "part_id": "part-elbow-joint",
+          "pin_label": null,
+          "role": "service_disconnect",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-main-arm-harness",
+        "notes": [
+          "Current rating and voltage drop are not validated."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "wire-shoulder-encoder",
+        "name": "Shielded shoulder encoder pigtail",
+        "conductor_count": 6,
+        "wire_gauge_awg": 28,
+        "length_mm": 190,
+        "signal_or_power": "encoder signal",
+        "color": "green",
+        "from_endpoint": {
+          "connector_id": "conn-controller-encoder",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-shoulder-encoder",
+          "part_id": "part-shoulder-yoke",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-shoulder-encoder",
+        "notes": [
+          "Shield termination and EMI are review-required."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "wire-wrist-tool",
+        "name": "8-conductor wrist tool IO cable",
+        "conductor_count": 8,
+        "wire_gauge_awg": 24,
+        "length_mm": 260,
+        "signal_or_power": "tool IO",
+        "color": "orange",
+        "from_endpoint": {
+          "connector_id": "conn-elbow-service",
+          "part_id": "part-elbow-joint",
+          "pin_label": null,
+          "role": "service_disconnect",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-wrist-tool",
+          "part_id": "part-wrist-plate",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-wrist-tool",
+        "notes": [
+          "Flex life is not validated by this MVP review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      }
+    ],
+    "wiring_rules": [
+      {
+        "id": "rule-mvp-arm-harness",
+        "name": "MVP robot arm harness heuristic",
+        "required_clearance_min_mm": 2,
+        "required_bend_radius_min_mm": 15,
+        "bend_radius_multiplier": null,
+        "required_service_loop_min_mm": 25,
+        "evidence_basis": "heuristic",
+        "notes": [
+          "Screening threshold only. Replace with cable manufacturer data and CAD sweep before release."
+        ]
+      }
+    ]
+  },
+  "analysis_readiness_previews": [
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "asm-open-gripper-demo",
+      "target_name": "Six-part robot arm with wrist gripper visual MVP",
+      "target_kind": "assembly",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project assembly data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-palm-plate",
+      "target_name": "Base pedestal plate",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-shoulder-yoke",
+      "target_name": "Shoulder yoke joint",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-upper-arm-link",
+      "target_name": "Upper arm link",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-elbow-joint",
+      "target_name": "Elbow joint hub",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-forearm-link",
+      "target_name": "Forearm link",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-wrist-plate",
+      "target_name": "Wrist tool plate",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-finger-link",
+      "target_name": "Parallel gripper jaw link",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "part-controller-pcb",
+      "target_name": "Controller PCB placeholder",
+      "target_kind": "part",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project part data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    },
+    {
+      "project_id": "project-open-gripper-demo",
+      "target_id": "asm-finger",
+      "target_name": "Finger subassembly",
+      "target_kind": "assembly",
+      "state": "review_required",
+      "trust_label": "pre_solver_input",
+      "summary": "Mock readiness preview regenerated from imported project assembly data.",
+      "criteria": [
+        "Review all parts, materials, wiring routes, and solver inputs before FEA."
+      ],
+      "load_cases": [],
+      "constraints": [],
+      "solver_inputs": {
+        "geometry_source": null,
+        "units": "mm, N, MPa",
+        "mesh_size_mm": null,
+        "freecad_document": null,
+        "gmsh_model": null,
+        "calculix_input_deck": null,
+        "notes": [
+          "Mock API does not invoke FreeCAD, Gmsh, or CalculiX."
+        ]
+      },
+      "expected_result_artifacts": [],
+      "solver_pipeline": [],
+      "demo_estimates": [],
+      "review_required": [
+        "Regenerate authoritative readiness with the FastAPI backend or a future solver worker."
+      ],
+      "generated_at": "2026-09-05T00:00:00Z"
+    }
+  ],
+  "extensions": {
+    "future_imports": {
+      "step": "reserved for a future FreeCAD-backed geometry import worker",
+      "freecad": "reserved for a future FreeCAD document import worker"
+    }
+  }
+}

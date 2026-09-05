@@ -104,6 +104,25 @@ const riskLabel: Record<Part['stressRisk'], string> = {
   unknown: 'Review required',
 };
 
+type DemoGuideStatus = 'complete' | 'available' | 'review' | 'unavailable';
+
+interface DemoGuideStep {
+  id: string;
+  label: string;
+  status: DemoGuideStatus;
+  summary: string;
+  anchor: string;
+  actionLabel: string;
+  canMarkReviewed?: boolean;
+}
+
+const demoGuideStatusLabel: Record<DemoGuideStatus, string> = {
+  complete: 'Complete',
+  available: 'Ready',
+  review: 'Review required',
+  unavailable: 'Unavailable',
+};
+
 function App() {
   const [design, setDesign] = useState<ReferenceDesign | null>(null);
   const [selectedAssemblyId, setSelectedAssemblyId] = useState('');
@@ -120,12 +139,18 @@ function App() {
   const [substitutionPreview, setSubstitutionPreview] = useState<MaterialSubstitutionResult | null>(null);
   const [substitutionMessage, setSubstitutionMessage] = useState<string | null>(null);
   const [substitutionPending, setSubstitutionPending] = useState(false);
+  const [demoStepReviews, setDemoStepReviews] = useState<Set<string>>(() => new Set());
+
+  const markDemoStep = (stepId: string) => {
+    setDemoStepReviews((current) => new Set(current).add(stepId));
+  };
 
   const applyLoadedDesign = (loadedDesign: ReferenceDesign) => {
     setDesign(loadedDesign);
     setSelectedAssemblyId(loadedDesign.assembly.id);
     setSelectedPartId(loadedDesign.assembly.parts[0]?.id ?? '');
     setSelectedOptionId(loadedDesign.materialOptions[0]?.id ?? '');
+    markDemoStep('open-reference');
   };
 
   useEffect(() => {
@@ -179,11 +204,13 @@ function App() {
   const selectPart = (partId: string) => {
     setSelectedPartId(partId);
     setSubstitutionPreview(null);
+    markDemoStep('select-part');
   };
 
   const selectMaterialOption = (optionId: string) => {
     setSelectedOptionId(optionId);
     setSubstitutionPreview(null);
+    markDemoStep('material-substitution');
   };
 
   const selectAssembly = (assemblyId: string) => {
@@ -209,9 +236,13 @@ function App() {
         setSubstitutionPreview(null);
         setSelectedOptionId('');
         setSubstitutionMessage('Applied substitution to the backend project. BOM, manufacturing, readiness, and reports were reloaded from persisted state.');
+        markDemoStep('material-substitution');
+        markDemoStep('bom-wiring-manufacturing');
       } else {
         setSubstitutionPreview(result);
         setSubstitutionMessage('Preview only: BOM, manufacturing, readiness, and reports below show projected effects. Project is unchanged until Apply is clicked.');
+        markDemoStep('material-substitution');
+        markDemoStep('bom-wiring-manufacturing');
       }
     } catch (error) {
       console.warn('Material substitution failed.', error);
@@ -240,6 +271,7 @@ function App() {
         analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
       });
       setAnalysisRunMessage('Local pre-solver job completed. Artifact is review-required and not FEA.');
+      markDemoStep('local-analysis');
     } catch (error) {
       console.warn('Local pre-solver run failed.', error);
       setAnalysisRunMessage('Local pre-solver job failed. Check the backend status and review-required details.');
@@ -274,6 +306,8 @@ function App() {
             ? 'Solver-readiness fixture completed with real CalculiX execution. It is still not project FEA.'
             : 'Solver-readiness fixture needs review. Inspect logs and artifact manifests below.',
       );
+      markDemoStep('solver-readiness');
+      markDemoStep('local-analysis');
     } catch (error) {
       console.warn('Local solver-readiness fixture failed.', error);
       setAnalysisRunMessage('Local solver-readiness fixture failed. Check logs and review-required details.');
@@ -301,6 +335,7 @@ function App() {
       link.remove();
       URL.revokeObjectURL(objectUrl);
       setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}.`);
+      markDemoStep('export-import');
     } catch (error) {
       console.warn('Project export failed.', error);
       setProjectFileMessage('Project export failed. Check that the backend supports MechaFlow project files.');
@@ -325,6 +360,7 @@ function App() {
       const importedDesign = await importProjectFile(design.backend.apiBaseUrl, projectFile);
       applyLoadedDesign(importedDesign);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
+      markDemoStep('export-import');
     } catch (error) {
       console.warn('Project import failed.', error);
       const message = error instanceof SyntaxError
@@ -365,6 +401,115 @@ function App() {
     : selectedPart.rating;
   const visibleDesign = substitutionPreview?.design ?? design;
   const visibleBomTotal = totalBomCost(visibleDesign.bom);
+  const hasBomManufacturingWiring = visibleDesign.bom.length > 0
+    && visibleDesign.manufacturingOptions.length > 0
+    && (visibleDesign.wiringRoutes.length > 0 || visibleDesign.wiringReview != null);
+  const hasCachedEvidence = visibleDesign.analysisJobs.some((job) => (
+    job.cachedArtifactRefs.length > 0
+    || job.cachedReportRefs.length > 0
+    || job.artifacts.length > 0
+  )) || visibleDesign.reports.length > 0;
+  const hasLocalAnalysisRun = design.analysisJobs.some((job) => (
+    job.worker === 'local-pre-solver-runner'
+    || job.worker === 'local-calculix-fixture-runner'
+    || job.id.startsWith('job-local-')
+  ));
+  const hasExportOrImport = projectFileMessage != null && /Exported|Opened/.test(projectFileMessage);
+  const demoGuideSteps: DemoGuideStep[] = [
+    {
+      id: 'open-reference',
+      label: 'Open reference robot',
+      status: 'complete',
+      summary: `${design.name} is loaded from ${design.backend.source.replaceAll('-', ' ')} with project ${design.backend.projectId}.`,
+      anchor: '#reference-panel',
+      actionLabel: 'Review project source',
+    },
+    {
+      id: 'select-part',
+      label: 'Select and inspect parts',
+      status: demoStepReviews.has('select-part') ? 'complete' : 'available',
+      summary: `${activeAssembly.parts.length} selectable mechanical and electrical parts are available in ${activeAssembly.name}.`,
+      anchor: '#assembly-viewer',
+      actionLabel: 'Open viewer',
+      canMarkReviewed: true,
+    },
+    {
+      id: 'material-substitution',
+      label: 'Try material substitution',
+      status: demoStepReviews.has('material-substitution')
+        ? 'complete'
+        : materialOptions.length > 0 ? 'available' : 'review',
+      summary: materialOptions.length > 0
+        ? `${materialOptions.length} compatible, review-required material or process options are available for ${selectedPart.name}.`
+        : `${selectedPart.name} has no compatible substitution option in the seed data.`,
+      anchor: '#part-inspector',
+      actionLabel: 'Open material controls',
+      canMarkReviewed: materialOptions.length > 0,
+    },
+    {
+      id: 'bom-wiring-manufacturing',
+      label: 'Review BOM, manufacturing, and wiring',
+      status: demoStepReviews.has('bom-wiring-manufacturing')
+        ? 'complete'
+        : hasBomManufacturingWiring ? 'available' : 'review',
+      summary: hasBomManufacturingWiring
+        ? 'BOM ranges, make or buy options, harness routes, and electronics records are loaded with estimate and heuristic labels.'
+        : 'One or more downstream workflow panels need seed or backend data before the captain demo is complete.',
+      anchor: '#bom-panel',
+      actionLabel: 'Open downstream panels',
+      canMarkReviewed: hasBomManufacturingWiring,
+    },
+    {
+      id: 'solver-readiness',
+      label: 'Check solver readiness',
+      status: demoStepReviews.has('solver-readiness')
+        ? 'complete'
+        : solverReadiness ? 'available' : 'review',
+      summary: solverReadiness
+        ? `${solverReadiness.summary} Full project FEA remains review-required unless a real solver result is present.`
+        : 'Selected part readiness is visible, but local solver tool detection needs a connected backend.',
+      anchor: '#analysis-queue',
+      actionLabel: 'Open analysis queue',
+      canMarkReviewed: true,
+    },
+    {
+      id: 'local-analysis',
+      label: 'Run local-safe analysis path',
+      status: hasLocalAnalysisRun
+        ? 'complete'
+        : design.backend.apiBaseUrl ? 'available' : 'unavailable',
+      summary: design.backend.apiBaseUrl
+        ? 'Use pre-solver screening or the CalculiX fixture boundary. These paths produce review-required artifacts and never claim project FEA.'
+        : 'Connect the desktop mock API or FastAPI backend to run local-safe analysis actions.',
+      anchor: '#analysis-queue',
+      actionLabel: 'Run safe local path',
+    },
+    {
+      id: 'cached-evidence',
+      label: 'Inspect cached evidence and reports',
+      status: demoStepReviews.has('cached-evidence')
+        ? 'complete'
+        : hasCachedEvidence ? 'available' : 'review',
+      summary: hasCachedEvidence
+        ? 'Cached artifact references and advisory reports are present. Stale or metadata-only files remain honestly labeled.'
+        : 'No cached report or artifact evidence is available for this project yet.',
+      anchor: '#reports-panel',
+      actionLabel: 'Open reports',
+      canMarkReviewed: hasCachedEvidence,
+    },
+    {
+      id: 'export-import',
+      label: 'Export or reopen evidence',
+      status: hasExportOrImport
+        ? 'complete'
+        : design.backend.apiBaseUrl ? 'available' : 'unavailable',
+      summary: design.backend.apiBaseUrl
+        ? 'Export a .mfcad.json evidence package, then import it again to prove the round trip.'
+        : 'Project file import and export need a local API connection.',
+      anchor: '#reference-panel',
+      actionLabel: 'Open file controls',
+    },
+  ];
 
   return (
     <main className="app-shell">
@@ -392,8 +537,10 @@ function App() {
         </div>
       </header>
 
+      <DemoGuidePanel steps={demoGuideSteps} onMarkReviewed={markDemoStep} />
+
       <section className="cockpit-grid" aria-label="Assembly cockpit">
-        <aside className="panel reference-panel">
+        <aside className="panel reference-panel" id="reference-panel">
           <p className="eyebrow">Reference design</p>
           <h2>{design.name}</h2>
           <dl className="meta-grid">
@@ -435,7 +582,7 @@ function App() {
           <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={selectPart} />
         </aside>
 
-        <section className="viewer-card panel">
+        <section className="viewer-card panel" id="assembly-viewer">
           <div className="viewer-toolbar">
             <div>
               <p className="eyebrow">Interactive robot assembly</p>
@@ -531,7 +678,7 @@ function App() {
           </div>
         </section>
 
-        <aside className="panel inspector-panel">
+        <aside className="panel inspector-panel" id="part-inspector">
           <p className="eyebrow">Part inspector</p>
           <h2>{selectedPart.name}</h2>
           <p>{selectedPart.purpose}</p>
@@ -610,6 +757,64 @@ function App() {
         </p>
       </section>
     </main>
+  );
+}
+
+function EmptyPanelNotice({ title, children }: { title: string; children: string }) {
+  return (
+    <div className="inline-empty-state" role="status">
+      <strong>{title}</strong>
+      <p>{children}</p>
+    </div>
+  );
+}
+
+function DemoGuidePanel({
+  steps,
+  onMarkReviewed,
+}: {
+  steps: DemoGuideStep[];
+  onMarkReviewed: (stepId: string) => void;
+}) {
+  const completed = steps.filter((step) => step.status === 'complete').length;
+  const progress = Math.round((completed / steps.length) * 100);
+
+  return (
+    <section className="panel demo-guide-panel" aria-label="Captain demo checklist">
+      <div className="demo-guide-heading">
+        <div>
+          <p className="eyebrow">Captain demo checklist</p>
+          <h2>Guided end-to-end MVP flow</h2>
+          <p>
+            Follow these steps from reference robot load through export. The checklist calls out demo estimates,
+            heuristic screens, unavailable tooling, and review-required engineering decisions before they can look complete.
+          </p>
+        </div>
+        <div className="demo-progress" aria-label={`${completed} of ${steps.length} demo steps complete`}>
+          <strong>{completed}/{steps.length}</strong>
+          <span>steps complete</span>
+          <div className="progress-track" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
+        </div>
+      </div>
+      <ol className="demo-step-list">
+        {steps.map((step, index) => (
+          <li className={`demo-step status-${step.status}`} key={step.id}>
+            <div className="demo-step-index" aria-hidden="true">{index + 1}</div>
+            <div>
+              <strong>{step.label}</strong>
+              <span>{demoGuideStatusLabel[step.status]}</span>
+              <p>{step.summary}</p>
+              <div className="demo-step-actions">
+                <a href={step.anchor}>{step.actionLabel}</a>
+                {step.canMarkReviewed && step.status !== 'complete' ? (
+                  <button type="button" onClick={() => onMarkReviewed(step.id)}>Mark reviewed</button>
+                ) : null}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -1016,7 +1221,7 @@ function AnalysisPanel({
     return `${design.backend.apiBaseUrl ?? ''}${downloadUrl}`;
   };
   return (
-    <article className="panel job-queue-panel">
+    <article className="panel job-queue-panel" id="analysis-queue">
       <p className="eyebrow">Analysis job queue</p>
       <h2>Local-first orchestration and cached reports</h2>
       <p>
@@ -1073,7 +1278,9 @@ function AnalysisPanel({
       ) : null}
       {runMessage ? <p className="runner-message" aria-live="polite">{runMessage}</p> : null}
       <div className="job-list" aria-label="Analysis jobs with recommendations and cached artifacts">
-        {design.analysisJobs.map((job) => {
+        {design.analysisJobs.length === 0 ? (
+          <EmptyPanelNotice title="No analysis jobs yet">Run a local-safe pre-solver screening, import a project with retained jobs, or review the backend queue once it is connected.</EmptyPanelNotice>
+        ) : design.analysisJobs.map((job) => {
           const recommendation = job.recommendation;
           const targetLabel = recommendation?.recommended_target.replaceAll('_', ' ') ?? 'recommendation unavailable';
           return (
@@ -1209,7 +1416,7 @@ function BomPanel({
   total: UsdRange | null;
 }) {
   return (
-    <article className={`panel ${previewActive ? 'preview-panel' : ''}`}>
+    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="bom-panel">
       <p className="eyebrow">BOM and cost {previewActive ? 'preview' : ''}</p>
       <h2>{total == null ? 'Cost review required' : `${formatUsdRange(total)} open estimate`}</h2>
       <p className="muted">
@@ -1218,7 +1425,9 @@ function BomPanel({
           : 'Ranges are explicit local estimates or review-required placeholders, not supplier quotes.'}
       </p>
       <div className="bom-list">
-        {design.bom.map((item) => (
+        {design.bom.length === 0 ? (
+          <EmptyPanelNotice title="No BOM items yet">Import a richer project or connect the backend seed so cost ranges, lead-time estimates, and review-required supplier fields appear here.</EmptyPanelNotice>
+        ) : design.bom.map((item) => (
           <div key={item.id}>
             <strong>{item.quantity}x {item.item}</strong>
             <small>
@@ -1243,14 +1452,16 @@ function ManufacturingPanel({
 }) {
   const selectedPartName = design.assemblies.flatMap((assembly) => assembly.parts).find((part) => part.id === selectedPartId)?.name;
   return (
-    <article className={`panel ${previewActive ? 'preview-panel' : ''}`}>
+    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="manufacturing-panel">
       <p className="eyebrow">Manufacturing panel {previewActive ? 'preview' : ''}</p>
       <h2>Make or buy paths</h2>
       <p className="muted">
         Active process cards mirror backend manufacturing options. Cost and lead time stay ranged and review-required.
       </p>
       <div className="option-stack">
-        {design.manufacturingOptions.map((option) => {
+        {design.manufacturingOptions.length === 0 ? (
+          <EmptyPanelNotice title="No manufacturing options yet">Connect backend panel data or import a demo project with make or buy process options before manufacturing review.</EmptyPanelNotice>
+        ) : design.manufacturingOptions.map((option) => {
           const activeForSelected = option.partName === selectedPartName;
           return (
             <div className={`manufacturing-card ${activeForSelected ? 'selected-manufacturing' : ''}`} key={option.id}>
@@ -1281,11 +1492,13 @@ function ReportPanel({ reports, selectedOption }: { reports: AdvisoryReport[]; s
   const visibleReports = previewReport ? [previewReport, ...reports] : reports;
 
   return (
-    <article className="panel">
+    <article className="panel" id="reports-panel">
       <p className="eyebrow">Reports</p>
       <h2>Advisory edit report</h2>
       <div className="option-stack">
-        {visibleReports.map((report) => (
+        {visibleReports.length === 0 ? (
+          <EmptyPanelNotice title="No advisory reports yet">Preview a material substitution or import a project file with cached report metadata to create review evidence.</EmptyPanelNotice>
+        ) : visibleReports.map((report) => (
           <div className="report-card" key={report.id}>
             <strong>{report.title}</strong>
             <small>{report.status.replaceAll('_', ' ')}</small>
@@ -1369,7 +1582,7 @@ function WiringPanel({ design, selectedPart }: { design: ReferenceDesign; select
   const selectedRoute = relatedRoutes[0] ?? design.wiringRoutes[0];
 
   return (
-    <article className="panel wiring-workflow-panel" aria-label="Wiring and electronics workflow">
+    <article className="panel wiring-workflow-panel" id="wiring-panel" aria-label="Wiring and electronics workflow">
       <p className="eyebrow">Wiring and electronics</p>
       <h2>{design.wiringReview ? wiringStatusCopy[design.wiringReview.status] : 'Harness review required'}</h2>
       <p className="muted">
