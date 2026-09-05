@@ -81,9 +81,9 @@ Example:
 
 ```text
 Task: lift 50 lb
-Current status: passes with estimated 2.1 safety factor
+Current status: review-required; no worker-supplied payload rating is available
 Selected edit: switch aluminum to nylon carbon fiber
-Projected result: fails at 31 lb unless thickness increases by 22 percent
+Projected result: compare weight, stiffness, yield, heat, manufacturing, cost, and lead-time effects; payload remains review-required
 ```
 
 ### 7. Show options
