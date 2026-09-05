@@ -282,6 +282,73 @@ const currentReadinessPreviews = () => {
     : fallbackReadinessPreviews();
 };
 
+function buildMockWiringReview(sourceProject) {
+  const components = sourceProject.electronics_components ?? [];
+  const segments = sourceProject.wire_segments ?? [];
+  const routes = sourceProject.assemblies.flatMap((assembly) => assembly.wiring_routes ?? []);
+  const componentConnectorIds = new Set(components.flatMap((component) => component.connector_ids ?? []));
+  const segmentIds = new Set(segments.map((segment) => segment.id));
+  const reviews = routes.map((route) => {
+    const evidence = [];
+    const endpointComplete = (route.endpoints ?? []).length === 2
+      && route.endpoints.every((endpoint) => [route.from_connector.id, route.to_connector.id].includes(endpoint.connector_id));
+    evidence.push({
+      check: 'endpoint linkage',
+      status: endpointComplete ? 'pass' : 'review_required',
+      basis: endpointComplete ? 'explicit_data' : 'missing_input',
+      message: endpointComplete ? 'Both route endpoint connectors are recorded.' : 'Route endpoint records are incomplete or inconsistent.',
+      related_ids: route.endpoints?.map((endpoint) => endpoint.connector_id) ?? [],
+    });
+    const connectorsComplete = [route.from_connector.id, route.to_connector.id].every((id) => componentConnectorIds.has(id));
+    evidence.push({
+      check: 'connector details',
+      status: connectorsComplete ? 'pass' : 'review_required',
+      basis: connectorsComplete ? 'explicit_data' : 'missing_input',
+      message: connectorsComplete ? 'Route connectors are tied to electronics component records.' : 'Route connectors are missing electronics component records.',
+      related_ids: [route.from_connector.id, route.to_connector.id],
+    });
+    const geometryComplete = (route.path_points_mm ?? []).length >= 2;
+    evidence.push({
+      check: 'route geometry',
+      status: geometryComplete ? 'pass' : 'review_required',
+      basis: geometryComplete ? 'heuristic_estimate' : 'missing_input',
+      message: geometryComplete ? 'Polyline path contains enough points for a screening estimate.' : 'Route needs at least two path points.',
+    });
+    const clearanceStatus = route.clearance_min_mm == null ? 'review_required' : route.clearance_min_mm < 2 ? 'warning' : 'pass';
+    evidence.push({ check: 'clearance', status: clearanceStatus, basis: route.clearance_min_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Clearance is a heuristic screening signal.' });
+    const bendStatus = route.bend_radius_min_mm == null ? 'review_required' : route.bend_radius_min_mm < 15 ? 'warning' : 'pass';
+    evidence.push({ check: 'bend radius', status: bendStatus, basis: route.bend_radius_min_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Bend radius is a heuristic screening signal.' });
+    const serviceStatus = route.service_loop_mm == null ? 'review_required' : route.service_loop_mm < 25 ? 'warning' : 'pass';
+    evidence.push({ check: 'service loop', status: serviceStatus, basis: route.service_loop_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Service loop is a heuristic screening signal.' });
+    const bomStatus = route.wire_segment_ids?.length > 0 && route.wire_segment_ids.every((id) => segmentIds.has(id)) && route.harness_bom?.length > 0 ? 'pass' : 'review_required';
+    evidence.push({ check: 'BOM linkage', status: bomStatus, basis: bomStatus === 'pass' ? 'explicit_data' : 'missing_input', message: 'Wire segments and harness BOM links are required.' });
+    const status = evidence.some((item) => item.status === 'review_required')
+      ? 'review_required'
+      : evidence.some((item) => item.status === 'warning') ? 'warning' : 'pass';
+    return {
+      route_id: route.id,
+      route_name: route.name,
+      status,
+      summary: status === 'pass' ? 'MVP wiring review passes recorded checks.' : status === 'warning' ? 'MVP wiring review found heuristic warnings.' : 'MVP wiring review needs more evidence.',
+      evidence,
+      bom_item_ids: route.harness_bom ?? [],
+      endpoint_part_ids: [route.from_connector.part_id, route.to_connector.part_id].filter(Boolean),
+      review_required: evidence.filter((item) => item.status === 'review_required').map((item) => item.message),
+    };
+  });
+  const status = reviews.some((review) => review.status === 'review_required')
+    ? 'review_required'
+    : reviews.some((review) => review.status === 'warning') ? 'warning' : 'pass';
+  return {
+    project_id: sourceProject.id,
+    status,
+    summary: `Reviewed ${reviews.length} wiring route${reviews.length === 1 ? '' : 's'} with deterministic MVP heuristics. Clearance and bend checks are screening signals, not exact electrical or CAD validation.`,
+    route_reviews: reviews,
+    generated_at: new Date().toISOString(),
+    assumptions: ['Mock backend mirrors deterministic heuristic route checks; exact electrical or CAD validation remains review-required.'],
+  };
+}
+
 const projectPanelData = (sourceProject = project, readinessPreviews = null) => ({
   ...mockBackendPanelData,
   project: sourceProject,
@@ -313,7 +380,7 @@ const projectPanelData = (sourceProject = project, readinessPreviews = null) => 
   wiring_routes: sourceProject.assemblies.flatMap((assembly) => assembly.wiring_routes).filter((route, index, routes) => (
     routes.findIndex((candidate) => candidate.id === route.id) === index
   )),
-  wiring_review: mockBackendPanelData.wiring_review ?? null,
+  wiring_review: buildMockWiringReview(sourceProject),
   reports: sourceProject.reports,
 });
 

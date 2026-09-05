@@ -289,6 +289,13 @@ def test_project_file_import_rejects_inconsistent_non_empty_wiring_lists() -> No
     assert imported.status_code == 422
     assert "unknown wire segments" in imported.json()["detail"]
 
+    project_file = local_client.get("/api/projects/project-open-gripper-demo/export-file").json()
+    project_file["project"]["assemblies"][0]["wiring_routes"][0]["from_connector"]["part_id"] = "part-finger-link"
+    imported = local_client.post("/api/projects/import-file", json=project_file)
+
+    assert imported.status_code == 422
+    assert "inconsistent component ownership" in imported.json()["detail"]
+
 
 
 def test_project_file_export_import_round_trip_preserves_mvp_data() -> None:

@@ -19,6 +19,16 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.wiringReview?.summary).toMatch(/screening signals, not exact electrical or CAD validation/i);
   });
 
+  it('requires complete route evidence when a backend review is absent', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.wiring_review = null;
+    panelData.wiring_routes[0].service_loop_mm = null;
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata);
+
+    expect(design.wiringRoutes[0]?.reviewStatus).toBe('review_required');
+  });
+
   it('links electronics, wire segments, and harness BOM items into the frontend model', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
 

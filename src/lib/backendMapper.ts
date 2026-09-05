@@ -724,7 +724,17 @@ const routeLengthMm = (route: BackendWiringRoute): number | null => {
 };
 
 const fallbackWiringStatus = (route: BackendWiringRoute): WiringRoute['reviewStatus'] => {
-  if (route.clearance_min_mm == null || route.bend_radius_min_mm == null) return 'review_required';
+  const connectorIds = new Set([route.from_connector.id, route.to_connector.id]);
+  const completeEvidence = route.path_points_mm.length >= 2
+    && route.endpoints?.length === 2
+    && route.endpoints.every((endpoint) => connectorIds.has(endpoint.connector_id))
+    && route.wire_segment_ids.length > 0
+    && route.electronics_component_ids.length > 0
+    && route.harness_bom.length > 0
+    && route.clearance_min_mm != null
+    && route.bend_radius_min_mm != null
+    && route.service_loop_mm != null;
+  if (!completeEvidence) return 'review_required';
   if (route.clearance_min_mm < 2 || route.bend_radius_min_mm < 15) return 'warning';
   return 'pass';
 };
