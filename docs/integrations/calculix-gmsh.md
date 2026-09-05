@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use FreeCAD, Gmsh, and CalculiX as separable future workers for geometry preparation, mesh generation, and static structural checks that support advisory capability re-rating. The local runner can package pre-solver inputs and a review-required demo screening artifact, but it does not run FEA. See [Backend development](../backend.md) for the runner contract and invocation.
+Use FreeCAD, Gmsh, and CalculiX as separable workers for geometry preparation, mesh generation, and static structural checks that support advisory capability re-rating. The local pre-solver runner packages inputs without running FEA, while the solver-readiness endpoint can execute a deterministic CalculiX fixture when `ccx` is installed. The fixture verifies solver plumbing only and is not project FEA. See [Local solver execution](../local-solver-execution.md) for the executable boundary and [Backend development](../backend.md) for the API contract.
 
 ## Initial capabilities
 
@@ -22,7 +22,8 @@ Use FreeCAD, Gmsh, and CalculiX as separable future workers for geometry prepara
 ## Outputs
 
 - Future artifacts: mesh files.
-- Future artifacts: CalculiX input and result files.
+- Current fixture artifacts: generated CalculiX input, logs, and result files.
+- Future project artifacts: CalculiX input and result files generated from selected MechaFlow geometry.
 - Future artifacts: images or VTK-style visualization artifacts.
 - Future artifact: JSON rating report with assumptions and warnings.
 

@@ -8,6 +8,7 @@ import type {
   BackendProjectFile,
   BackendProjectFileImportResponse,
   BackendProjectPanelData,
+  LocalSolverReadinessSummary,
   MaterialOption,
   ReferenceDesign,
 } from '../types';
@@ -185,6 +186,28 @@ export async function runLocalPreSolverAnalysis(
 ): Promise<AnalysisJob> {
   const job = await fetchJson<BackendAnalysisJob>(
     `${trimTrailingSlash(apiBaseUrl)}/api/projects/${projectId}/analysis-jobs/pre-solver-runs`,
+    {
+      body: JSON.stringify({ target_id: targetId }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    },
+  );
+  return mapBackendAnalysisJob(job);
+}
+
+export async function loadLocalSolverReadiness(apiBaseUrl: string): Promise<LocalSolverReadinessSummary> {
+  return fetchJson<LocalSolverReadinessSummary>(
+    `${trimTrailingSlash(apiBaseUrl)}/api/local-analysis/solver-readiness`,
+  );
+}
+
+export async function runLocalSolverReadinessAnalysis(
+  apiBaseUrl: string,
+  projectId: string,
+  targetId: string,
+): Promise<AnalysisJob> {
+  const job = await fetchJson<BackendAnalysisJob>(
+    `${trimTrailingSlash(apiBaseUrl)}/api/projects/${projectId}/analysis-jobs/solver-readiness-runs`,
     {
       body: JSON.stringify({ target_id: targetId }),
       headers: { 'Content-Type': 'application/json' },

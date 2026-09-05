@@ -16,6 +16,7 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 - Showing selected-part and selected-assembly pre-solver analysis readiness with explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes. Assembly fallback previews aggregate included parts and do not copy part-level demo estimates.
 - Showing background CAD, future FEA, wiring, and supplier job status without claiming that real FEA has run.
 - Triggering the FastAPI local pre-solver runner when `VITE_API_BASE_URL` points at the backend. The button creates a persisted review-required artifact and keeps it labeled as not FEA.
+- Inspecting local FreeCAD, Gmsh, and CalculiX availability through the solver-readiness endpoint, then running a deterministic CalculiX fixture boundary when available or showing exact missing-tool guidance when unavailable.
 - Exporting and importing portable `.mfcad.json` project files when the cockpit is connected to the FastAPI backend or desktop mock API.
 - Reviewing BOM, cost, manufacturing, and lead-time panels where substitutions visibly change ranged estimates without inventing exact quotes.
 - Surfacing wiring routes, bend radius, service loops, and clearance risk.
@@ -172,11 +173,13 @@ POST /api/projects/{project_id}/material-substitutions/preview
 POST /api/projects/{project_id}/material-substitutions/apply
 POST /api/projects/{project_id}/analysis-jobs/pre-solver-runs
 GET /api/local-analysis/tool-boundaries
+GET /api/local-analysis/solver-readiness
+POST /api/projects/{project_id}/analysis-jobs/solver-readiness-runs
 ```
 
 The project file controls in the reference panel download and read `.mfcad.json` files in the browser or Electron shell. The JSON format is documented in [Project files](project-files.md). Unsupported or malformed files stay in the current project and show an understandable import error.
 
-Readiness responses are not FEA results. The local pre-solver run packages explicit worker inputs, computes only a demo-safe nominal screening estimate when possible, and lists FreeCAD, Gmsh, and CalculiX command availability. Missing solver binaries appear as `unavailable_review_required`; available binaries are still not invoked by this runner.
+Readiness responses are not FEA results. The local pre-solver run packages explicit worker inputs, computes only a demo-safe nominal screening estimate when possible, and lists FreeCAD, Gmsh, and CalculiX command availability. Missing solver binaries appear as `unavailable_review_required`; available binaries are still not invoked by this runner. The separate solver-readiness fixture can invoke CalculiX for a deterministic generated deck when `ccx` is installed, but that output is labeled as a fixture result, not project FEA.
 
 The substitution selector is generated only from explicit material/process intersections in project panel data. It shows current versus substitute material, process, weight delta from density when possible, stiffness modulus, material yield, heat screening limit, cost range, lead-time range, source confidence, and review-required warnings. The `Preview backend impact` button calls the non-persisting preview endpoint and temporarily drives BOM, manufacturing, readiness, and report panels from projected backend data. The `Apply validated substitution` button is disabled until a preview succeeds; it then calls the apply endpoint and reloads persisted panel data.
 

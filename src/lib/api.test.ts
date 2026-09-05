@@ -5,8 +5,10 @@ import {
   exportProjectFile,
   importProjectFile,
   loadCockpitDesign,
+  loadLocalSolverReadiness,
   previewMaterialSubstitution,
   runLocalPreSolverAnalysis,
+  runLocalSolverReadinessAnalysis,
 } from './api';
 import { mapProjectPanelDataToReferenceDesign } from './backendMapper';
 
@@ -234,6 +236,63 @@ describe('loadCockpitDesign', () => {
     expect(job.worker).toBe('local-pre-solver-runner');
     expect(job.artifacts[0]?.title).toContain('not FEA');
     expect(job.reviewStatus).toBe('review_required');
+  });
+
+  it('loads solver readiness and runs a solver-unavailable fixture boundary', async () => {
+    const backendReadiness = {
+      status: 'solver_unavailable',
+      tool_statuses: [],
+      available_tools: [],
+      missing_tools: ['CalculiX'],
+      execution_modes: [],
+      install_guidance: ['Install CalculiX.'],
+      summary: 'CalculiX is missing.',
+    };
+    const backendJob = {
+      id: 'job-local-fixture',
+      job_type: 'run_fea',
+      status: 'solver_unavailable',
+      target_id: 'part-finger-link',
+      project_id: 'project-open-gripper-demo',
+      adapter_name: 'local-calculix-fixture-runner',
+      local_compute_preferred: true,
+      input_summary: {},
+      result_summary: {
+        message: 'CalculiX is unavailable. Fixture input was generated, but no solver was run.',
+        progress: 100,
+        review_status: 'solver_unavailable_review_required',
+        trust_label: 'pre_solver_input',
+      },
+      artifacts: [{
+        kind: 'fea_summary',
+        title: 'CalculiX solver fixture prepared, solver unavailable',
+        payload: { file_manifest: [{ name: 'mechaflow_static_fixture.inp' }] },
+        generated_by: 'local-calculix-fixture-runner',
+      }],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        expect(init).toBeUndefined();
+        return Response.json(backendReadiness);
+      }
+      expect(url).toBe('http://api.test/api/projects/project-open-gripper-demo/analysis-jobs/solver-readiness-runs');
+      expect(init?.method).toBe('POST');
+      expect(init?.body).toBe(JSON.stringify({ target_id: 'part-finger-link' }));
+      return Response.json(backendJob);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const readiness = await loadLocalSolverReadiness('http://api.test/');
+    const job = await runLocalSolverReadinessAnalysis(
+      'http://api.test/',
+      'project-open-gripper-demo',
+      'part-finger-link',
+    );
+
+    expect(readiness.missing_tools).toEqual(['CalculiX']);
+    expect(job.status).toBe('solver-unavailable');
+    expect(job.artifacts[0]?.payload?.file_manifest).toEqual([{ name: 'mechaflow_static_fixture.inp' }]);
   });
 
   it('falls back directly to bundled data when panel data is unavailable', async () => {

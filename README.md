@@ -25,6 +25,7 @@ This repository contains product and technical documentation plus an integrated 
 - [MVP roadmap](docs/mvp-roadmap.md)
 - [Data and standards strategy](docs/data-and-standards.md)
 - [Backend development](docs/backend.md)
+- [Local solver execution](docs/local-solver-execution.md)
 
 Machine-readable seeds:
 
@@ -189,7 +190,7 @@ Use `python scripts/find-free-port.py` for one unused port or `node scripts/find
 
 ## Repository status
 
-This repository now contains planning documents and an integrated local MVP foundation. The backend exposes CAD orchestration, analysis-readiness, report, worker, and catalog-shaped contracts, including a local pre-solver runner that packages review-required demo artifacts without running real FEA; see [Backend development](docs/backend.md). The frontend cockpit can use backend-shaped mock data or a running API. The desktop-friendly visual seed shows a robot arm assembly with honest demo criteria, explicit pre-solver load cases, material and thermal provenance, expected FreeCAD, Gmsh, and CalculiX artifacts, and no real FEA claims. Catalog data is validated locally where present. Heavy CAD, FEA, electronics, wiring, and supplier integrations are not wired to FreeCAD, CalculiX, Gmsh, KiCad, WireViz, or external supplier APIs yet.
+This repository now contains planning documents and an integrated local MVP foundation. The backend exposes CAD orchestration, analysis-readiness, report, worker, and catalog-shaped contracts, including a local pre-solver runner and a CalculiX solver-readiness fixture boundary; see [Backend development](docs/backend.md) and [Local solver execution](docs/local-solver-execution.md). The frontend cockpit can use backend-shaped mock data or a running API. The desktop-friendly visual seed shows a robot arm assembly with honest demo criteria, explicit pre-solver load cases, material and thermal provenance, expected FreeCAD, Gmsh, and CalculiX artifacts, local solver tool availability, and no fake FEA claims. Full project FEA still requires FreeCAD geometry prep, Gmsh meshing, CalculiX solving, and engineering review before stress, displacement, safety factor, or payload ratings can be treated as real solver outputs.
 
 ## License
 

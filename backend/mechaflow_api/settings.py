@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from . import __version__
 
@@ -57,6 +58,7 @@ class Settings:
         default_factory=lambda: _env_csv("MECHAFLOW_CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
     )
     local_mode: bool = field(default_factory=lambda: _env_bool("MECHAFLOW_LOCAL_MODE", True))
+    artifact_dir: Path = field(default_factory=lambda: Path(os.getenv("MECHAFLOW_ARTIFACT_DIR", ".mechaflow-artifacts")))
 
 
 def get_settings() -> Settings:

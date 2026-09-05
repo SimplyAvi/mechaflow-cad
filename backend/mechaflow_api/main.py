@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -29,6 +30,7 @@ from .models import (
     BOMItem,
     CatalogSeedResponse,
     ExpectedAnalysisResultArtifact,
+    LocalSolverReadinessSummary,
     LocalSolverToolStatus,
     ManufacturingOption,
     Material,
@@ -55,6 +57,11 @@ from .runners import (
     LOCAL_PRE_SOLVER_RUNNER_NAME,
     PRE_SOLVER_SCREENING_RUNNER,
     list_local_solver_tool_statuses,
+)
+from .solver_execution import (
+    LOCAL_SOLVER_FIXTURE_RUNNER_NAME,
+    build_local_solver_readiness_summary,
+    run_calculix_fixture,
 )
 from .services import (
     InvalidDimensionChangeError,
@@ -137,6 +144,7 @@ SCHEMA_MODELS = [
     SolverInputSpec,
     SolverPipelineStep,
     LocalSolverToolStatus,
+    LocalSolverReadinessSummary,
     Modification,
     MaterialSubstitutionRequest,
     MaterialSubstitutionOption,
@@ -660,19 +668,31 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def local_analysis_tool_boundaries() -> list[LocalSolverToolStatus]:
         return list_local_solver_tool_statuses()
 
+    @app.get(
+        f"{settings.api_prefix}/local-analysis/solver-readiness",
+        response_model=LocalSolverReadinessSummary,
+        tags=["jobs"],
+    )
+    def local_analysis_solver_readiness() -> LocalSolverReadinessSummary:
+        return build_local_solver_readiness_summary(api_prefix=settings.api_prefix)
+
     def add_queued_analysis_job(request: AnalysisJobRequest, adapter_name: str | None = None) -> AnalysisJob:
         adapter = choose_adapter(request) if adapter_name is None else None
         now = datetime.now(timezone.utc)
         plan = adapter.plan(request) if adapter else None
         resolved_adapter_name = adapter_name or (adapter.status.name if adapter else "unassigned")
+        local_runner_queue_names = {
+            LOCAL_PRE_SOLVER_RUNNER_NAME: "pre-solver-local",
+            LOCAL_SOLVER_FIXTURE_RUNNER_NAME: "solver-fixture-local",
+        }
         queue_name = (
-            "pre-solver-local"
-            if adapter_name == LOCAL_PRE_SOLVER_RUNNER_NAME
+            local_runner_queue_names[adapter_name]
+            if adapter_name in local_runner_queue_names
             else plan.queue_name if plan else None
         )
         expected_artifacts = (
             ["fea_summary" if request.job_type == AnalysisJobType.run_fea else "load_heuristic"]
-            if adapter_name == LOCAL_PRE_SOLVER_RUNNER_NAME
+            if adapter_name in local_runner_queue_names
             else [artifact.value for artifact in plan.expected_artifacts] if plan else []
         )
         while True:
@@ -714,6 +734,27 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}", response_model=AnalysisJob, tags=["jobs"])
     def analysis_job(job_id: str) -> AnalysisJob:
         return get_analysis_job_or_404(job_id)
+
+    @app.get(f"{settings.api_prefix}/analysis-artifacts/{{artifact_id}}/{{file_name}}", tags=["jobs"])
+    def analysis_artifact_file(artifact_id: str, file_name: str) -> FileResponse:
+        if Path(file_name).name != file_name:
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        for job in project_store.list_analysis_jobs():
+            artifact = next((item for item in job.artifacts if item.id == artifact_id), None)
+            if artifact is None:
+                continue
+            manifest = artifact.payload.get("file_manifest", [])
+            if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
+                raise HTTPException(status_code=404, detail="artifact file not found")
+            artifact_root = settings.artifact_dir.resolve()
+            bundle_id = artifact.payload.get("storage_bundle_id", job.id)
+            path = (artifact_root / bundle_id / file_name).resolve()
+            if not path.is_relative_to(artifact_root):
+                raise HTTPException(status_code=404, detail="artifact file not found")
+            if not path.is_file():
+                raise HTTPException(status_code=404, detail="artifact file expired")
+            return FileResponse(path, filename=file_name)
+        raise HTTPException(status_code=404, detail="artifact not found")
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/plan", response_model=AnalysisJobPlan, tags=["jobs"])
     def analysis_job_plan(job_id: str) -> AnalysisJobPlan:
@@ -801,8 +842,113 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         )
         return run_local_pre_solver_job(job.id)
 
+    def run_local_solver_fixture_job(job_id: str) -> AnalysisJob:
+        class ConcurrentSolverRunError(RuntimeError):
+            pass
+
+        def mark_running(job: AnalysisJob) -> AnalysisJob:
+            if job.status == AnalysisJobStatus.running:
+                raise ConcurrentSolverRunError("solver fixture is already running")
+            return job.model_copy(
+                update={"status": AnalysisJobStatus.running, "updated_at": datetime.now(timezone.utc)},
+                deep=True,
+            )
+
+        try:
+            running_job = project_store.update_analysis_job(job_id, mark_running)
+        except ConcurrentSolverRunError as exc:
+            raise HTTPException(status_code=409, detail="solver fixture is already running") from exc
+        if running_job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        project = get_project_or_404(running_job.project_id)
+        try:
+            completed_job = run_calculix_fixture(
+                project,
+                running_job,
+                artifact_root=settings.artifact_dir,
+                api_prefix=settings.api_prefix,
+            )
+        except PartNotFoundError as exc:
+            def mark_failed(job: AnalysisJob) -> AnalysisJob:
+                return job.model_copy(
+                    update={
+                        "status": AnalysisJobStatus.failed,
+                        "result_summary": {**job.result_summary, "message": "analysis target not found"},
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                    deep=True,
+                )
+
+            project_store.update_analysis_job(job_id, mark_failed)
+            raise HTTPException(status_code=404, detail="analysis target not found") from exc
+        except Exception as exc:
+            def mark_failed(job: AnalysisJob) -> AnalysisJob:
+                return job.model_copy(
+                    update={
+                        "status": AnalysisJobStatus.failed,
+                        "result_summary": {
+                            **job.result_summary,
+                            "message": "solver fixture execution failed before a result was produced",
+                            "error": str(exc)[:1000],
+                            "review_status": "solver_artifact_preparation_failed",
+                        },
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                    deep=True,
+                )
+
+            project_store.update_analysis_job(job_id, mark_failed)
+            raise HTTPException(status_code=500, detail="solver fixture execution failed") from exc
+        stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
+        if stored_job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        return stored_job
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/analysis-jobs/solver-readiness-runs",
+        response_model=AnalysisJob,
+        status_code=202,
+        tags=["jobs"],
+    )
+    def create_project_solver_readiness_run(project_id: str, request: AnalysisReadinessRequest) -> AnalysisJob:
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
+        project = get_project_or_404(project_id)
+        if request.job_type != AnalysisJobType.run_fea:
+            raise HTTPException(
+                status_code=422,
+                detail="solver-readiness fixture runner supports run_fea jobs only",
+            )
+        try:
+            readiness = build_analysis_readiness_preview(
+                project,
+                request.target_id,
+                include_demo_estimates=False,
+            )
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="analysis target not found") from exc
+        job = add_queued_analysis_job(
+            AnalysisJobRequest(
+                job_type=AnalysisJobType.run_fea,
+                target_id=request.target_id,
+                project_id=project_id,
+                local_compute_preferred=True,
+                input_summary={
+                    "readiness_state": readiness.state.value,
+                    "source": "project solver-readiness fixture endpoint",
+                    "fixture_scope": "CalculiX deterministic fixture only, not project FEA",
+                    "expected_artifacts": [".inp", ".dat", ".frd", ".sta"],
+                },
+            ),
+            adapter_name=LOCAL_SOLVER_FIXTURE_RUNNER_NAME,
+        )
+        return run_local_solver_fixture_job(job.id)
+
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-local", response_model=AnalysisJob, tags=["jobs"])
     def run_analysis_job_local(job_id: str) -> AnalysisJob:
+        job = get_analysis_job_or_404(job_id)
+        if job.adapter_name == LOCAL_SOLVER_FIXTURE_RUNNER_NAME:
+            return run_local_solver_fixture_job(job_id)
         return run_local_pre_solver_job(job_id)
 
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])

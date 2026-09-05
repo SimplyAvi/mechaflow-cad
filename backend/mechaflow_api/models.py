@@ -85,6 +85,8 @@ class AnalysisJobStatus(str, Enum):
     queued = "queued"
     running = "running"
     blocked_missing_adapter = "blocked_missing_adapter"
+    solver_unavailable = "solver_unavailable"
+    review_required = "review_required"
     completed = "completed"
     failed = "failed"
 
@@ -556,6 +558,32 @@ class LocalSolverToolStatus(StrictModel):
     availability: LocalSolverToolAvailability = LocalSolverToolAvailability.unavailable
     review_status: LocalSolverToolReviewStatus = LocalSolverToolReviewStatus.unavailable_review_required
     message: str
+    required_for_real_run: bool = True
+    install_guidance: str | None = None
+    version_command: list[str] = Field(default_factory=list)
+    detected_version: str | None = None
+
+
+class LocalSolverExecutionMode(StrictModel):
+    id: str
+    label: str
+    status: str
+    summary: str
+    required_tools: list[str] = Field(default_factory=list)
+    missing_tools: list[str] = Field(default_factory=list)
+    review_required: list[str] = Field(default_factory=list)
+    endpoints: list[str] = Field(default_factory=list)
+
+
+class LocalSolverReadinessSummary(StrictModel):
+    status: str
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    tool_statuses: list[LocalSolverToolStatus] = Field(default_factory=list)
+    available_tools: list[str] = Field(default_factory=list)
+    missing_tools: list[str] = Field(default_factory=list)
+    execution_modes: list[LocalSolverExecutionMode] = Field(default_factory=list)
+    install_guidance: list[str] = Field(default_factory=list)
+    summary: str
 
 
 class AnalysisReadinessRequest(BaseModel):

@@ -398,6 +398,93 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/demo pre solver not fea/i)).toBeInTheDocument();
   });
 
+  it('shows solver-unavailable guidance and generated fixture artifacts', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
+    const solverReadiness = {
+      status: 'solver_unavailable',
+      generated_at: '2026-09-05T00:00:00Z',
+      tool_statuses: [{
+        adapter_name: 'calculix-fea-worker',
+        open_source_tool: 'CalculiX',
+        role: 'Run static structural solve.',
+        binary_candidates: ['ccx', 'calculix'],
+        resolved_command: null,
+        availability: 'unavailable',
+        review_status: 'unavailable_review_required',
+        message: 'CalculiX command was not found locally.',
+        required_for_real_run: true,
+        install_guidance: 'Install CalculiX and make ccx available on PATH.',
+        version_command: [],
+        detected_version: null,
+      }],
+      available_tools: [],
+      missing_tools: ['CalculiX'],
+      execution_modes: [{
+        id: 'calculix_fixture',
+        label: 'CalculiX deterministic fixture run',
+        status: 'solver_unavailable',
+        summary: 'Runs a generated one-element CalculiX static structural fixture when installed.',
+        required_tools: ['CalculiX'],
+        missing_tools: ['CalculiX'],
+        review_required: ['Fixture output is not project FEA.'],
+        endpoints: ['/api/projects/{project_id}/analysis-jobs/solver-readiness-runs'],
+      }],
+      install_guidance: ['Install CalculiX and make ccx available on PATH.'],
+      summary: 'CalculiX is missing.',
+    };
+    const backendJob = {
+      id: 'job-local-fixture',
+      job_type: 'run_fea',
+      status: 'solver_unavailable',
+      target_id: 'part-finger-link',
+      project_id: 'project-open-gripper-demo',
+      adapter_name: 'local-calculix-fixture-runner',
+      local_compute_preferred: true,
+      input_summary: {},
+      result_summary: {
+        message: 'CalculiX is unavailable. Fixture input was generated, but no solver was run.',
+        progress: 100,
+        review_status: 'solver_unavailable_review_required',
+        trust_label: 'pre_solver_input',
+      },
+      artifacts: [{
+        kind: 'fea_summary',
+        title: 'CalculiX solver fixture prepared, solver unavailable',
+        summary: 'Generated input deck only.',
+        payload: {
+          file_manifest: [
+            { name: 'mechaflow_static_fixture.inp', path: '/tmp/mechaflow_static_fixture.inp', bytes: 742 },
+            { name: 'mechaflow_static_fixture.dat', path: '/tmp/mechaflow_static_fixture.dat', missing: true },
+          ],
+        },
+        confidence: 'unknown_or_needs_review',
+        generated_by: 'local-calculix-fixture-runner',
+      }],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) return Response.json(solverReadiness);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/analysis-jobs/solver-readiness-runs')) {
+        return Response.json(backendJob, { status: 202 });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText(/CalculiX command was not found locally/i)).toBeInTheDocument();
+    const runButton = await screen.findByRole('button', { name: /Run solver-readiness fixture for Base pedestal plate/i });
+    await user.click(runButton);
+
+    expect(await screen.findByText(/Solver-readiness fixture prepared input artifacts/i)).toBeInTheDocument();
+    expect(screen.getByText(/CalculiX solver fixture prepared, solver unavailable/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/solver unavailable/i).length).toBeGreaterThan(0);
+  });
+
   it('renders explicit BOM prices and totals as ranges', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const panelData = structuredClone(mockProjectPanelData);

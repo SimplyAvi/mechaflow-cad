@@ -66,14 +66,14 @@ const analysisAdaptersByJobType = {
   extract_part_list: new Set(['freecad-worker']),
   estimate_mass_properties: new Set(['freecad-worker']),
   quick_load_heuristic: new Set(['local-pre-solver-runner', 'calculix-fea-worker']),
-  run_fea: new Set(['local-pre-solver-runner', 'freecad-fea-prep-worker', 'gmsh-meshing-worker', 'calculix-fea-worker']),
+  run_fea: new Set(['local-pre-solver-runner', 'local-calculix-fixture-runner', 'freecad-fea-prep-worker', 'gmsh-meshing-worker', 'calculix-fea-worker']),
   rerate_payload_capability: new Set(['calculix-fea-worker', 'capability-heuristic-worker']),
   check_wire_routing: new Set(['wireviz-harness-worker']),
   generate_bom: new Set(['wireviz-harness-worker', 'supplier-options-worker']),
   generate_manufacturing_report: new Set(['supplier-options-worker']),
 };
 const analysisJobTypes = new Set(Object.keys(analysisAdaptersByJobType));
-const analysisJobStatuses = new Set(['queued', 'running', 'blocked_missing_adapter', 'completed', 'failed']);
+const analysisJobStatuses = new Set(['queued', 'running', 'blocked_missing_adapter', 'solver_unavailable', 'review_required', 'completed', 'failed']);
 const analysisArtifactKinds = new Set(['cad_metadata', 'exploded_view', 'part_list', 'mass_properties', 'load_heuristic', 'fea_summary', 'payload_rerating', 'wiring_check', 'bom', 'manufacturing_report']);
 const reportStatuses = new Set(['draft', 'advisory', 'requires_review', 'superseded']);
 const analysisArtifactKindByJobType = {
@@ -160,6 +160,10 @@ const localSolverToolBoundaries = () => [
     availability: 'unavailable',
     review_status: 'unavailable_review_required',
     message: 'Mock backend does not invoke FreeCAD. Use the FastAPI backend to inspect local command availability.',
+    required_for_real_run: true,
+    install_guidance: 'Install FreeCAD and make freecadcmd available on PATH for geometry preparation.',
+    version_command: ['--version'],
+    detected_version: null,
   },
   {
     adapter_name: 'gmsh-meshing-worker',
@@ -170,6 +174,10 @@ const localSolverToolBoundaries = () => [
     availability: 'unavailable',
     review_status: 'unavailable_review_required',
     message: 'Mock backend does not invoke Gmsh. Use the FastAPI backend to inspect local command availability.',
+    required_for_real_run: true,
+    install_guidance: 'Install Gmsh and make gmsh available on PATH for meshing.',
+    version_command: ['--version'],
+    detected_version: null,
   },
   {
     adapter_name: 'calculix-fea-worker',
@@ -180,8 +188,54 @@ const localSolverToolBoundaries = () => [
     availability: 'unavailable',
     review_status: 'unavailable_review_required',
     message: 'Mock backend does not invoke CalculiX. Use the FastAPI backend to inspect local command availability.',
+    required_for_real_run: true,
+    install_guidance: 'Install CalculiX and make ccx available on PATH for local solver fixture runs.',
+    version_command: [],
+    detected_version: null,
   },
 ];
+
+const localSolverReadiness = () => ({
+  status: 'solver_unavailable',
+  generated_at: new Date().toISOString(),
+  tool_statuses: localSolverToolBoundaries(),
+  available_tools: [],
+  missing_tools: ['FreeCAD', 'Gmsh', 'CalculiX'],
+  execution_modes: [
+    {
+      id: 'pre_solver_package',
+      label: 'Pre-solver readiness package',
+      status: 'available_not_fea',
+      summary: 'Mock backend can package review-required pre-solver artifacts, but no solver is invoked.',
+      required_tools: [],
+      missing_tools: [],
+      review_required: ['Not a real FEA result.'],
+      endpoints: ['/api/projects/{project_id}/analysis-jobs/pre-solver-runs'],
+    },
+    {
+      id: 'calculix_fixture',
+      label: 'CalculiX deterministic fixture run',
+      status: 'solver_unavailable',
+      summary: 'Mock backend reports this fixture unavailable. Use FastAPI with CalculiX on PATH for real fixture execution.',
+      required_tools: ['CalculiX'],
+      missing_tools: ['CalculiX'],
+      review_required: ['Fixture output would not be project FEA.'],
+      endpoints: ['/api/projects/{project_id}/analysis-jobs/solver-readiness-runs'],
+    },
+    {
+      id: 'full_part_fea',
+      label: 'Full local part FEA stack',
+      status: 'solver_unavailable',
+      summary: 'Requires FreeCAD, Gmsh, and CalculiX plus worker implementation.',
+      required_tools: ['FreeCAD', 'Gmsh', 'CalculiX'],
+      missing_tools: ['FreeCAD', 'Gmsh', 'CalculiX'],
+      review_required: ['Do not present mock output as real analysis.'],
+      endpoints: ['/api/local-analysis/solver-readiness'],
+    },
+  ],
+  install_guidance: localSolverToolBoundaries().map((tool) => tool.install_guidance),
+  summary: 'Mock backend cannot execute solver tools. Connect FastAPI for real command detection and CalculiX fixture execution.',
+});
 
 const fallbackReadinessPreviews = () => project.assemblies.flatMap((assembly) => {
   const assemblyPreview = {
@@ -1236,6 +1290,74 @@ const createMockPreSolverJob = (targetId) => {
   };
 };
 
+const createMockSolverReadinessJob = (targetId) => {
+  const found = findTarget(targetId);
+  if (!found) return null;
+  const now = new Date().toISOString();
+  const jobId = `job-${randomUUID()}`;
+  const artifact = {
+    id: `artifact-${randomUUID()}`,
+    job_id: jobId,
+    kind: 'fea_summary',
+    title: 'CalculiX solver fixture prepared, solver unavailable',
+    summary: 'Mock backend generated a solver-readiness artifact shape, but CalculiX was not invoked.',
+    payload: {
+      artifact_contract: 'local_calculix_fixture_run_v1_mock',
+      target_context: {
+        project_id: projectId,
+        target_id: targetId,
+        target_name: found.target.name,
+        target_kind: found.kind,
+      },
+      not_project_fea: true,
+      result_label: 'solver_unavailable_review_required',
+      missing_tools: ['CalculiX'],
+      install_guidance: 'Install CalculiX and make ccx available on PATH for local solver fixture runs.',
+      file_manifest: [
+        {
+          name: 'mechaflow_static_fixture.inp',
+          path: 'mock://mechaflow_static_fixture.inp',
+          bytes: 742,
+          content_preview: '*HEADING\nMechaFlow CAD deterministic CalculiX solver-readiness fixture.\n*NODE\n*CLOAD\n',
+        },
+        { name: 'mechaflow_static_fixture.dat', path: 'mock://mechaflow_static_fixture.dat', missing: true },
+      ],
+      tool_boundaries: localSolverToolBoundaries(),
+      review_required: ['Mock solver-readiness artifacts are not FEA results.'],
+    },
+    confidence: 'unknown_or_needs_review',
+    generated_by: 'local-calculix-fixture-runner',
+    created_at: now,
+  };
+  return {
+    id: jobId,
+    job_type: 'run_fea',
+    status: 'solver_unavailable',
+    target_id: targetId,
+    project_id: projectId,
+    adapter_name: 'local-calculix-fixture-runner',
+    local_compute_preferred: true,
+    input_summary: {
+      source: 'mock solver-readiness fixture endpoint',
+      target_part_ids: found.partIds,
+      fixture_scope: 'CalculiX deterministic fixture only, not project FEA',
+    },
+    result_summary: {
+      message: 'CalculiX is unavailable. Fixture input was generated, but no solver was run.',
+      progress: 100,
+      runner: 'local-calculix-fixture-runner',
+      trust_label: 'pre_solver_input',
+      review_status: 'solver_unavailable_review_required',
+      artifact_id: artifact.id,
+      artifact_kind: artifact.kind,
+      missing_tools: ['CalculiX'],
+    },
+    artifacts: [artifact],
+    created_at: now,
+    updated_at: now,
+  };
+};
+
 const isOriginAllowed = (request) => {
   const origin = request.headers.origin;
   return !origin || corsOrigins.has('*') || corsOrigins.has(origin);
@@ -1496,6 +1618,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/local-analysis/solver-readiness') {
+      send(200, localSolverReadiness());
+      return;
+    }
+
     if (request.method === 'POST' && isProjectPath(url.pathname, '/analysis-jobs/pre-solver-runs')) {
       if (!isOriginAllowed(request)) {
         send(403, { error: 'origin is not allowed' });
@@ -1518,6 +1645,41 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const job = createMockPreSolverJob(body.target_id);
+      if (!job) {
+        send(404, { error: 'analysis target not found' });
+        return;
+      }
+      project = {
+        ...project,
+        analysis_jobs: [job, ...project.analysis_jobs],
+        updated_at: new Date().toISOString(),
+      };
+      send(202, job);
+      return;
+    }
+
+    if (request.method === 'POST' && isProjectPath(url.pathname, '/analysis-jobs/solver-readiness-runs')) {
+      if (!isOriginAllowed(request)) {
+        send(403, { error: 'origin is not allowed' });
+        return;
+      }
+      const contentType = request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
+        send(415, { error: 'content-type must be application/json' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(request);
+      } catch {
+        send(422, { error: 'request body must contain valid JSON' });
+        return;
+      }
+      if (!body || typeof body.target_id !== 'string') {
+        send(422, { error: 'target_id is required' });
+        return;
+      }
+      const job = createMockSolverReadinessJob(body.target_id);
       if (!job) {
         send(404, { error: 'analysis target not found' });
         return;

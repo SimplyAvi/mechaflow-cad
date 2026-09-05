@@ -1,4 +1,5 @@
 import json
+import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
@@ -919,6 +920,81 @@ def test_local_solver_tool_boundaries_report_availability_without_invoking_tools
         item["review_status"] in {"available_not_invoked", "unavailable_review_required"}
         for item in payload
     )
+
+
+def test_local_solver_readiness_reports_missing_tools_with_install_guidance(monkeypatch) -> None:
+    monkeypatch.setattr("mechaflow_api.runners.shutil.which", lambda _candidate: None)
+    local_client = TestClient(main_module.create_app())
+
+    response = local_client.get("/api/local-analysis/solver-readiness")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "solver_unavailable"
+    assert set(payload["missing_tools"]) == {"FreeCAD", "Gmsh", "CalculiX"}
+    assert any("CalculiX" in guidance for guidance in payload["install_guidance"])
+    fixture_mode = next(mode for mode in payload["execution_modes"] if mode["id"] == "calculix_fixture")
+    assert fixture_mode["status"] == "solver_unavailable"
+    assert fixture_mode["missing_tools"] == ["CalculiX"]
+    assert all(status["install_guidance"] for status in payload["tool_statuses"])
+
+
+def test_solver_readiness_fixture_generates_input_manifest_when_calculix_is_missing(monkeypatch) -> None:
+    monkeypatch.setattr("mechaflow_api.runners.shutil.which", lambda _candidate: None)
+    local_client = TestClient(main_module.create_app())
+
+    response = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/solver-readiness-runs",
+        json={"target_id": "part-finger-link"},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["adapter_name"] == "local-calculix-fixture-runner"
+    assert payload["status"] == "solver_unavailable"
+    assert payload["result_summary"]["review_status"] == "solver_unavailable_review_required"
+    assert payload["result_summary"]["trust_label"] == "pre_solver_input"
+    assert payload["result_summary"]["missing_tools"] == ["CalculiX"]
+    artifact = payload["artifacts"][-1]
+    assert artifact["title"] == "CalculiX solver fixture prepared, solver unavailable"
+    assert artifact["payload"]["not_project_fea"] is True
+    assert artifact["payload"]["result_label"] == "solver_unavailable_review_required"
+    input_manifest = next(item for item in artifact["payload"]["file_manifest"] if item["name"].endswith(".inp"))
+    assert "*NODE" in input_manifest["content_preview"]
+    assert "*CLOAD" in input_manifest["content_preview"]
+    assert any(item.get("missing") for item in artifact["payload"]["file_manifest"] if item["name"].endswith(".dat"))
+
+
+def test_solver_readiness_fixture_runs_calculix_when_available(monkeypatch) -> None:
+    def fake_which(candidate: str) -> str | None:
+        return "/opt/test/bin/ccx" if candidate == "ccx" else None
+
+    def fake_run_calculix(_resolved_command: str, workdir: Path) -> subprocess.CompletedProcess[str]:
+        (workdir / "mechaflow_static_fixture.dat").write_text("displacements and stresses", encoding="utf-8")
+        (workdir / "mechaflow_static_fixture.frd").write_text("fixture result", encoding="utf-8")
+        (workdir / "mechaflow_static_fixture.sta").write_text("complete", encoding="utf-8")
+        return subprocess.CompletedProcess(["ccx", "mechaflow_static_fixture"], 0, "ccx completed", "")
+
+    monkeypatch.setattr("mechaflow_api.runners.shutil.which", fake_which)
+    monkeypatch.setattr("mechaflow_api.solver_execution._run_calculix", fake_run_calculix)
+    local_client = TestClient(main_module.create_app())
+
+    response = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/solver-readiness-runs",
+        json={"target_id": "part-finger-link"},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["status"] == "completed"
+    assert payload["result_summary"]["trust_label"] == "solver_result"
+    assert payload["result_summary"]["review_status"] == "fixture_solver_result_not_project_fea"
+    assert "mechaflow_static_fixture.dat" in payload["result_summary"]["produced_outputs"]
+    artifact_payload = payload["artifacts"][-1]["payload"]
+    assert artifact_payload["result_label"] == "real_solver_fixture_not_project_fea"
+    assert artifact_payload["not_project_fea"] is True
+    assert artifact_payload["resolved_command"] == "/opt/test/bin/ccx"
+    assert any(item["name"] == "mechaflow_static_fixture.inp" for item in artifact_payload["file_manifest"])
 
 
 def test_project_pre_solver_run_creates_review_required_artifact(monkeypatch) -> None:

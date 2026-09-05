@@ -4,11 +4,13 @@ import {
   exportProjectFile,
   importProjectFile,
   loadCockpitDesign,
+  loadLocalSolverReadiness,
   previewMaterialSubstitution,
   runLocalPreSolverAnalysis,
+  runLocalSolverReadinessAnalysis,
   type MaterialSubstitutionResult,
 } from './lib/api';
-import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
+import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import './App.css';
 
 const formatCurrency = (value: number): string => {
@@ -100,6 +102,7 @@ function App() {
   const [orbitPitchDeg, setOrbitPitchDeg] = useState(10);
   const [analysisRunMessage, setAnalysisRunMessage] = useState<string | null>(null);
   const [analysisRunPending, setAnalysisRunPending] = useState(false);
+  const [solverReadiness, setSolverReadiness] = useState<LocalSolverReadinessSummary | null>(null);
   const [projectFileMessage, setProjectFileMessage] = useState<string | null>(null);
   const [projectFilePending, setProjectFilePending] = useState(false);
   const [substitutionPreview, setSubstitutionPreview] = useState<MaterialSubstitutionResult | null>(null);
@@ -118,6 +121,18 @@ function App() {
     loadCockpitDesign().then((loadedDesign) => {
       if (!cancelled) {
         applyLoadedDesign(loadedDesign);
+        if (loadedDesign.backend.apiBaseUrl) {
+          loadLocalSolverReadiness(loadedDesign.backend.apiBaseUrl)
+            .then((readiness) => {
+              if (!cancelled) setSolverReadiness(readiness);
+            })
+            .catch((error) => {
+              console.warn('Local solver readiness endpoint is unavailable.', error);
+              if (!cancelled) setSolverReadiness(null);
+            });
+        } else {
+          setSolverReadiness(null);
+        }
       }
     });
     return () => {
@@ -221,6 +236,40 @@ function App() {
     }
   };
 
+  const runSelectedPartSolverReadiness = async () => {
+    if (!design?.backend.apiBaseUrl || !selectedPart) {
+      setAnalysisRunMessage('Start the local backend with VITE_API_BASE_URL to run the solver-readiness fixture.');
+      return;
+    }
+    setAnalysisRunPending(true);
+    setAnalysisRunMessage('Running local solver-readiness fixture or preparing unavailable-tool artifacts...');
+    try {
+      const job = await runLocalSolverReadinessAnalysis(
+        design.backend.apiBaseUrl,
+        design.backend.projectId,
+        selectedPart.id,
+      );
+      setDesign((current) => current && {
+        ...current,
+        analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
+      });
+      const refreshed = await loadLocalSolverReadiness(design.backend.apiBaseUrl);
+      setSolverReadiness(refreshed);
+      setAnalysisRunMessage(
+        job.status === 'solver-unavailable'
+          ? 'Solver-readiness fixture prepared input artifacts, but CalculiX is unavailable. Install tools before a real fixture run.'
+          : job.status === 'complete'
+            ? 'Solver-readiness fixture completed with real CalculiX execution. It is still not project FEA.'
+            : 'Solver-readiness fixture needs review. Inspect logs and artifact manifests below.',
+      );
+    } catch (error) {
+      console.warn('Local solver-readiness fixture failed.', error);
+      setAnalysisRunMessage('Local solver-readiness fixture failed. Check logs and review-required details.');
+    } finally {
+      setAnalysisRunPending(false);
+    }
+  };
+
   const exportCurrentProjectFile = async () => {
     if (!design?.backend.apiBaseUrl) {
       setProjectFileMessage('Start the desktop demo with a local backend or mock API to export a portable project file.');
@@ -314,7 +363,7 @@ function App() {
           <p className="hero-copy">
             Open the desktop-style demo, orbit a robot arm assembly, explode or collapse the mechanism, select
             individual parts, and read explicit pre-solver load cases, stiffness guidance, thermal limits, and
-            review-required notes before real FreeCAD or FEA workers exist.
+            review-required notes before full FreeCAD, Gmsh, and CalculiX project FEA workers exist.
           </p>
         </div>
         <div className="task-card" aria-label="Preserved task">
@@ -528,9 +577,11 @@ function App() {
         <AnalysisPanel
           design={design}
           onRunPreSolver={runSelectedPartPreSolver}
+          onRunSolverReadiness={runSelectedPartSolverReadiness}
           runMessage={analysisRunMessage}
           runPending={analysisRunPending}
           selectedPart={selectedPart}
+          solverReadiness={solverReadiness}
         />
         <BomPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
         <ManufacturingPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
@@ -928,30 +979,71 @@ function ModificationPreview({ selectedOption }: { selectedOption?: MaterialOpti
 function AnalysisPanel({
   design,
   onRunPreSolver,
+  onRunSolverReadiness,
   runMessage,
   runPending,
   selectedPart,
+  solverReadiness,
 }: {
   design: ReferenceDesign;
   onRunPreSolver: () => void;
+  onRunSolverReadiness: () => void;
   runMessage: string | null;
   runPending: boolean;
   selectedPart: Part;
+  solverReadiness: LocalSolverReadinessSummary | null;
 }) {
   const canRun = Boolean(design.backend.apiBaseUrl) && !runPending;
+  const fixtureMode = solverReadiness?.execution_modes.find((mode) => mode.id === 'calculix_fixture');
   return (
     <article className="panel">
       <p className="eyebrow">Background analysis status</p>
-      <h2>Local pre-solver job runner</h2>
+      <h2>Local solver readiness</h2>
       <p>
-        Trigger a local Python screening job for {selectedPart.name}. It packages readiness inputs and checks FreeCAD,
-        Gmsh, and CalculiX command boundaries, but any artifact remains review-required and not FEA.
+        Pre-solver packages are still separate from real solver output. The executable boundary can run a small
+        deterministic CalculiX fixture when the binary is installed, or it reports exactly which tool is missing.
       </p>
-      <button className="runner-button" disabled={!canRun} onClick={onRunPreSolver} type="button">
-        {runPending ? 'Running pre-solver screening...' : `Run pre-solver screening for ${selectedPart.name}`}
-      </button>
+      <div className="solver-state-grid" aria-label="Local solver readiness states">
+        <div>
+          <strong>Selected target</strong>
+          <span className={`readiness-pill state-${selectedPart.analysisReadiness.state}`}>
+            {selectedPart.analysisReadiness.state.replaceAll('_', ' ')}
+          </span>
+          <small>{selectedPart.analysisReadiness.trust_label.replaceAll('_', ' ')} - selected part readiness</small>
+        </div>
+        <div>
+          <strong>Solver fixture</strong>
+          <span className={`readiness-pill state-${fixtureMode?.status ?? 'review_required'}`}>
+            {(fixtureMode?.status ?? 'review_required').replaceAll('_', ' ')}
+          </span>
+          <small>{fixtureMode?.summary ?? 'Connect the FastAPI backend to inspect local solver tools.'}</small>
+        </div>
+      </div>
+      {solverReadiness ? (
+        <div className="solver-tools" aria-label="Detected local solver tools">
+          {solverReadiness.tool_statuses.map((tool) => (
+            <div className={`tool-card ${tool.availability}`} key={tool.open_source_tool}>
+              <strong>{tool.open_source_tool}</strong>
+              <span>{tool.availability === 'available' ? 'available' : 'solver unavailable'}</span>
+              <small>{tool.resolved_command ?? tool.binary_candidates.join(', ')}</small>
+              <p>{tool.message}</p>
+              {tool.availability === 'unavailable' && tool.install_guidance ? <small>{tool.install_guidance}</small> : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="runner-note">Solver tool detection is unavailable until the cockpit is connected to FastAPI.</p>
+      )}
+      <div className="runner-actions">
+        <button className="runner-button" disabled={!canRun} onClick={onRunPreSolver} type="button">
+          {runPending ? 'Running analysis job...' : `Run pre-solver screening for ${selectedPart.name}`}
+        </button>
+        <button className="runner-button secondary" disabled={!canRun} onClick={onRunSolverReadiness} type="button">
+          {runPending ? 'Running analysis job...' : `Run solver-readiness fixture for ${selectedPart.name}`}
+        </button>
+      </div>
       {!design.backend.apiBaseUrl ? (
-        <small className="runner-note">Connect the React desktop demo to the local FastAPI backend to persist a runner job.</small>
+        <small className="runner-note">Connect the React desktop demo to the local FastAPI backend to persist runner jobs.</small>
       ) : null}
       {runMessage ? <p className="runner-message" aria-live="polite">{runMessage}</p> : null}
       <div className="job-list">
@@ -967,7 +1059,7 @@ function AnalysisPanel({
             >
               <span style={{ width: `${job.progress ?? 0}%` }} />
             </div>
-            <span className={`job-status ${job.status}`}>{job.status}</span>
+            <span className={`job-status ${job.status}`}>{job.status.replaceAll('-', ' ')}</span>
             <p>{job.summary}</p>
             {job.trustLabel || job.reviewStatus ? (
               <small className="runner-note">
@@ -976,12 +1068,31 @@ function AnalysisPanel({
             ) : null}
             {job.artifacts.length > 0 ? (
               <ul className="artifact-list" aria-label={`${job.name} artifacts`}>
-                {job.artifacts.map((artifact) => (
-                  <li key={`${job.id}-${artifact.kind}-${artifact.title}`}>
-                    {artifact.title} ({artifact.kind.replaceAll('_', ' ')})
-                    {artifact.generatedBy ? ` from ${artifact.generatedBy}` : ''}
-                  </li>
-                ))}
+                {job.artifacts.map((artifact) => {
+                  const manifestValue = artifact.payload?.file_manifest;
+                  const fileManifest = Array.isArray(manifestValue)
+                    ? manifestValue as Array<Record<string, unknown>>
+                    : [];
+                  return (
+                    <li key={`${job.id}-${artifact.kind}-${artifact.title}`}>
+                      {artifact.title} ({artifact.kind.replaceAll('_', ' ')})
+                      {artifact.generatedBy ? ` from ${artifact.generatedBy}` : ''}
+                      {artifact.summary ? <small>{artifact.summary}</small> : null}
+                      {fileManifest.length > 0 ? (
+                        <details>
+                          <summary>Generated files and logs</summary>
+                          <ul>
+                            {fileManifest.slice(0, 5).map((file) => (
+                              <li key={`${String(file.name)}-${String(file.path)}`}>
+                                <code>{String(file.name)}</code>{file.missing ? ' missing until solver runs' : ` ${String(file.bytes ?? '?')} bytes`}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
           </div>
@@ -1107,6 +1218,8 @@ function BackendContractPanel({ design }: { design: ReferenceDesign }) {
     `/api/projects/${design.backend.projectId}/analysis-readiness/${design.assembly.parts[0]?.id ?? 'part-id'}`,
     `/api/projects/${design.backend.projectId}/analysis-readiness/previews`,
     `/api/projects/${design.backend.projectId}/analysis-jobs/pre-solver-runs`,
+    `/api/projects/${design.backend.projectId}/analysis-jobs/solver-readiness-runs`,
+    '/api/local-analysis/solver-readiness',
     `/api/projects/${design.backend.projectId}/parts/${design.assembly.parts[0]?.id ?? 'part-id'}/material-substitutions`,
     `/api/projects/${design.backend.projectId}/material-substitutions/preview`,
     `/api/projects/${design.backend.projectId}/material-substitutions/apply`,
