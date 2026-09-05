@@ -48,6 +48,36 @@ const manufacturingProcesses = new Set([
   'casting',
   'unknown',
 ]);
+const analysisAdaptersByJobType = {
+  import_design: new Set(['freecad-worker']),
+  generate_exploded_view: new Set(['freecad-worker']),
+  extract_part_list: new Set(['freecad-worker']),
+  estimate_mass_properties: new Set(['freecad-worker']),
+  quick_load_heuristic: new Set(['local-pre-solver-runner', 'calculix-fea-worker']),
+  run_fea: new Set(['local-pre-solver-runner', 'freecad-fea-prep-worker', 'gmsh-meshing-worker', 'calculix-fea-worker']),
+  rerate_payload_capability: new Set(['calculix-fea-worker', 'capability-heuristic-worker']),
+  check_wire_routing: new Set(['wireviz-harness-worker']),
+  generate_bom: new Set(['wireviz-harness-worker', 'supplier-options-worker']),
+  generate_manufacturing_report: new Set(['supplier-options-worker']),
+};
+const analysisArtifactKindByJobType = {
+  import_design: 'cad_metadata',
+  generate_exploded_view: 'exploded_view',
+  extract_part_list: 'part_list',
+  estimate_mass_properties: 'mass_properties',
+  quick_load_heuristic: 'load_heuristic',
+  run_fea: 'fea_summary',
+  rerate_payload_capability: 'payload_rerating',
+  check_wire_routing: 'wiring_check',
+  generate_bom: 'bom',
+  generate_manufacturing_report: 'manufacturing_report',
+};
+const legacyMockArtifactKindsByJobType = {
+  import_design: new Set(['assembly_tree']),
+  rerate_payload_capability: new Set(['advisory_note']),
+  run_fea: new Set(['future_fea_result']),
+  check_wire_routing: new Set(['wiring_review']),
+};
 
 const modificationValidationError = (modification) => {
   if (!modification || typeof modification !== 'object' || Array.isArray(modification)) {
@@ -171,8 +201,20 @@ const currentReadinessPreviews = () => (
 const projectPanelData = () => ({
   ...mockBackendPanelData,
   project,
+  task_requirements: project.active_task ? [project.active_task] : [],
+  bom_items: project.assemblies.flatMap((assembly) => assembly.parts.map((part) => ({
+    id: `bom-${part.id}`,
+    part_id: part.id,
+    name: part.name,
+    quantity: 1,
+    unit: 'part',
+    license_or_terms: 'Derived from local project assembly metadata',
+  }))),
   analysis_readiness_previews: currentReadinessPreviews(),
   manufacturing_options: projectManufacturingOptions(),
+  wiring_routes: project.assemblies.flatMap((assembly) => assembly.wiring_routes).filter((route, index, routes) => (
+    routes.findIndex((candidate) => candidate.id === route.id) === index
+  )),
   reports: project.reports,
 });
 
@@ -247,6 +289,22 @@ const projectFileValidationError = (file) => {
         error = requireArray(assembly[field], `${assemblyPath}.${field}`);
         if (error) return error;
       }
+      const nodeIds = new Set(assembly.nodes.map((node) => node?.id));
+      for (const [nodeIndex, node] of assembly.nodes.entries()) {
+        const nodePath = `${assemblyPath}.nodes[${nodeIndex}]`;
+        error = requiredFields(node, ['id', 'name', 'part_ids', 'child_assembly_ids', 'exploded_transform'], nodePath);
+        if (error) return error;
+        if (assembly.nodes.findIndex((candidate) => candidate?.id === node.id) !== nodeIndex) return `${assemblyPath}.nodes ids must be unique: ${node.id}`;
+        for (const field of ['part_ids', 'child_assembly_ids']) {
+          error = requireArray(node[field], `${nodePath}.${field}`);
+          if (error) return error;
+        }
+        error = requireObject(node.exploded_transform, `${nodePath}.exploded_transform`);
+        if (error) return error;
+        for (const partId of node.part_ids) if (!partIds.has(partId)) return `assembly node ${node.id} references unknown part ${partId}`;
+        for (const childNodeId of node.child_assembly_ids) if (!nodeIds.has(childNodeId)) return `assembly node ${node.id} references unknown child node ${childNodeId}`;
+      }
+      if (!nodeIds.has(assembly.root_node_id)) return `assembly ${assembly.id} references unknown root node ${assembly.root_node_id}`;
       error = uniqueIds(assembly.parts, `${assemblyPath}.parts`);
       if (error) return error;
       for (const part of assembly.parts) {
@@ -288,22 +346,22 @@ const projectFileValidationError = (file) => {
     for (const assembly of candidate.assemblies) {
       for (const part of assembly.parts) {
         if (part.material_id != null && !materialIds.has(part.material_id)) return `part ${part.id} references unknown project material ${part.material_id}`;
-        for (const routeId of part.wiring_route_ids) if (!routeIds.has(routeId)) return `part ${part.id} references unknown wiring route ${routeId}`;
       }
     }
     error = uniqueIds(candidate.analysis_jobs, 'project.analysis_jobs');
     if (error) return error;
     for (const job of candidate.analysis_jobs) {
-      error = requiredFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'input_summary', 'result_summary', 'artifacts', 'created_at', 'updated_at'], 'project.analysis_jobs');
+      error = requiredFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'input_summary', 'result_summary', 'artifacts'], 'project.analysis_jobs');
       if (error) return error;
       if (job.project_id !== candidate.id) return `analysis job ${job.id} belongs to another project`;
-      if (!assemblyIds.has(job.target_id) && !partIds.has(job.target_id)) return `analysis job ${job.id} references unknown target ${job.target_id}`;
+      if (!analysisAdaptersByJobType[job.job_type]?.has(job.adapter_name)) return `adapter ${job.adapter_name} does not support analysis job type ${job.job_type}`;
       error = requireArray(job.artifacts, `analysis job ${job.id}.artifacts`);
       if (error) return error;
       for (const artifact of job.artifacts) {
-        error = requiredFields(artifact, ['id', 'job_id', 'kind', 'title', 'summary', 'payload', 'generated_by', 'created_at'], `analysis job ${job.id}.artifacts`);
+        error = requiredFields(artifact, ['kind', 'title'], `analysis job ${job.id}.artifacts`);
         if (error) return error;
-        if (artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
+        if (artifact.job_id != null && artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
+        if (artifact.kind !== analysisArtifactKindByJobType[job.job_type] && !legacyMockArtifactKindsByJobType[job.job_type]?.has(artifact.kind)) return `analysis job type ${job.job_type} requires a compatible artifact kind`;
       }
     }
     error = uniqueIds(candidate.reports, 'project.reports');
