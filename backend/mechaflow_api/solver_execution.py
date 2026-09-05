@@ -14,6 +14,7 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any
 from uuid import uuid4
 
@@ -199,6 +200,7 @@ def _run_calculix(resolved_command: str, workdir: Path) -> subprocess.CompletedP
 
 ARTIFACT_RETENTION_DAYS = 7
 MAX_ARTIFACT_BUNDLES = 100
+ARTIFACT_STORE_LOCK = Lock()
 
 
 def _prepare_artifact_root(artifact_root: Path, reserved_bundles: int = 0) -> None:
@@ -216,13 +218,14 @@ def _prepare_artifact_root(artifact_root: Path, reserved_bundles: int = 0) -> No
 
 def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, job_id: str) -> Path:
     try:
-        _prepare_artifact_root(artifact_root, reserved_bundles=1)
-        destination = artifact_root / job_id
-        destination.mkdir()
-        for path in fixture.workdir.iterdir():
-            if path.is_file():
-                shutil.copy2(path, destination / path.name)
-        return destination
+        with ARTIFACT_STORE_LOCK:
+            _prepare_artifact_root(artifact_root, reserved_bundles=1)
+            destination = artifact_root / job_id
+            destination.mkdir()
+            for path in fixture.workdir.iterdir():
+                if path.is_file():
+                    shutil.copy2(path, destination / path.name)
+            return destination
     except Exception:
         shutil.rmtree(fixture.workdir, ignore_errors=True)
         raise
