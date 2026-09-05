@@ -275,6 +275,13 @@ const projectFile = () => ({
 
 const normalizeProjectFileDefaults = (file) => {
   const withDefault = (value, fallback) => value === undefined ? fallback : value;
+  const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const mapObjects = (value, mapper, fallback = []) => {
+    const collection = withDefault(value, fallback);
+    return Array.isArray(collection)
+      ? collection.map((item) => isObject(item) ? mapper(item) : item)
+      : collection;
+  };
   const now = new Date().toISOString();
   return {
     ...file,
@@ -282,15 +289,15 @@ const normalizeProjectFileDefaults = (file) => {
     extensions: withDefault(file.extensions, {}),
     project: {
       ...file.project,
-      assemblies: withDefault(file.project.assemblies, []).map((assembly) => ({
+      assemblies: mapObjects(file.project.assemblies, (assembly) => ({
         ...assembly,
-        nodes: withDefault(assembly.nodes, []).map((node) => ({
+        nodes: mapObjects(assembly.nodes, (node) => ({
           ...node,
           part_ids: withDefault(node.part_ids, []),
           child_assembly_ids: withDefault(node.child_assembly_ids, []),
           exploded_transform: withDefault(node.exploded_transform, {}),
         })),
-        parts: withDefault(assembly.parts, []).map((part) => ({
+        parts: mapObjects(assembly.parts, (part) => ({
           ...part,
           dimensions: withDefault(part.dimensions, {}),
           manufacturing_options: withDefault(part.manufacturing_options, []),
@@ -298,30 +305,30 @@ const normalizeProjectFileDefaults = (file) => {
           wiring_route_ids: withDefault(part.wiring_route_ids, []),
           metadata: withDefault(part.metadata, {}),
         })),
-        wiring_routes: withDefault(assembly.wiring_routes, []).map((route) => ({
+        wiring_routes: mapObjects(assembly.wiring_routes, (route) => ({
           ...route,
           path_points_mm: withDefault(route.path_points_mm, []),
           harness_bom: withDefault(route.harness_bom, []),
           risk_notes: withDefault(route.risk_notes, []),
         })),
       })),
-      materials: withDefault(file.project.materials, []).map((material) => ({
+      materials: mapObjects(file.project.materials, (material) => ({
         ...material,
         properties: withDefault(material.properties, {}),
         compatible_processes: withDefault(material.compatible_processes, []),
         notes: withDefault(material.notes, []),
       })),
-      modifications: withDefault(file.project.modifications, []).map((modification) => ({
+      modifications: mapObjects(file.project.modifications, (modification) => ({
         ...modification,
         dimension_changes: withDefault(modification.dimension_changes, {}),
         created_at: withDefault(modification.created_at, now),
       })),
-      analysis_jobs: withDefault(file.project.analysis_jobs, []).map((job) => ({
+      analysis_jobs: mapObjects(file.project.analysis_jobs, (job) => ({
         ...job,
         local_compute_preferred: withDefault(job.local_compute_preferred, true),
         input_summary: withDefault(job.input_summary, {}),
         result_summary: withDefault(job.result_summary, {}),
-        artifacts: withDefault(job.artifacts, []).map((artifact) => ({
+        artifacts: mapObjects(job.artifacts, (artifact) => ({
           ...artifact,
           payload: withDefault(artifact.payload, {}),
           created_at: withDefault(artifact.created_at, now),
@@ -329,7 +336,7 @@ const normalizeProjectFileDefaults = (file) => {
         created_at: withDefault(job.created_at, now),
         updated_at: withDefault(job.updated_at, now),
       })),
-      reports: withDefault(file.project.reports, []).map((report) => ({
+      reports: mapObjects(file.project.reports, (report) => ({
         ...report,
         status: withDefault(report.status, 'advisory'),
         task_results: withDefault(report.task_results, []),
