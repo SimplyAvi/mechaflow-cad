@@ -304,6 +304,9 @@ def run_calculix_fixture(
     }
 
     if calculix.availability != LocalSolverToolAvailability.available or not calculix.resolved_command:
+        durable_workdir = _persist_fixture_files(fixture, artifact_root, job.id)
+        shutil.rmtree(fixture.workdir, ignore_errors=True)
+        file_manifest = _artifact_file_manifest(durable_workdir, api_prefix, artifact_id, fixture.expected_outputs)
         artifact = AnalysisArtifact(
             id=artifact_id,
             job_id=job.id,
@@ -318,19 +321,14 @@ def run_calculix_fixture(
                 "result_label": "solver_unavailable_review_required",
                 "missing_tools": ["CalculiX"],
                 "install_guidance": calculix.install_guidance,
-                "file_manifest": _artifact_file_manifest(
-                    _persist_fixture_files(fixture, artifact_root, job.id),
-                    api_prefix,
-                    artifact_id,
-                    fixture.expected_outputs,
-                ),
+                "fixture_invocation": {"status": "not_invoked", "reason": "CalculiX unavailable"},
+                "file_manifest": file_manifest,
                 "retention": f"Persisted for {ARTIFACT_RETENTION_DAYS} days, capped at {MAX_ARTIFACT_BUNDLES} bundles.",
             },
             confidence=RecommendationConfidence.unknown,
             generated_by=LOCAL_SOLVER_FIXTURE_RUNNER_NAME,
             created_at=now,
         )
-        shutil.rmtree(fixture.workdir, ignore_errors=True)
         return job.model_copy(
             update={
                 "status": AnalysisJobStatus.solver_unavailable,
@@ -406,6 +404,10 @@ def run_calculix_fixture(
             "stderr": stderr[-6000:],
             "file_manifest": file_manifest,
             "produced_outputs": produced_outputs,
+            "fixture_invocation": {
+                "status": "completed" if solver_succeeded else "invoked_failed",
+                "return_code": return_code,
+            },
             "retention": f"Persisted for {ARTIFACT_RETENTION_DAYS} days, capped at {MAX_ARTIFACT_BUNDLES} bundles.",
         },
         confidence=RecommendationConfidence.calculated if solver_succeeded else RecommendationConfidence.unknown,

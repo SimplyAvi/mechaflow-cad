@@ -928,7 +928,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                     "readiness_state": readiness.state.value,
                     "source": "project solver-readiness fixture endpoint",
                     "fixture_scope": "CalculiX deterministic fixture only, not project FEA",
-                    "expected_artifacts": [".inp", ".dat", ".frd", "stdout", "stderr"],
+                    "expected_artifacts": [".inp", ".dat", ".frd", ".sta", ".cvg"],
                 },
             ),
             adapter_name=LOCAL_SOLVER_FIXTURE_RUNNER_NAME,
