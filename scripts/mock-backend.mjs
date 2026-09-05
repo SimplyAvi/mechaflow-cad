@@ -249,6 +249,23 @@ const estimate = (label, min, max, unit, basis, notice) => ({
 
 const mockJobRecommendation = (job) => {
   const target = findTarget(job.target_id);
+  if (!target) {
+    return {
+      recommended_target: 'unavailable',
+      status: 'unavailable',
+      summary: 'Mock queue cannot recommend execution because the analysis target is missing from the project.',
+      reasons: ['The requested target does not exist in the imported project.'],
+      missing_local_tools: [],
+      review_required: ['Select an existing project target before analysis.'],
+      model_complexity_score: 0,
+      expected_runtime_minutes: estimate('unavailable', null, null, 'minutes', 'unavailable', 'No runtime estimate is current for an unknown target.'),
+      cost_estimate: estimate('unavailable', null, null, 'USD', 'unavailable', 'No cost estimate is current for an unknown target.'),
+      wait_time_estimate: estimate('unavailable', null, null, 'minutes', 'unavailable', 'No wait estimate is current for an unknown target.'),
+      cloud_execution_available: false,
+      cloud_configuration_required: true,
+      cloud_notice: 'Cloud execution is not configured in the mock backend.',
+    };
+  }
   const isSafeLocal = job.adapter_name === 'local-pre-solver-runner' || job.job_type === 'quick_load_heuristic';
   const needsCloudPlanning = ['freecad-worker', 'calculix-fea-worker'].includes(job.adapter_name) && !isSafeLocal;
   const complexity = target?.kind === 'assembly' ? Math.max(1, target.partIds.length * 3) : 3;
@@ -1292,6 +1309,20 @@ const projectFileValidationError = (file) => {
           if (error) return error;
         }
         if (artifact.kind !== analysisArtifactKindByJobType[job.job_type] && !legacyMockArtifactKindsByJobType[job.job_type]?.has(artifact.kind)) return `analysis job type ${job.job_type} requires a compatible artifact kind`;
+        const manifest = artifact.payload.file_manifest;
+        if (manifest != null) {
+          if (!Array.isArray(manifest)) return `analysis artifact ${artifact.id}.payload.file_manifest must be an array`;
+          for (const item of manifest) {
+            if (item?.missing) continue;
+            if (!item || typeof item.name !== 'string' || !item.name.trim() || item.name === '.' || item.name === '..' || item.name.includes('/') || item.name.includes('\\')) return `analysis artifact ${artifact.id} has an unsafe file name`;
+            if (item.download_url !== `/api/analysis-artifacts/${artifact.id}/${item.name}`) return `analysis artifact ${artifact.id} has stale or impossible download_url metadata`;
+          }
+        }
+      }
+      const artifactById = new Map(job.artifacts.map((artifact) => [artifact.id, artifact]));
+      for (const ref of job.cached_artifact_refs ?? []) {
+        if (!ref || ref.job_id !== job.id || ref.project_id !== candidate.id || !artifactById.has(ref.artifact_id) || ref.kind !== artifactById.get(ref.artifact_id).kind) return `cached artifact reference for analysis job ${job.id} is invalid`;
+        if (ref.status === 'current') return `cached artifact reference for analysis job ${job.id} cannot be current in the mock backend`;
       }
     }
     error = uniqueIds(candidate.reports, 'project.reports');
@@ -1307,6 +1338,13 @@ const projectFileValidationError = (file) => {
         error = requireArray(report[field], `report ${report.id}.${field}`);
         if (error) return error;
       }
+    }
+    const reportsById = new Map(candidate.reports.map((report) => [report.id, report]));
+    for (const job of candidate.analysis_jobs) {
+      for (const ref of job.cached_report_refs ?? []) {
+        if (!ref || ref.project_id !== candidate.id || !reportsById.has(ref.report_id) || ref.derived_from_job_id !== job.id) return `cached report reference for analysis job ${job.id} is invalid`;
+      }
+      if (job.result_summary.report_id != null && !reportsById.has(job.result_summary.report_id)) return `analysis job ${job.id} references a missing report`;
     }
     return null;
   };

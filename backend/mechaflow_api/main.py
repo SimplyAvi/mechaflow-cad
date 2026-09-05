@@ -205,7 +205,21 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     settings = settings or get_settings()
     def artifact_file_exists(artifact: AnalysisArtifact, name: str) -> bool:
         bundle_id = artifact.payload.get("storage_bundle_id", artifact.id)
-        return (settings.artifact_dir / bundle_id / name).is_file() if isinstance(bundle_id, str) else False
+        if (
+            not isinstance(bundle_id, str)
+            or not bundle_id
+            or bundle_id in {".", ".."}
+            or "/" in bundle_id
+            or "\\" in bundle_id
+            or Path(bundle_id).name != bundle_id
+        ):
+            return False
+        artifact_root = settings.artifact_dir.resolve()
+        bundle_path = (artifact_root / bundle_id).resolve()
+        if not bundle_path.is_relative_to(artifact_root):
+            return False
+        file_path = (bundle_path / name).resolve()
+        return file_path.is_relative_to(bundle_path) and file_path.is_file()
 
     project_store = project_store or build_default_project_store(artifact_file_exists)
     readiness_previews_by_project: dict[str, list[AnalysisReadinessPreview]] = {}
