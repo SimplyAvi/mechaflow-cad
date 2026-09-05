@@ -18,6 +18,7 @@ export const mockBackendMetadata = {
     'analysis_jobs',
     'analysis_readiness',
     'manufacturing_options',
+    'material_substitutions',
     'wiring_routes',
     'reports',
   ],

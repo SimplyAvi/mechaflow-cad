@@ -81,14 +81,20 @@ const moneyRange = (cost?: BackendMoneyRange | null): string => {
   return formatUsdRange(usdCost);
 };
 
-const leadTime = (option: BackendManufacturingOption): string => {
-  if (option.lead_time_days_min == null && option.lead_time_days_max == null) return 'Lead time pending';
-  if (option.lead_time_days_min != null && option.lead_time_days_max != null) {
-    return `${option.lead_time_days_min}-${option.lead_time_days_max} days`;
+const formatLeadTimeRange = (min?: number | null, max?: number | null): string => {
+  if (min == null && max == null) return 'Lead time review required';
+  if (min != null && max != null) {
+    if (min === max) return `${min} day${min === 1 ? '' : 's'}`;
+    return `${min}-${max} days`;
   }
-  if (option.lead_time_days_min != null) return `From ${option.lead_time_days_min} days`;
-  return `Up to ${option.lead_time_days_max} days`;
+  if (min != null) return `From ${min} days`;
+  return `Up to ${max} days`;
 };
+
+const leadTime = (option: BackendManufacturingOption): string => formatLeadTimeRange(
+  option.lead_time_days_min,
+  option.lead_time_days_max,
+);
 
 const jobStatus = (status: string): JobStatus => {
   if (status === 'completed' || status === 'complete') return 'complete';
@@ -543,52 +549,75 @@ const mapMaterialOptions = (
     const partProcesses = new Set(
       part.manufacturing_options.map((option) => option.process).filter((process) => process !== 'unknown'),
     );
+    const currentProcess = activeManufacturingOption(part)?.process ?? null;
     return materials.flatMap((material) => {
       const compatibleProcesses = material.compatible_processes.filter(
         (process) => process !== 'unknown' && partProcesses.has(process),
       );
       if (material.id === currentMaterialId || compatibleProcesses.length === 0) return [];
-      const manufacturingProcess = compatibleProcesses[0];
-      const currentDensity = currentMaterial?.properties.density_kg_m3;
-      const nextDensity = material.properties.density_kg_m3;
-      const weightDeltaLb = part.mass_kg != null && currentDensity != null && currentDensity > 0 && nextDensity != null
-        ? round(part.mass_kg * (nextDensity / currentDensity - 1) * 2.20462, 2)
-        : null;
-      const manufacturingOption = part.manufacturing_options.find(
-        (option) => option.process === manufacturingProcess,
-      );
-      const previewScope = 'Material-only preview';
-      return {
-        id: `${part.id}-${material.id}`,
-        partId: part.id,
-        material: material.name,
-        process: toTitle(manufacturingProcess),
-        payloadLb: null,
-        safetyFactor: null,
-        weightDeltaLb,
-        costRangeUsd: usdCostRange(manufacturingOption?.cost),
-        taskImpact: `${previewScope} has no worker-supplied payload rating; engineering review is required.`,
-        wiringImpact: part.wiring_route_ids.length > 0
-          ? 'Backend modification report would require a wiring clearance and bend-radius worker check.'
-          : 'No linked wiring route is known for this part in the sample project.',
-        manufacturingImpact: `${previewScope} uses ${toTitle(manufacturingProcess)} and remains advisory until supplier and manufacturing workers run.`,
-        status: 'watch',
-        backendModification: {
-          endpoint: `/api/projects/${projectId}/modifications`,
-          method: 'POST',
-          payload: {
-            id: `mod-${part.id}-${material.id}`,
-            target_part_id: part.id,
-            description: `${previewScope} for ${part.name} using ${material.name} while preserving the active task.`,
-            material_id: material.id,
-            dimension_changes: {},
-            manufacturing_process: manufacturingProcess,
+      return compatibleProcesses.map((manufacturingProcess) => {
+        const currentDensity = currentMaterial?.properties.density_kg_m3;
+        const nextDensity = material.properties.density_kg_m3;
+        const weightDeltaLb = part.mass_kg != null && currentDensity != null && currentDensity > 0 && nextDensity != null
+          ? round(part.mass_kg * (nextDensity / currentDensity - 1) * 2.20462, 2)
+          : null;
+        const manufacturingOption = part.manufacturing_options.find(
+          (option) => option.process === manufacturingProcess,
+        );
+        const heatLimitC = material.properties.heat_deflection_temp_c ?? material.properties.max_service_temp_c ?? null;
+        const previewScope = 'Material and process substitution preview';
+        return {
+          id: `${part.id}-${material.id}-${manufacturingProcess}`,
+          partId: part.id,
+          material: material.name,
+          materialId: material.id,
+          process: toTitle(manufacturingProcess),
+          processValue: manufacturingProcess,
+          currentMaterial: currentMaterial?.name ?? currentMaterialId ?? null,
+          currentProcess: currentProcess == null ? null : toTitle(currentProcess),
+          payloadLb: null,
+          safetyFactor: null,
+          weightDeltaLb,
+          costRangeUsd: usdCostRange(manufacturingOption?.cost),
+          leadTimeRangeDays: {
+            min: manufacturingOption?.lead_time_days_min ?? null,
+            max: manufacturingOption?.lead_time_days_max ?? null,
           },
-          reportTitle: `Advisory edit report for ${part.name}`,
-          reportSummary: 'Local preview would update project metadata and attach an advisory report before real CAD geometry changes exist.',
-          reportStatus: 'requires_review',
-        },
-      };
+          stiffnessGpa: material.properties.elastic_modulus_gpa ?? null,
+          yieldStrengthMpa: material.properties.yield_strength_mpa ?? null,
+          heatLimitC,
+          materialConfidence: material.confidence,
+          manufacturingConfidence: manufacturingOption?.confidence ?? 'unknown_or_needs_review',
+          reviewRequired: true,
+          blockedReasons: [],
+          warnings: [
+            'This is a preview only until applied to the backend project.',
+            ...material.notes,
+            ...(manufacturingOption?.risk_notes ?? []),
+          ],
+          taskImpact: `${previewScope} has no worker-supplied payload rating; engineering review is required.`,
+          wiringImpact: part.wiring_route_ids.length > 0
+            ? 'Backend modification report requires a wiring clearance and bend-radius worker check after apply.'
+            : 'No linked wiring route is known for this part in the sample project.',
+          manufacturingImpact: `${previewScope} uses ${toTitle(manufacturingProcess)}. Cost and lead time are heuristic ranges, not supplier quotes.`,
+          status: 'watch',
+          backendModification: {
+            endpoint: `/api/projects/${projectId}/material-substitutions/preview then /apply`,
+            method: 'POST',
+            payload: {
+              id: `mod-${part.id}-${material.id}-${manufacturingProcess}`,
+              target_part_id: part.id,
+              description: `${previewScope} for ${part.name} using ${material.name} with ${toTitle(manufacturingProcess)} while preserving the active task.`,
+              material_id: material.id,
+              dimension_changes: {},
+              manufacturing_process: manufacturingProcess,
+            },
+            reportTitle: `Advisory edit report for ${part.name}`,
+            reportSummary: 'Preview returns projected BOM, manufacturing, and analysis-readiness data without persisting. Apply commits the same validated substitution.',
+            reportStatus: 'requires_review',
+          },
+        };
+      });
     });
   });
 
@@ -634,6 +663,7 @@ const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
       source: bomSourceFromPart(part) ?? 'open design',
       unitCostRangeUsd: null,
       leadTimeDays: null,
+      leadTimeRange: null,
     }));
   }
 
@@ -648,7 +678,11 @@ const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
       quantity: item.quantity,
       source,
       unitCostRangeUsd: price,
-      leadTimeDays: null,
+      leadTimeDays: item.lead_time_days_min ?? item.lead_time_days_max ?? null,
+      leadTimeRange: {
+        min: item.lead_time_days_min ?? null,
+        max: item.lead_time_days_max ?? null,
+      },
     };
   });
 };

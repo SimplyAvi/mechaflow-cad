@@ -9,14 +9,15 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 - Opening a bundled robot arm visual MVP with a wrist gripper.
 - Viewing an interactive exploded assembly concept with desktop-demo orbit, yaw, pitch, and explode controls.
 - Selecting parts from the assembly and part tree with visual highlighting tied to the inspector.
-- Preserving the active task while previewing material substitution.
+- Preserving the active task while comparing compatible material and manufacturing substitutions.
+- Previewing backend substitution effects before apply, with non-persisted preview panels clearly separated from persisted project mutation.
 - Keeping payload capability and safety factor under review until a backend worker supplies a task-independent rating.
 - Showing plain-English part criteria for load role, material, stiffness, heat limit, manufacturing process, source confidence, and review-required values.
 - Showing selected-part and selected-assembly pre-solver analysis readiness with explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes. Assembly fallback previews aggregate included parts and do not copy part-level demo estimates.
 - Showing background CAD, future FEA, wiring, and supplier job status without claiming that real FEA has run.
 - Triggering the FastAPI local pre-solver runner when `VITE_API_BASE_URL` points at the backend. The button creates a persisted review-required artifact and keeps it labeled as not FEA.
 - Exporting and importing portable `.mfcad.json` project files when the cockpit is connected to the FastAPI backend or desktop mock API.
-- Reviewing BOM, cost, manufacturing, and lead-time panels.
+- Reviewing BOM, cost, manufacturing, and lead-time panels where substitutions visibly change ranged estimates without inventing exact quotes.
 - Surfacing wiring routes, bend radius, service loops, and clearance risk.
 - Mirroring the backend project, panel-data, modification preview, report, catalog, and metadata contracts.
 
@@ -159,13 +160,16 @@ GET /api/projects/project-open-gripper-demo/panel-data
 - `reports`: advisory summaries from local modification previews or workers.
 - `analysis_readiness_previews`: optional pre-solver readiness previews keyed by part or assembly id. When omitted, the frontend derives clearly labeled local previews from the same part, material, and task fields for demo continuity; assembly fallbacks aggregate all included parts and remain review-required when aggregate inputs are incomplete.
 
-The frontend also displays readiness endpoints, can save and reopen project files, and, when connected to FastAPI, can trigger the local pre-solver runner:
+The frontend also displays readiness endpoints, can save and reopen project files, can preview/apply material substitutions, and, when connected to FastAPI, can trigger the local pre-solver runner:
 
 ```text
 GET /api/projects/{project_id}/export-file
 POST /api/projects/import-file
 GET /api/projects/{project_id}/analysis-readiness/{target_id}
 POST /api/projects/{project_id}/analysis-readiness/previews
+GET /api/projects/{project_id}/parts/{part_id}/material-substitutions
+POST /api/projects/{project_id}/material-substitutions/preview
+POST /api/projects/{project_id}/material-substitutions/apply
 POST /api/projects/{project_id}/analysis-jobs/pre-solver-runs
 GET /api/local-analysis/tool-boundaries
 ```
@@ -174,16 +178,18 @@ The project file controls in the reference panel download and read `.mfcad.json`
 
 Readiness responses are not FEA results. The local pre-solver run packages explicit worker inputs, computes only a demo-safe nominal screening estimate when possible, and lists FreeCAD, Gmsh, and CalculiX command availability. Missing solver binaries appear as `unavailable_review_required`; available binaries are still not invoked by this runner.
 
-The frontend also displays the intended mutation endpoint without requiring a write during normal UI use:
+The substitution selector is generated only from explicit material/process intersections in project panel data. It shows current versus substitute material, process, weight delta from density when possible, stiffness modulus, material yield, heat screening limit, cost range, lead-time range, source confidence, and review-required warnings. The `Preview backend impact` button calls the non-persisting preview endpoint and temporarily drives BOM, manufacturing, readiness, and report panels from projected backend data. The `Apply validated substitution` button is disabled until a preview succeeds; it then calls the apply endpoint and reloads persisted panel data.
+
+The lower-level mutation endpoint is still documented for API handoff and custom local edits:
 
 ```text
 POST /api/projects/{project_id}/modifications
 ```
 
-The preview payload mirrors the backend `Modification` shape: required `id`, `target_part_id`, and
+The mutation payload mirrors the backend `Modification` shape: required `id`, `target_part_id`, and
 `description`, plus optional `material_id`, `dimension_changes`, and `manufacturing_process`. The FastAPI
 backend owns the conditional validation and mass-invalidation rules in the
-[backend modification contract](backend.md#modification-contract). A real backend response should attach an
+[backend material substitution and modification contracts](backend.md#material-substitution-and-modification-contracts). A real backend response should attach an
 advisory report until CAD, FEA, wiring, and supplier workers produce authoritative artifacts.
 
 The bundled mock lives in `src/data/backendPanelData.json` and follows the backend handoff concepts from the local FastAPI scaffold. The Node mock API in `scripts/mock-backend.mjs` serves the same data for frontend-to-backend development. The current visual MVP seed intentionally keeps the legacy `project-open-gripper-demo` id for compatibility while presenting a robot arm with a wrist gripper.

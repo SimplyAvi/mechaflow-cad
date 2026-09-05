@@ -131,11 +131,21 @@ const modificationValidationError = (modification) => {
   return null;
 };
 
-const projectManufacturingOptions = () =>
-  project.assemblies.flatMap((assembly) =>
+const activeManufacturingOption = (part) => {
+  const preferredProcess = typeof part.metadata?.preferred_manufacturing_process === 'string'
+    ? part.metadata.preferred_manufacturing_process
+    : undefined;
+  return part.manufacturing_options.find((option) => option.process === preferredProcess)
+    ?? part.manufacturing_options[0]
+    ?? null;
+};
+
+const projectManufacturingOptions = (sourceProject = project) =>
+  sourceProject.assemblies.flatMap((assembly) =>
     assembly.parts.map((part) => ({
       part_id: part.id,
       part_name: part.name,
+      material_id: part.material_id,
       options: part.manufacturing_options,
     })),
   );
@@ -218,25 +228,179 @@ const currentReadinessPreviews = () => {
     : fallbackReadinessPreviews();
 };
 
-const projectPanelData = () => ({
+const projectPanelData = (sourceProject = project, readinessPreviews = null) => ({
   ...mockBackendPanelData,
-  project,
-  task_requirements: project.active_task ? [project.active_task] : [],
-  bom_items: project.assemblies.flatMap((assembly) => assembly.parts.map((part) => ({
-    id: `bom-${part.id}`,
-    part_id: part.id,
-    name: part.name,
-    quantity: 1,
-    unit: 'part',
-    license_or_terms: 'Derived from local project assembly metadata',
-  }))),
-  analysis_readiness_previews: currentReadinessPreviews(),
-  manufacturing_options: projectManufacturingOptions(),
-  wiring_routes: project.assemblies.flatMap((assembly) => assembly.wiring_routes).filter((route, index, routes) => (
+  project: sourceProject,
+  task_requirements: sourceProject.active_task ? [sourceProject.active_task] : [],
+  bom_items: sourceProject.assemblies.flatMap((assembly) => assembly.parts.map((part) => {
+    const option = activeManufacturingOption(part);
+    return {
+      id: `bom-${part.id}`,
+      part_id: part.id,
+      name: part.name,
+      quantity: 1,
+      unit: 'part',
+      price: option?.cost ?? null,
+      lead_time_days_min: option?.lead_time_days_min ?? null,
+      lead_time_days_max: option?.lead_time_days_max ?? null,
+      license_or_terms: option
+        ? 'Estimated from active part manufacturing option; not a supplier quote.'
+        : 'Derived from local project assembly metadata; price review required.',
+    };
+  })),
+  analysis_readiness_previews: readinessPreviews ?? (sourceProject === project ? currentReadinessPreviews() : []),
+  manufacturing_options: projectManufacturingOptions(sourceProject),
+  wiring_routes: sourceProject.assemblies.flatMap((assembly) => assembly.wiring_routes).filter((route, index, routes) => (
     routes.findIndex((candidate) => candidate.id === route.id) === index
   )),
-  reports: project.reports,
+  reports: sourceProject.reports,
 });
+
+const findPart = (partId, sourceProject = project) => {
+  for (const assembly of sourceProject.assemblies) {
+    const part = assembly.parts.find((candidate) => candidate.id === partId);
+    if (part) return part;
+  }
+  return null;
+};
+
+const compatibleProcessesFor = (part, material) => {
+  const partProcesses = new Set(part.manufacturing_options.map((option) => option.process).filter((process) => process !== 'unknown'));
+  return material.compatible_processes.filter((process) => process !== 'unknown' && partProcesses.has(process));
+};
+
+const materialSubstitutionOption = (part, material, process) => {
+  const currentMaterial = project.materials.find((candidate) => candidate.id === part.material_id);
+  const currentOption = activeManufacturingOption(part);
+  const nextOption = part.manufacturing_options.find((option) => option.process === process);
+  const compatibleProcesses = compatibleProcessesFor(part, material);
+  const blockedReasons = [];
+  if (material.id === part.material_id) blockedReasons.push('Requested material is already assigned to this part.');
+  if (!compatibleProcesses.includes(process)) {
+    blockedReasons.push(`${material.name} is not explicitly compatible with ${process} for ${part.name}.`);
+  }
+  const currentDensity = currentMaterial?.properties?.density_kg_m3;
+  const nextDensity = material.properties?.density_kg_m3;
+  const weightDeltaKg = part.mass_kg != null && currentDensity > 0 && nextDensity != null
+    ? part.mass_kg * (nextDensity / currentDensity - 1)
+    : null;
+  return {
+    id: `${part.id}-${material.id}-${process}`,
+    part_id: part.id,
+    part_name: part.name,
+    current_material_id: part.material_id,
+    current_material_name: currentMaterial?.name ?? part.material_id ?? null,
+    current_process: currentOption?.process ?? null,
+    material_id: material.id,
+    material_name: material.name,
+    process,
+    compatible: blockedReasons.length === 0,
+    review_required: true,
+    blocked_reasons: blockedReasons,
+    warnings: [
+      'Mock substitution uses seed material and manufacturing data only; it is not a quote, CAD update, or FEA result.',
+      ...(material.notes ?? []),
+      ...(nextOption?.risk_notes ?? []),
+    ],
+    weight_delta_kg: weightDeltaKg,
+    cost_range: nextOption?.cost ?? null,
+    cost_delta: null,
+    lead_time_days_min: nextOption?.lead_time_days_min ?? null,
+    lead_time_days_max: nextOption?.lead_time_days_max ?? null,
+    stiffness_gpa: material.properties?.elastic_modulus_gpa ?? null,
+    yield_strength_mpa: material.properties?.yield_strength_mpa ?? null,
+    heat_limit_c: material.properties?.heat_deflection_temp_c ?? material.properties?.max_service_temp_c ?? null,
+    material_confidence: material.confidence ?? 'unknown_or_needs_review',
+    manufacturing_confidence: nextOption?.confidence ?? 'unknown_or_needs_review',
+    summary: `${part.name}: ${material.name} with ${process} is explicit but review-required. No real FEA, supplier quote, or CAD regeneration has run.`,
+    task_guidance: 'Use preserved task loads for comparison only; do not derive a payload rating from this substitution preview.',
+    manufacturing_guidance: nextOption
+      ? `${nextOption.description} Cost and lead time are heuristic ranges, not supplier quotes.`
+      : 'Manufacturing process needs an explicit part option before preview or apply.',
+    wiring_guidance: part.wiring_route_ids.length > 0
+      ? 'Linked wiring routes require clearance and bend-radius review after CAD geometry changes.'
+      : 'No linked wiring route is known for this part in current assembly metadata.',
+    modification: {
+      id: `mod-${part.id}-${material.id}-${process}`,
+      target_part_id: part.id,
+      description: `Preview substituting ${part.name} to ${material.name} with ${process} while preserving the active task.`,
+      material_id: material.id,
+      dimension_changes: {},
+      manufacturing_process: process,
+    },
+  };
+};
+
+const materialSubstitutionOptions = (partId) => {
+  const part = findPart(partId);
+  if (!part) return null;
+  return project.materials.flatMap((material) => material.id === part.material_id
+    ? []
+    : compatibleProcessesFor(part, material).map((process) => materialSubstitutionOption(part, material, process)).filter((option) => option.compatible));
+};
+
+const materialSubstitutionPreview = (requestBody, mode) => {
+  const part = requestBody && typeof requestBody === 'object' ? findPart(requestBody.target_part_id) : null;
+  if (!part) return { status: 404, payload: { error: 'target part not found' } };
+  const material = project.materials.find((candidate) => candidate.id === requestBody.material_id);
+  if (!material) return { status: 422, payload: { error: 'material not found' } };
+  if (!manufacturingProcesses.has(requestBody.manufacturing_process)) {
+    return { status: 422, payload: { error: 'manufacturing_process is invalid' } };
+  }
+  const option = materialSubstitutionOption(part, material, requestBody.manufacturing_process);
+  if (!option.compatible) return { status: 422, payload: { error: option.blocked_reasons.join('; ') } };
+  const modification = {
+    ...option.modification,
+    id: requestBody.modification_id ?? option.modification.id,
+    description: requestBody.description ?? option.modification.description,
+    created_at: new Date().toISOString(),
+  };
+  const report = {
+    id: `report-${modification.id}`,
+    project_id: projectId,
+    title: `Advisory edit report for ${part.name}`,
+    status: 'requires_review',
+    summary: `Mock ${mode} accepted ${part.name} material substitution. Payload, fatigue, wiring, and manufacturability remain review-required until real workers run.`,
+    task_results: [{ task_kind: project.active_task?.kind ?? 'custom', status: 'requires_review', method: 'local_schema_update_only' }],
+    weight_delta_kg: option.weight_delta_kg,
+    cost_delta: option.cost_delta,
+    manufacturing_impacts: [`Preferred process changed to ${requestBody.manufacturing_process}.`],
+    wiring_impacts: [option.wiring_guidance],
+    risks: ['Local edit preview does not modify CAD geometry yet.', 'Strength, payload, and fatigue changes are advisory until CAD and FEA workers validate them.'],
+    unknowns: ['Updated mass properties are unknown until a CAD worker recalculates them.', 'Supplier cost and lead time are unknown until a supplier adapter runs.'],
+    recommendations: ['Queue mass properties, payload re-rating, wiring clearance, and manufacturing report workers before release.'],
+    assumptions: ['Mock endpoint mirrors the FastAPI material substitution contract.'],
+    generated_at: new Date().toISOString(),
+  };
+  const projectedProject = {
+    ...project,
+    assemblies: project.assemblies.map((assembly) => ({
+      ...assembly,
+      parts: assembly.parts.map((candidate) => candidate.id === part.id
+        ? {
+            ...candidate,
+            material_id: material.id,
+            mass_kg: null,
+            metadata: { ...candidate.metadata, preferred_manufacturing_process: requestBody.manufacturing_process },
+          }
+        : candidate),
+    })),
+    modifications: [...project.modifications, modification],
+    reports: [...project.reports, report],
+    updated_at: new Date().toISOString(),
+  };
+  return {
+    status: 200,
+    payload: {
+      mode,
+      persisted: mode === 'applied',
+      option: { ...option, modification },
+      report,
+      panel_data: projectPanelData(projectedProject, []),
+    },
+    projectedProject,
+  };
+};
 
 const projectFileProject = () => {
   const exportedProject = structuredClone(project);
@@ -1273,6 +1437,47 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/manufacturing-options')) {
       send(200, projectManufacturingOptions());
+      return;
+    }
+
+    const substitutionsMatch = url.pathname.match(/^\/api\/projects\/([^/]+)\/parts\/([^/]+)\/material-substitutions$/);
+    if (request.method === 'GET' && substitutionsMatch && (substitutionsMatch[1] === projectId || substitutionsMatch[1] === 'sample')) {
+      const options = materialSubstitutionOptions(substitutionsMatch[2]);
+      if (!options) {
+        send(404, { error: 'target part not found' });
+        return;
+      }
+      send(200, options);
+      return;
+    }
+
+    if (
+      request.method === 'POST'
+      && (isProjectPath(url.pathname, '/material-substitutions/preview') || isProjectPath(url.pathname, '/material-substitutions/apply'))
+    ) {
+      if (!isOriginAllowed(request)) {
+        send(403, { error: 'origin is not allowed' });
+        return;
+      }
+      const contentType = request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
+        send(415, { error: 'content-type must be application/json' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(request);
+      } catch {
+        send(422, { error: 'request body must contain valid JSON' });
+        return;
+      }
+      const mode = url.pathname.endsWith('/apply') ? 'applied' : 'preview';
+      const result = materialSubstitutionPreview(body, mode);
+      if (mode === 'applied' && result.status === 200) {
+        project = result.projectedProject;
+        analysisReadinessPreviews = [];
+      }
+      send(result.status, result.payload);
       return;
     }
 

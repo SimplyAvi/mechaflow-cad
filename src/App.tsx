@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from 'react';
-import { exportProjectFile, importProjectFile, loadCockpitDesign, runLocalPreSolverAnalysis } from './lib/api';
+import {
+  applyMaterialSubstitution,
+  exportProjectFile,
+  importProjectFile,
+  loadCockpitDesign,
+  previewMaterialSubstitution,
+  runLocalPreSolverAnalysis,
+  type MaterialSubstitutionResult,
+} from './lib/api';
 import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import './App.css';
 
@@ -25,6 +33,16 @@ const formatUsdRange = (range: UsdRange): string => {
 const formatMeasurement = (value: number, maximumFractionDigits = 2): string => new Intl.NumberFormat('en-US', {
   maximumFractionDigits,
 }).format(value);
+
+const formatLeadTimeRange = (range?: { min: number | null; max: number | null } | null): string => {
+  if (!range || (range.min == null && range.max == null)) return 'lead time review required';
+  if (range.min != null && range.max != null) {
+    if (range.min === range.max) return `${range.min} day${range.min === 1 ? '' : 's'}`;
+    return `${range.min}-${range.max} days`;
+  }
+  if (range.min != null) return `from ${range.min} days`;
+  return `up to ${range.max} days`;
+};
 
 const formatThresholdMeasurement = (value: number, threshold: number): string => {
   const isBelow = value < threshold;
@@ -84,6 +102,9 @@ function App() {
   const [analysisRunPending, setAnalysisRunPending] = useState(false);
   const [projectFileMessage, setProjectFileMessage] = useState<string | null>(null);
   const [projectFilePending, setProjectFilePending] = useState(false);
+  const [substitutionPreview, setSubstitutionPreview] = useState<MaterialSubstitutionResult | null>(null);
+  const [substitutionMessage, setSubstitutionMessage] = useState<string | null>(null);
+  const [substitutionPending, setSubstitutionPending] = useState(false);
 
   const applyLoadedDesign = (loadedDesign: ReferenceDesign) => {
     setDesign(loadedDesign);
@@ -128,17 +149,50 @@ function App() {
 
   const selectedOption = materialOptions.find((option) => option.id === selectedOptionId) ?? materialOptions[0];
 
-  useEffect(() => {
-    if (materialOptions.length > 0 && !materialOptions.some((option) => option.id === selectedOptionId)) {
-      setSelectedOptionId(materialOptions[0].id);
-    }
-  }, [materialOptions, selectedOptionId]);
+  const selectPart = (partId: string) => {
+    setSelectedPartId(partId);
+    setSubstitutionPreview(null);
+  };
+
+  const selectMaterialOption = (optionId: string) => {
+    setSelectedOptionId(optionId);
+    setSubstitutionPreview(null);
+  };
 
   const selectAssembly = (assemblyId: string) => {
     const assembly = design?.assemblies.find((candidate) => candidate.id === assemblyId);
     if (!assembly) return;
     setSelectedAssemblyId(assembly.id);
-    setSelectedPartId(assembly.parts[0]?.id ?? '');
+    selectPart(assembly.parts[0]?.id ?? '');
+  };
+
+  const runMaterialSubstitutionAction = async (action: 'preview' | 'apply') => {
+    if (!design?.backend.apiBaseUrl || !selectedOption) {
+      setSubstitutionMessage('Start the local backend to preview or apply a persisted material substitution. Offline mock data is read-only.');
+      return;
+    }
+    setSubstitutionPending(true);
+    setSubstitutionMessage(action === 'preview' ? 'Requesting non-persisted substitution preview...' : 'Applying validated substitution to the project...');
+    try {
+      const result = action === 'preview'
+        ? await previewMaterialSubstitution(design.backend.apiBaseUrl, design.backend.projectId, selectedOption)
+        : await applyMaterialSubstitution(design.backend.apiBaseUrl, design.backend.projectId, selectedOption);
+      if (result.persisted) {
+        setDesign(result.design);
+        setSubstitutionPreview(null);
+        setSelectedOptionId('');
+        setSubstitutionMessage('Applied substitution to the backend project. BOM, manufacturing, readiness, and reports were reloaded from persisted state.');
+      } else {
+        setSubstitutionPreview(result);
+        setSubstitutionMessage('Preview only: BOM, manufacturing, readiness, and reports below show projected effects. Project is unchanged until Apply is clicked.');
+      }
+    } catch (error) {
+      console.warn('Material substitution failed.', error);
+      setSubstitutionPreview(null);
+      setSubstitutionMessage(error instanceof Error ? error.message : 'Material substitution failed compatibility validation.');
+    } finally {
+      setSubstitutionPending(false);
+    }
   };
 
   const runSelectedPartPreSolver = async () => {
@@ -240,7 +294,6 @@ function App() {
     );
   }
 
-  const bomTotal = totalBomCost(design.bom);
   const activeRating = selectedOption
     ? {
         payloadLb: selectedOption.payloadLb,
@@ -249,6 +302,8 @@ function App() {
         summary: selectedOption.taskImpact,
       }
     : selectedPart.rating;
+  const visibleDesign = substitutionPreview?.design ?? design;
+  const visibleBomTotal = totalBomCost(visibleDesign.bom);
 
   return (
     <main className="app-shell">
@@ -316,7 +371,7 @@ function App() {
               onSelect={selectAssembly}
             />
           ) : null}
-          <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={setSelectedPartId} />
+          <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={selectPart} />
         </aside>
 
         <section className="viewer-card panel">
@@ -386,7 +441,7 @@ function App() {
                     aria-pressed={part.id === selectedPart.id}
                     className={`part-shape shape-${part.visual.shape ?? 'plate'} risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
                     key={part.id}
-                    onClick={() => setSelectedPartId(part.id)}
+                    onClick={() => selectPart(part.id)}
                     style={{
                       '--x': `${part.visual.x}%`,
                       '--y': `${part.visual.y}%`,
@@ -454,8 +509,18 @@ function App() {
           <StrengthInfoPanel part={selectedPart} />
           <PreSolverReadinessPanel readiness={activeAssembly.analysisReadiness} title="Assembly readiness" />
           <PreSolverReadinessPanel readiness={selectedPart.analysisReadiness} title="Part readiness" />
-          <MaterialSubstitution options={materialOptions} selectedOption={selectedOption} onSelect={setSelectedOptionId} />
-          <ModificationPreview selectedOption={selectedOption} />
+          <MaterialSubstitution
+            canUseBackend={Boolean(design.backend.apiBaseUrl)}
+            message={substitutionMessage}
+            onApply={() => runMaterialSubstitutionAction('apply')}
+            onPreview={() => runMaterialSubstitutionAction('preview')}
+            onSelect={selectMaterialOption}
+            options={materialOptions}
+            pending={substitutionPending}
+            previewActive={Boolean(substitutionPreview)}
+            selectedOption={selectedOption}
+          />
+          <ModificationPreview selectedOption={substitutionPreview?.option ?? selectedOption} />
         </aside>
       </section>
 
@@ -467,10 +532,10 @@ function App() {
           runPending={analysisRunPending}
           selectedPart={selectedPart}
         />
-        <BomPanel design={design} total={bomTotal} />
-        <ManufacturingPanel design={design} />
-        <WiringPanel design={design} selectedPart={selectedPart} />
-        <ReportPanel reports={design.reports} selectedOption={selectedOption} />
+        <BomPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
+        <ManufacturingPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
+        <WiringPanel design={visibleDesign} selectedPart={selectedPart} />
+        <ReportPanel reports={visibleDesign.reports} selectedOption={substitutionPreview?.option ?? selectedOption} />
         <BackendContractPanel design={design} />
       </section>
 
@@ -736,11 +801,23 @@ function PreSolverReadinessPanel({ readiness, title }: { readiness: Part['analys
 }
 
 function MaterialSubstitution({
+  canUseBackend,
+  message,
+  onApply,
+  onPreview,
   options,
+  pending,
+  previewActive,
   selectedOption,
   onSelect,
 }: {
+  canUseBackend: boolean;
+  message: string | null;
+  onApply: () => void;
+  onPreview: () => void;
   options: MaterialOption[];
+  pending: boolean;
+  previewActive: boolean;
   selectedOption?: MaterialOption;
   onSelect: (id: string) => void;
 }) {
@@ -748,34 +825,83 @@ function MaterialSubstitution({
     return <p className="muted">No compatible substitution options are available; material and process compatibility review is required.</p>;
   }
 
+  const blocked = Boolean(selectedOption?.blockedReasons.length);
+
   return (
     <div className="substitution-panel">
       <h3>Task-preserving material substitution</h3>
-      <label htmlFor="material-option">Preview option</label>
+      <label htmlFor="material-option">Preview option: compatible material and process</label>
       <select id="material-option" value={selectedOption?.id} onChange={(event) => onSelect(event.target.value)}>
         {options.map((option) => (
           <option key={option.id} value={option.id}>
-            {option.material} - {statusLabel[option.status]}
+            {option.material} via {option.process} - {option.reviewRequired ? 'review required' : statusLabel[option.status]}
           </option>
         ))}
       </select>
       {selectedOption ? (
         <div className="option-impact">
           <p>{selectedOption.taskImpact}</p>
+          <dl className="comparison-grid">
+            <div>
+              <dt>Current</dt>
+              <dd>{selectedOption.currentMaterial ?? 'Review required'} via {selectedOption.currentProcess ?? 'review-required process'}</dd>
+            </div>
+            <div>
+              <dt>Substitute</dt>
+              <dd>{selectedOption.material} via {selectedOption.process}</dd>
+            </div>
+            <div>
+              <dt>Weight effect</dt>
+              <dd>{selectedOption.weightDeltaLb == null
+                ? 'review required'
+                : `${selectedOption.weightDeltaLb > 0 ? '+' : ''}${selectedOption.weightDeltaLb.toFixed(2)} lb estimated from density`}</dd>
+            </div>
+            <div>
+              <dt>Stiffness</dt>
+              <dd>{selectedOption.stiffnessGpa == null ? 'review required' : `${formatMeasurement(selectedOption.stiffnessGpa)} GPa modulus`}</dd>
+            </div>
+            <div>
+              <dt>Yield strength</dt>
+              <dd>{selectedOption.yieldStrengthMpa == null ? 'review required' : `${formatMeasurement(selectedOption.yieldStrengthMpa)} MPa material yield`}</dd>
+            </div>
+            <div>
+              <dt>Heat limit</dt>
+              <dd>{selectedOption.heatLimitC == null ? 'review required' : `${formatMeasurement(selectedOption.heatLimitC)} C screening limit`}</dd>
+            </div>
+            <div>
+              <dt>Cost range</dt>
+              <dd>{selectedOption.costRangeUsd == null ? 'review required' : `${formatUsdRange(selectedOption.costRangeUsd)} heuristic range`}</dd>
+            </div>
+            <div>
+              <dt>Lead time</dt>
+              <dd>{formatLeadTimeRange(selectedOption.leadTimeRangeDays)}</dd>
+            </div>
+          </dl>
           <ul>
-            <li>
-              Weight change: {selectedOption.weightDeltaLb == null
-                ? 'review required'
-                : `${selectedOption.weightDeltaLb > 0 ? '+' : ''}${selectedOption.weightDeltaLb.toFixed(2)} lb`}
-            </li>
-            <li>
-              Process cost: {selectedOption.costRangeUsd == null
-                ? 'review required'
-                : formatUsdRange(selectedOption.costRangeUsd)}
-            </li>
             <li>{selectedOption.manufacturingImpact}</li>
             <li>{selectedOption.wiringImpact}</li>
+            <li>Confidence: material {selectedOption.materialConfidence.replaceAll('_', ' ')}, process {selectedOption.manufacturingConfidence.replaceAll('_', ' ')}.</li>
           </ul>
+          {selectedOption.warnings.length > 0 ? (
+            <details>
+              <summary>Review-required warnings</summary>
+              <ul>{selectedOption.warnings.slice(0, 4).map((warning) => <li key={warning}>{warning}</li>)}</ul>
+            </details>
+          ) : null}
+          {blocked ? <p className="warning">Blocked: {selectedOption.blockedReasons.join(' ')}</p> : null}
+          <div className="substitution-actions">
+            <button disabled={!canUseBackend || pending || blocked} onClick={onPreview} type="button">
+              {pending ? 'Working...' : 'Preview backend impact'}
+            </button>
+            <button disabled={!canUseBackend || pending || blocked || !previewActive} onClick={onApply} type="button">
+              Apply validated substitution
+            </button>
+          </div>
+          <small className="runner-note">
+            Preview is non-persisted. Apply mutates the backend project only after the same compatibility validation passes.
+          </small>
+          {!canUseBackend ? <small className="runner-note">Offline bundled mock data is read-only; connect the backend to apply.</small> : null}
+          {message ? <p className="runner-message" aria-live="polite">{message}</p> : null}
         </div>
       ) : null}
     </div>
@@ -865,18 +991,31 @@ function AnalysisPanel({
   );
 }
 
-function BomPanel({ design, total }: { design: ReferenceDesign; total: UsdRange | null }) {
+function BomPanel({
+  design,
+  previewActive,
+  total,
+}: {
+  design: ReferenceDesign;
+  previewActive: boolean;
+  total: UsdRange | null;
+}) {
   return (
-    <article className="panel">
-      <p className="eyebrow">BOM and cost</p>
+    <article className={`panel ${previewActive ? 'preview-panel' : ''}`}>
+      <p className="eyebrow">BOM and cost {previewActive ? 'preview' : ''}</p>
       <h2>{total == null ? 'Cost review required' : `${formatUsdRange(total)} open estimate`}</h2>
+      <p className="muted">
+        {previewActive
+          ? 'Preview only: values below are projected backend panel data and are not persisted yet.'
+          : 'Ranges are explicit local estimates or review-required placeholders, not supplier quotes.'}
+      </p>
       <div className="bom-list">
         {design.bom.map((item) => (
           <div key={item.id}>
             <strong>{item.quantity}x {item.item}</strong>
             <small>
               {item.source} - {item.unitCostRangeUsd == null ? 'cost review required' : `${formatUsdRange(item.unitCostRangeUsd)} each`} -{' '}
-              {item.leadTimeDays == null ? 'lead time review required' : `${item.leadTimeDays} day lead`}
+              {formatLeadTimeRange(item.leadTimeRange)}
             </small>
           </div>
         ))}
@@ -885,20 +1024,35 @@ function BomPanel({ design, total }: { design: ReferenceDesign; total: UsdRange 
   );
 }
 
-function ManufacturingPanel({ design }: { design: ReferenceDesign }) {
+function ManufacturingPanel({
+  design,
+  previewActive,
+  selectedPartId,
+}: {
+  design: ReferenceDesign;
+  previewActive: boolean;
+  selectedPartId: string;
+}) {
+  const selectedPartName = design.assemblies.flatMap((assembly) => assembly.parts).find((part) => part.id === selectedPartId)?.name;
   return (
-    <article className="panel">
-      <p className="eyebrow">Manufacturing panel</p>
+    <article className={`panel ${previewActive ? 'preview-panel' : ''}`}>
+      <p className="eyebrow">Manufacturing panel {previewActive ? 'preview' : ''}</p>
       <h2>Make or buy paths</h2>
+      <p className="muted">
+        Active process cards mirror backend manufacturing options. Cost and lead time stay ranged and review-required.
+      </p>
       <div className="option-stack">
-        {design.manufacturingOptions.map((option) => (
-          <div className="manufacturing-card" key={option.id}>
-            <strong>{option.label}</strong>
-            <span>{option.process}</span>
-            <small>{option.costDisplay} - {option.leadTime}</small>
-            <p>{option.riskNote}</p>
-          </div>
-        ))}
+        {design.manufacturingOptions.map((option) => {
+          const activeForSelected = option.partName === selectedPartName;
+          return (
+            <div className={`manufacturing-card ${activeForSelected ? 'selected-manufacturing' : ''}`} key={option.id}>
+              <strong>{option.label}</strong>
+              <span>{option.process}{activeForSelected ? ' - selected part option' : ''}</span>
+              <small>{option.costDisplay} - {option.leadTime}</small>
+              <p>{option.riskNote}</p>
+            </div>
+          );
+        })}
       </div>
     </article>
   );
@@ -953,6 +1107,9 @@ function BackendContractPanel({ design }: { design: ReferenceDesign }) {
     `/api/projects/${design.backend.projectId}/analysis-readiness/${design.assembly.parts[0]?.id ?? 'part-id'}`,
     `/api/projects/${design.backend.projectId}/analysis-readiness/previews`,
     `/api/projects/${design.backend.projectId}/analysis-jobs/pre-solver-runs`,
+    `/api/projects/${design.backend.projectId}/parts/${design.assembly.parts[0]?.id ?? 'part-id'}/material-substitutions`,
+    `/api/projects/${design.backend.projectId}/material-substitutions/preview`,
+    `/api/projects/${design.backend.projectId}/material-substitutions/apply`,
     '/api/local-analysis/tool-boundaries',
     `/api/projects/${design.backend.projectId}/modifications`,
   ];

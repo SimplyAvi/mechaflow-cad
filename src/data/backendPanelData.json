@@ -1282,7 +1282,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     },
     {
       "id": "bom-part-shoulder-yoke",
@@ -1299,7 +1301,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     },
     {
       "id": "bom-part-upper-arm-link",
@@ -1316,7 +1320,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     },
     {
       "id": "bom-part-elbow-joint",
@@ -1333,7 +1339,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     },
     {
       "id": "bom-part-forearm-link",
@@ -1350,7 +1358,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     },
     {
       "id": "bom-part-wrist-plate",
@@ -1367,7 +1377,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     },
     {
       "id": "bom-part-finger-link",
@@ -1384,7 +1396,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     },
     {
       "id": "bom-part-controller-pcb",
@@ -1401,7 +1415,9 @@
         "confidence": "estimated_from_heuristic"
       },
       "datasheet_url": null,
-      "license_or_terms": null
+      "license_or_terms": null,
+      "lead_time_days_min": 5,
+      "lead_time_days_max": 12
     }
   ],
   "manufacturing_options": [

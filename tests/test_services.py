@@ -1,10 +1,13 @@
 import pytest
 
-from mechaflow_api.models import ManufacturingProcess, Modification
+from mechaflow_api.models import ManufacturingProcess, MaterialSubstitutionRequest, Modification
 from mechaflow_api.services import (
     InvalidDimensionChangeError,
+    MaterialProcessCompatibilityError,
     PartNotFoundError,
     apply_project_modification,
+    build_material_substitution_options,
+    build_material_substitution_preview,
     build_project_panel_data,
     collect_project_bom_items,
     collect_project_manufacturing_options,
@@ -43,12 +46,65 @@ def test_project_panel_collectors_extract_frontend_data() -> None:
 
     assert collect_project_task_requirements(project)[0].id == "task-lift-50lb"
     assert collect_project_bom_items(project)[0].part_id == "part-finger-link"
+    assert collect_project_bom_items(project)[0].price == project.assemblies[0].parts[0].manufacturing_options[0].cost
+    assert collect_project_bom_items(project)[0].lead_time_days_min == 3
     assert collect_project_manufacturing_options(project)[0].options[0].id == "mfg-finger-cnc"
     assert collect_project_wiring_routes(project)[0].id == "route-finger-sensor"
 
     panel = build_project_panel_data(project)
     assert panel.project.id == project.id
     assert panel.bom_items[0].name == "Finger link"
+
+
+def test_material_substitution_options_are_explicit_compatible_and_review_required() -> None:
+    project = build_sample_project()
+
+    options = build_material_substitution_options(project, "part-finger-link")
+
+    assert {option.material_id for option in options} >= {"mat-carbon-fiber-nylon", "mat-low-carbon-steel"}
+    assert all(option.compatible for option in options)
+    assert all(option.review_required for option in options)
+    assert all(option.modification.manufacturing_process is not None for option in options)
+    assert all(option.material_id != "mat-fr4-generic" for option in options)
+    carbon_fiber = next(option for option in options if option.material_id == "mat-carbon-fiber-nylon")
+    assert carbon_fiber.process == ManufacturingProcess.additive_fdm
+    assert carbon_fiber.weight_delta_kg is not None
+    assert carbon_fiber.weight_delta_kg < 0
+    assert carbon_fiber.cost_range == project.assemblies[0].parts[0].manufacturing_options[1].cost
+    assert "not supplier quotes" in carbon_fiber.manufacturing_guidance
+
+
+def test_material_substitution_preview_is_non_persisted_and_projects_panel_updates() -> None:
+    project = build_sample_project()
+    request = MaterialSubstitutionRequest(
+        target_part_id="part-finger-link",
+        material_id="mat-carbon-fiber-nylon",
+        manufacturing_process=ManufacturingProcess.additive_fdm,
+    )
+
+    preview = build_material_substitution_preview(project, request)
+
+    assert preview.mode == "preview"
+    assert preview.persisted is False
+    assert project.assemblies[0].parts[0].material_id == "mat-aluminum-6061-t6"
+    projected_part = preview.panel_data.project.assemblies[0].parts[0]
+    assert projected_part.material_id == "mat-carbon-fiber-nylon"
+    assert projected_part.metadata["preferred_manufacturing_process"] == "additive_fdm"
+    assert preview.panel_data.bom_items[0].price == project.assemblies[0].parts[0].manufacturing_options[1].cost
+    assert preview.panel_data.analysis_readiness_previews[0].material_properties.material_id == "mat-carbon-fiber-nylon"
+    assert preview.report.status.value == "requires_review"
+
+
+def test_material_substitution_preview_rejects_incompatible_process() -> None:
+    with pytest.raises(MaterialProcessCompatibilityError, match="not explicitly compatible"):
+        build_material_substitution_preview(
+            build_sample_project(),
+            MaterialSubstitutionRequest(
+                target_part_id="part-finger-link",
+                material_id="mat-carbon-fiber-nylon",
+                manufacturing_process=ManufacturingProcess.cnc_machining,
+            ),
+        )
 
 
 def test_apply_project_modification_rejects_unknown_part() -> None:

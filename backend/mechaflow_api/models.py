@@ -319,8 +319,20 @@ class BOMItem(BaseModel):
     supplier: str | None = None
     supplier_part_number: str | None = None
     price: MoneyRange | None = None
+    lead_time_days_min: NonNegativeFloat | None = None
+    lead_time_days_max: NonNegativeFloat | None = None
     datasheet_url: HttpUrl | None = None
     license_or_terms: str | None = None
+
+    @model_validator(mode="after")
+    def validate_lead_time_bounds(self) -> BOMItem:
+        if (
+            self.lead_time_days_min is not None
+            and self.lead_time_days_max is not None
+            and self.lead_time_days_min > self.lead_time_days_max
+        ):
+            raise ValueError("lead_time_days_min must be less than or equal to lead_time_days_max")
+        return self
 
 
 class TaskRequirement(StrictModel):
@@ -368,6 +380,52 @@ class Modification(StrictModel):
         if value is not None and not value.strip():
             raise ValueError("material_id must not be blank")
         return value
+
+
+class MaterialSubstitutionRequest(StrictModel):
+    target_part_id: str
+    material_id: str
+    manufacturing_process: ManufacturingProcess
+    description: str | None = None
+    modification_id: str | None = None
+
+    @field_validator("material_id", "target_part_id")
+    @classmethod
+    def validate_nonblank_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("ids must not be blank")
+        return value
+
+
+class MaterialSubstitutionOption(StrictModel):
+    id: str
+    part_id: str
+    part_name: str
+    current_material_id: str | None = None
+    current_material_name: str | None = None
+    current_process: ManufacturingProcess | None = None
+    material_id: str
+    material_name: str
+    process: ManufacturingProcess
+    compatible: bool
+    review_required: bool = True
+    blocked_reasons: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    weight_delta_kg: float | None = None
+    cost_range: MoneyRange | None = None
+    cost_delta: MoneyRange | None = None
+    lead_time_days_min: NonNegativeFloat | None = None
+    lead_time_days_max: NonNegativeFloat | None = None
+    stiffness_gpa: PositiveFloat | None = None
+    yield_strength_mpa: PositiveFloat | None = None
+    heat_limit_c: PositiveFloat | None = None
+    material_confidence: RecommendationConfidence = RecommendationConfidence.unknown
+    manufacturing_confidence: RecommendationConfidence = RecommendationConfidence.unknown
+    summary: str
+    task_guidance: str
+    manufacturing_guidance: str
+    wiring_guidance: str
+    modification: Modification
 
 
 class AnalysisJobRequest(BaseModel):
@@ -648,6 +706,14 @@ class ProjectPanelData(BaseModel):
     wiring_routes: list[WiringRoute] = Field(default_factory=list)
     reports: list[AnalysisReport] = Field(default_factory=list)
     analysis_readiness_previews: list[AnalysisReadinessPreview] = Field(default_factory=list)
+
+
+class MaterialSubstitutionPreview(StrictModel):
+    mode: Literal["preview", "applied"]
+    persisted: bool
+    option: MaterialSubstitutionOption
+    report: AnalysisReport
+    panel_data: ProjectPanelData
 
 
 PROJECT_FILE_FORMAT = "mechaflow-cad.project"

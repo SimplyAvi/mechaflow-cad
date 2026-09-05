@@ -62,15 +62,16 @@ describe('MechaFlow cockpit', () => {
     const optionSelector = screen.getByLabelText(/Preview option/i);
     expect(within(optionSelector).queryByRole('option', { name: /FR-4/i })).not.toBeInTheDocument();
 
-    await user.selectOptions(optionSelector, 'part-finger-link-mat-carbon-fiber-nylon');
+    await user.selectOptions(optionSelector, 'part-finger-link-mat-carbon-fiber-nylon-additive_fdm');
 
     expect(
-      screen.getAllByText(/Material-only preview has no worker-supplied payload rating/i).length,
+      screen.getAllByText(/Material and process substitution preview has no worker-supplied payload rating/i).length,
     ).toBeGreaterThan(0);
     expect(screen.getByText(/Payload rating review required/i)).toBeInTheDocument();
-    expect(screen.getByText(/Process cost:/i)).toHaveTextContent('$3-$12');
+    expect(screen.getByText(/Cost range/i).closest('div')).toHaveTextContent('$3-$12');
+    expect(screen.getAllByText(/1-3 days/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent(
-      '/api/projects/project-open-gripper-demo/modifications',
+      '/api/projects/project-open-gripper-demo/material-substitutions/preview then /apply',
     );
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('"dimension_changes": {}');
     expect(screen.getByText(/mat-carbon-fiber-nylon/i)).toBeInTheDocument();
@@ -156,6 +157,118 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/http:\/\/api.test\/api\/projects\/project-open-gripper-demo\/panel-data/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
+  });
+
+  it('previews then applies a backend material substitution without mutating during preview', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
+    const previewPanelData = structuredClone(mockProjectPanelData);
+    const previewFinger = previewPanelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    previewFinger.material_id = 'mat-carbon-fiber-nylon';
+    previewFinger.metadata.preferred_manufacturing_process = 'additive_fdm';
+    previewFinger.mass_kg = null;
+    previewPanelData.bom_items = previewPanelData.bom_items.map((item) => item.part_id === 'part-finger-link'
+      ? {
+          ...item,
+          price: { currency: 'USD', min: 3, max: 12, confidence: 'estimated_from_heuristic' },
+          lead_time_days_min: 1,
+          lead_time_days_max: 3,
+        }
+      : item);
+    previewPanelData.reports = [{
+      id: 'report-substitution-preview',
+      project_id: 'project-open-gripper-demo',
+      title: 'Advisory edit report for Parallel gripper jaw link',
+      status: 'requires_review',
+      summary: 'Previewed material substitution; no FEA or supplier quote was produced.',
+      task_results: [],
+      manufacturing_impacts: ['Preferred process changed to additive_fdm.'],
+      wiring_impacts: ['Linked wiring needs clearance review.'],
+      risks: ['Local edit preview does not modify CAD geometry yet.'],
+      unknowns: ['Supplier price remains an estimate.'],
+      recommendations: ['Queue worker validation before release.'],
+      assumptions: ['Panel data projection only.'],
+    }];
+    const backendPreview = {
+      mode: 'preview',
+      persisted: false,
+      option: {
+        id: 'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
+        part_id: 'part-finger-link',
+        part_name: 'Parallel gripper jaw link',
+        current_material_id: 'mat-aluminum-6061-t6',
+        current_material_name: 'Aluminum 6061-T6',
+        current_process: 'cnc_machining',
+        material_id: 'mat-carbon-fiber-nylon',
+        material_name: 'Carbon-fiber reinforced nylon',
+        process: 'additive_fdm',
+        compatible: true,
+        review_required: true,
+        blocked_reasons: [],
+        warnings: ['No FEA was run.'],
+        weight_delta_kg: -0.06,
+        cost_range: { currency: 'USD', min: 3, max: 12, confidence: 'estimated_from_heuristic' },
+        cost_delta: null,
+        lead_time_days_min: 1,
+        lead_time_days_max: 3,
+        stiffness_gpa: 7.5,
+        yield_strength_mpa: 70,
+        heat_limit_c: 120,
+        material_confidence: 'estimated_from_heuristic',
+        manufacturing_confidence: 'estimated_from_heuristic',
+        summary: 'Review required.',
+        task_guidance: 'No worker-supplied payload rating.',
+        manufacturing_guidance: 'Cost and lead time are heuristic ranges, not supplier quotes.',
+        wiring_guidance: 'Linked wiring routes require clearance review.',
+        modification: {
+          id: 'mod-part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
+          target_part_id: 'part-finger-link',
+          description: 'Preview substituting Parallel gripper jaw link.',
+          material_id: 'mat-carbon-fiber-nylon',
+          dimension_changes: {},
+          manufacturing_process: 'additive_fdm',
+        },
+      },
+      report: previewPanelData.reports[0],
+      panel_data: previewPanelData,
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/material-substitutions/preview')) return Response.json(backendPreview);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/material-substitutions/apply')) {
+        return Response.json({ ...backendPreview, mode: 'applied', persisted: true });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const partTree = await screen.findByText('Selectable parts');
+    const treeContainer = partTree.closest('.part-tree');
+    expect(treeContainer).not.toBeNull();
+    await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Parallel gripper jaw link/i }));
+    await user.selectOptions(
+      screen.getByLabelText(/Preview option/i),
+      'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
+    );
+
+    expect(screen.getByRole('heading', { name: '$383-$1,152 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Preview backend impact/i }));
+
+    expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
+    expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$361-$1,084 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: /Apply validated substitution/i }));
+
+    expect(await screen.findByText(/Applied substitution to the backend project/i)).toBeInTheDocument();
+    expect(screen.queryByText(/BOM and cost preview/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$361-$1,084 open estimate' })).toBeInTheDocument();
   });
 
   it('imports a portable project file from the desktop picker and keeps cockpit data interactive', async () => {
@@ -362,7 +475,7 @@ describe('MechaFlow cockpit', () => {
         result_summary: { message: 'Waiting for an adapter.' },
       },
     ];
-    panelData.bom_items = [{ ...panelData.bom_items[0]!, price: null }];
+    panelData.bom_items = [{ ...panelData.bom_items[0]!, price: null, lead_time_days_min: null, lead_time_days_max: null }];
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);

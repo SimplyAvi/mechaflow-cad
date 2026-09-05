@@ -4,15 +4,23 @@ import type {
   AnalysisJob,
   BackendAnalysisJob,
   BackendApiMetadata,
+  BackendMaterialSubstitutionPreview,
   BackendProjectFile,
   BackendProjectFileImportResponse,
   BackendProjectPanelData,
+  MaterialOption,
   ReferenceDesign,
 } from '../types';
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
 const DEFAULT_PROJECT_ID = 'project-open-gripper-demo';
+
+const toTitle = (value: string): string => value
+  .split(/[_-]/)
+  .filter(Boolean)
+  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+  .join(' ');
 
 export const getApiBaseUrl = (): string | undefined => {
   const configured = import.meta.env.VITE_API_BASE_URL?.trim();
@@ -69,6 +77,105 @@ export async function importProjectFile(apiBaseUrl: string, projectFile: unknown
     },
   );
   return mapProjectPanelDataToReferenceDesign(imported.panel_data, metadata, trimmedApiBaseUrl);
+}
+
+export interface MaterialSubstitutionResult {
+  mode: 'preview' | 'applied';
+  persisted: boolean;
+  design: ReferenceDesign;
+  option: MaterialOption;
+  reportSummary: string;
+}
+
+const materialOptionFromBackendPreview = (
+  payload: BackendMaterialSubstitutionPreview,
+  projectId: string,
+): MaterialOption => {
+  const option = payload.option;
+  return {
+    id: option.id,
+    partId: option.part_id,
+    material: option.material_name,
+    materialId: option.material_id,
+    process: toTitle(option.process),
+    processValue: option.process,
+    currentMaterial: option.current_material_name ?? option.current_material_id ?? null,
+    currentProcess: option.current_process == null ? null : toTitle(option.current_process),
+    payloadLb: null,
+    safetyFactor: null,
+    weightDeltaLb: option.weight_delta_kg == null ? null : Number((option.weight_delta_kg * 2.20462).toFixed(2)),
+    costRangeUsd: option.cost_range == null || option.cost_range.currency.toUpperCase() !== 'USD'
+      ? null
+      : { min: option.cost_range.min ?? null, max: option.cost_range.max ?? null },
+    leadTimeRangeDays: { min: option.lead_time_days_min ?? null, max: option.lead_time_days_max ?? null },
+    stiffnessGpa: option.stiffness_gpa ?? null,
+    yieldStrengthMpa: option.yield_strength_mpa ?? null,
+    heatLimitC: option.heat_limit_c ?? null,
+    materialConfidence: option.material_confidence,
+    manufacturingConfidence: option.manufacturing_confidence,
+    reviewRequired: option.review_required,
+    blockedReasons: option.blocked_reasons,
+    warnings: option.warnings,
+    taskImpact: option.task_guidance,
+    wiringImpact: option.wiring_guidance,
+    manufacturingImpact: option.manufacturing_guidance,
+    status: 'watch',
+    backendModification: {
+      endpoint: `/api/projects/${projectId}/material-substitutions/${payload.mode === 'applied' ? 'apply' : 'preview'}`,
+      method: 'POST',
+      payload: option.modification,
+      reportTitle: payload.report.title,
+      reportSummary: payload.report.summary,
+      reportStatus: payload.report.status,
+    },
+  };
+};
+
+async function materialSubstitution(
+  apiBaseUrl: string,
+  projectId: string,
+  option: MaterialOption,
+  action: 'preview' | 'apply',
+): Promise<MaterialSubstitutionResult> {
+  const trimmedApiBaseUrl = trimTrailingSlash(apiBaseUrl);
+  const metadata = await loadMetadata(trimmedApiBaseUrl);
+  const response = await fetchJson<BackendMaterialSubstitutionPreview>(
+    `${trimmedApiBaseUrl}/api/projects/${projectId}/material-substitutions/${action}`,
+    {
+      body: JSON.stringify({
+        target_part_id: option.partId,
+        material_id: option.materialId,
+        manufacturing_process: option.processValue,
+        description: option.backendModification.payload.description,
+        modification_id: option.backendModification.payload.id,
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    },
+  );
+  return {
+    mode: response.mode,
+    persisted: response.persisted,
+    design: mapProjectPanelDataToReferenceDesign(response.panel_data, metadata, trimmedApiBaseUrl),
+    option: materialOptionFromBackendPreview(response, projectId),
+    reportSummary: response.report.summary,
+  };
+}
+
+export async function previewMaterialSubstitution(
+  apiBaseUrl: string,
+  projectId: string,
+  option: MaterialOption,
+): Promise<MaterialSubstitutionResult> {
+  return materialSubstitution(apiBaseUrl, projectId, option, 'preview');
+}
+
+export async function applyMaterialSubstitution(
+  apiBaseUrl: string,
+  projectId: string,
+  option: MaterialOption,
+): Promise<MaterialSubstitutionResult> {
+  return materialSubstitution(apiBaseUrl, projectId, option, 'apply');
 }
 
 export async function runLocalPreSolverAnalysis(

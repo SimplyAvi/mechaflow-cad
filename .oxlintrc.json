@@ -1,0 +1,4 @@
+{
+  "$schema": "https://oxc.rs/schema/oxlint.json",
+  "plugins": ["react"]
+}
