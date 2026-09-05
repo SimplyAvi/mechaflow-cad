@@ -128,9 +128,23 @@ def normalize_analysis_job(
                 f"not {artifact.kind.value!r}"
             )
     normalized_job_id = job.id if job_id is None else job_id
+    source_project_id = job.project_id
     artifacts = [artifact.model_copy(update={"job_id": normalized_job_id}, deep=True) for artifact in job.artifacts]
-    cached_artifact_refs = [ref.model_copy(deep=True) for ref in job.cached_artifact_refs]
-    cached_report_refs = [ref.model_copy(deep=True) for ref in job.cached_report_refs]
+    allowed_reference_projects = {source_project_id, project_id}
+    cached_artifact_refs = [
+        ref.model_copy(
+            update={"project_id": project_id} if ref.project_id in allowed_reference_projects else {},
+            deep=True,
+        )
+        for ref in job.cached_artifact_refs
+    ]
+    cached_report_refs = [
+        ref.model_copy(
+            update={"project_id": project_id} if ref.project_id in allowed_reference_projects else {},
+            deep=True,
+        )
+        for ref in job.cached_report_refs
+    ]
     normalized = job.model_copy(
         update={
             "id": normalized_job_id,

@@ -561,7 +561,11 @@ def _status_for_recommendation(
     if recommendation.status == AnalysisExecutionRecommendationStatus.review_required:
         return AnalysisJobStatus.review_required
     if recommendation.status == AnalysisExecutionRecommendationStatus.unavailable:
-        return AnalysisJobStatus.solver_unavailable
+        return (
+            AnalysisJobStatus.solver_unavailable
+            if recommendation.missing_local_tools
+            else AnalysisJobStatus.review_required
+        )
     return status
 
 
