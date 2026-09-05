@@ -298,10 +298,11 @@ def test_project_file_import_rejects_inconsistent_non_empty_wiring_lists() -> No
 
     project_file = local_client.get("/api/projects/project-open-gripper-demo/export-file").json()
     project_file["project"]["assemblies"][0]["wiring_routes"][0]["wire_segment_ids"] = ["wire-main-palm-harness"]
+    project_file["project"]["assemblies"][0]["wiring_routes"][0]["harness_bom"].append("bom-wire-main-palm-harness")
     imported = local_client.post("/api/projects/import-file", json=project_file)
 
     assert imported.status_code == 422
-    assert "mismatched endpoints" in imported.json()["detail"]
+    assert "mismatched terminals" in imported.json()["detail"]
 
 
 

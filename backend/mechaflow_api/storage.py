@@ -161,6 +161,12 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
         for route in assembly.wiring_routes
         for connector in (route.from_connector, route.to_connector)
     }
+    route_connector_ids.update(
+        endpoint.connector_id
+        for segment in project.wire_segments
+        for endpoint in (segment.from_endpoint, segment.to_endpoint)
+        if endpoint is not None
+    )
     for component in project.electronics_components:
         if component.mounted_part_id is not None and component.mounted_part_id not in part_ids:
             raise InvalidWiringEndpointError(
@@ -280,6 +286,16 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                         raise InvalidWiringEndpointError(
                             f"wiring route {route.id!r} references disconnected wire segments"
                         )
+                segment_component_ids = {
+                    connector_owners[endpoint.connector_id][1]
+                    for segment in route_segments
+                    for endpoint in (segment.from_endpoint, segment.to_endpoint)
+                    if endpoint is not None
+                }
+                if not segment_component_ids.issubset(set(route.electronics_component_ids)):
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} is missing wire segment component links"
+                    )
             if route.rule_set_id is not None and route.rule_set_id not in wiring_rule_ids:
                 raise InvalidWiringEndpointError(
                     f"wiring route {route.id!r} references unknown wiring rule set {route.rule_set_id!r}"
