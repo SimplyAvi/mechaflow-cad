@@ -48,6 +48,7 @@ const manufacturingProcesses = new Set([
   'casting',
   'unknown',
 ]);
+const projectIdPattern = /^[A-Za-z0-9._~-]+$/;
 const analysisAdaptersByJobType = {
   import_design: new Set(['freecad-worker']),
   generate_exploded_view: new Set(['freecad-worker']),
@@ -289,6 +290,7 @@ const projectFileValidationError = (file) => {
     if (error) return error;
     error = requireString(candidate.id, 'project.id') || requireString(candidate.name, 'project.name');
     if (error) return error;
+    if (candidate.id === 'sample' || candidate.id === '.' || candidate.id === '..' || !projectIdPattern.test(candidate.id)) return 'project.id must be a URL-safe path segment';
     for (const field of ['assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports']) {
       error = requireArray(candidate[field], `project.${field}`);
       if (error) return error;
@@ -306,6 +308,8 @@ const projectFileValidationError = (file) => {
       const assemblyPath = `project.assemblies[${assemblyIndex}]`;
       error = requiredFields(assembly, ['id', 'name', 'root_node_id', 'nodes', 'parts', 'wiring_routes'], assemblyPath);
       if (error) return error;
+      error = requireString(assembly.name, `${assemblyPath}.name`) || requireString(assembly.root_node_id, `${assemblyPath}.root_node_id`);
+      if (error) return error;
       for (const field of ['nodes', 'parts', 'wiring_routes']) {
         error = requireArray(assembly[field], `${assemblyPath}.${field}`);
         if (error) return error;
@@ -316,6 +320,8 @@ const projectFileValidationError = (file) => {
         error = requiredFields(node, ['id', 'name', 'part_ids', 'child_assembly_ids', 'exploded_transform'], nodePath);
         if (error) return error;
         if (assembly.nodes.findIndex((candidate) => candidate?.id === node.id) !== nodeIndex) return `${assemblyPath}.nodes ids must be unique: ${node.id}`;
+        error = requireString(node.name, `${nodePath}.name`);
+        if (error) return error;
         for (const field of ['part_ids', 'child_assembly_ids']) {
           error = requireArray(node[field], `${nodePath}.${field}`);
           if (error) return error;
@@ -334,6 +340,8 @@ const projectFileValidationError = (file) => {
         if (assemblyIds.has(part?.id)) return `part id overlaps another project target: ${part?.id}`;
         error = requiredFields(part, ['id', 'name', 'category', 'dimensions', 'manufacturing_options', 'related_fasteners', 'wiring_route_ids', 'metadata'], `${assemblyPath}.parts`);
         if (error) return error;
+        error = requireString(part.name, `${assemblyPath}.parts.name`) || requireString(part.category, `${assemblyPath}.parts.category`);
+        if (error) return error;
         for (const field of ['dimensions', 'metadata']) {
           error = requireObject(part[field], `${assemblyPath}.parts.${field}`);
           if (error) return error;
@@ -350,8 +358,12 @@ const projectFileValidationError = (file) => {
         routeIds.add(route?.id);
         error = requiredFields(route, ['id', 'name', 'from_connector', 'to_connector', 'path_points_mm', 'harness_bom', 'risk_notes'], `${assemblyPath}.wiring_routes`);
         if (error) return error;
+        error = requireString(route.name, `${assemblyPath}.wiring_routes.name`);
+        if (error) return error;
         for (const connectorField of ['from_connector', 'to_connector']) {
           error = requiredFields(route[connectorField], ['id', 'name'], `${assemblyPath}.wiring_routes.${connectorField}`);
+          if (error) return error;
+          error = requireString(route[connectorField].name, `${assemblyPath}.wiring_routes.${connectorField}.name`);
           if (error) return error;
           if (route[connectorField].part_id != null && !partIds.has(route[connectorField].part_id)) {
             return `wiring route ${route.id} references unknown part ${route[connectorField].part_id}`;
@@ -377,6 +389,10 @@ const projectFileValidationError = (file) => {
       error = requiredFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'input_summary', 'result_summary', 'artifacts'], 'project.analysis_jobs');
       if (error) return error;
       if (job.project_id !== candidate.id) return `analysis job ${job.id} belongs to another project`;
+      for (const field of ['job_type', 'status', 'target_id', 'project_id', 'adapter_name']) {
+        error = requireString(job[field], `analysis job ${job.id}.${field}`);
+        if (error) return error;
+      }
       if (!analysisAdaptersByJobType[job.job_type]?.has(job.adapter_name)) return `adapter ${job.adapter_name} does not support analysis job type ${job.job_type}`;
       error = requireArray(job.artifacts, `analysis job ${job.id}.artifacts`);
       if (error) return error;
@@ -384,6 +400,8 @@ const projectFileValidationError = (file) => {
         error = requiredFields(artifact, ['id', 'job_id', 'kind', 'title', 'summary', 'payload', 'generated_by', 'created_at'], `analysis job ${job.id}.artifacts`);
         if (error) return error;
         if (artifact.job_id != null && artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
+        error = requireString(artifact.summary, `analysis artifact ${artifact.id}.summary`) || requireString(artifact.generated_by, `analysis artifact ${artifact.id}.generated_by`);
+        if (error) return error;
         if (artifact.kind !== analysisArtifactKindByJobType[job.job_type] && !legacyMockArtifactKindsByJobType[job.job_type]?.has(artifact.kind)) return `analysis job type ${job.job_type} requires a compatible artifact kind`;
       }
     }
@@ -400,7 +418,20 @@ const projectFileValidationError = (file) => {
   if (file.format !== 'mechaflow-cad.project') return 'unsupported project file format';
   if (file.schema_version !== '1.0') return 'unsupported MechaFlow project file schema_version';
   if (!file.project || typeof file.project !== 'object' || Array.isArray(file.project)) return 'project is required';
-  return validateProject(file.project);
+  const projectError = validateProject(file.project);
+  if (projectError) return projectError;
+  if (file.analysis_readiness_previews != null) {
+    if (!Array.isArray(file.analysis_readiness_previews)) return 'analysis_readiness_previews must be an array';
+    const targetIds = new Set(file.project.assemblies.flatMap((assembly) => [assembly.id, ...assembly.parts.map((part) => part.id)]));
+    for (const [index, preview] of file.analysis_readiness_previews.entries()) {
+      const previewPath = `analysis_readiness_previews[${index}]`;
+      const previewError = requiredFields(preview, ['project_id', 'target_id', 'target_name', 'target_kind'], previewPath);
+      if (previewError) return previewError;
+      if (preview.project_id !== file.project.id) return `${previewPath}.project_id must match project.id`;
+      if (!targetIds.has(preview.target_id)) return `${previewPath}.target_id references an unknown project target`;
+    }
+  }
+  return null;
 };
 
 const findTarget = (targetId) => {
@@ -606,7 +637,9 @@ const server = http.createServer(async (request, response) => {
         updated_at: new Date().toISOString(),
       };
       projectId = project.id;
-      analysisReadinessPreviews = [];
+      analysisReadinessPreviews = Array.isArray(body.analysis_readiness_previews)
+        ? structuredClone(body.analysis_readiness_previews)
+        : [];
       send(200, {
         status: 'imported',
         project_id: projectId,
@@ -629,12 +662,12 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/task-requirements')) {
-      send(200, mockBackendPanelData.task_requirements);
+      send(200, projectPanelData().task_requirements);
       return;
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/bom')) {
-      send(200, mockBackendPanelData.bom_items);
+      send(200, projectPanelData().bom_items);
       return;
     }
 
@@ -644,7 +677,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/wiring-routes')) {
-      send(200, mockBackendPanelData.wiring_routes);
+      send(200, projectPanelData().wiring_routes);
       return;
     }
 

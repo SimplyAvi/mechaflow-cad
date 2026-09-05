@@ -29,9 +29,7 @@
               "part-palm-plate",
               "part-controller-pcb"
             ],
-            "child_assembly_ids": [
-              "node-shoulder"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": -90,
@@ -51,9 +49,7 @@
             "part_ids": [
               "part-shoulder-yoke"
             ],
-            "child_assembly_ids": [
-              "node-upper-arm"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": -48,
@@ -73,9 +69,7 @@
             "part_ids": [
               "part-upper-arm-link"
             ],
-            "child_assembly_ids": [
-              "node-elbow"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": -12,
@@ -95,9 +89,7 @@
             "part_ids": [
               "part-elbow-joint"
             ],
-            "child_assembly_ids": [
-              "node-forearm"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": 44,
@@ -118,9 +110,7 @@
               "part-forearm-link",
               "part-wrist-plate"
             ],
-            "child_assembly_ids": [
-              "node-tool"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": 84,

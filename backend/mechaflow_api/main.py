@@ -164,6 +164,7 @@ CATALOG_TASKS_PATH = Path(__file__).resolve().parents[2] / "data" / "tasks.seed.
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
     project_store = project_store or build_default_project_store()
+    readiness_previews_by_project: dict[str, list[AnalysisReadinessPreview]] = {}
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -198,14 +199,16 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         return job
 
     def build_project_file(project: Project) -> ProjectFile:
-        readiness_previews: list[AnalysisReadinessPreview] = []
-        for assembly in project.assemblies:
-            target_ids = [assembly.id, *[part.id for part in assembly.parts]]
-            for target_id in target_ids:
-                try:
-                    readiness_previews.append(build_analysis_readiness_preview(project, target_id))
-                except PartNotFoundError:
-                    continue
+        readiness_previews = readiness_previews_by_project.get(project.id)
+        if readiness_previews is None:
+            readiness_previews = []
+            for assembly in project.assemblies:
+                target_ids = [assembly.id, *[part.id for part in assembly.parts]]
+                for target_id in target_ids:
+                    try:
+                        readiness_previews.append(build_analysis_readiness_preview(project, target_id))
+                    except PartNotFoundError:
+                        continue
         return ProjectFile(
             metadata=ProjectFileMetadata(
                 source_api_version=settings.version,
@@ -360,7 +363,15 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             ) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        panel_data = build_project_panel_data(stored_project)
+        imported_previews = [
+            preview.model_copy(update={"project_id": stored_project.id}, deep=True)
+            for preview in project_file.analysis_readiness_previews
+        ]
+        readiness_previews_by_project[stored_project.id] = imported_previews
+        panel_data = build_project_panel_data(stored_project).model_copy(
+            update={"analysis_readiness_previews": imported_previews},
+            deep=True,
+        )
         return ProjectFileImportResponse(
             project_id=stored_project.id,
             message=f"Imported MechaFlow project file for {stored_project.id}.",
@@ -403,7 +414,13 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def project_panel_data(project_id: str) -> ProjectPanelData:
         if project_id == "sample":
             project_id = "project-open-gripper-demo"
-        return build_project_panel_data(get_project_or_404(project_id))
+        project = get_project_or_404(project_id)
+        previews = readiness_previews_by_project.get(project.id)
+        panel_data = build_project_panel_data(project)
+        return panel_data.model_copy(
+            update={"analysis_readiness_previews": previews},
+            deep=True,
+        ) if previews is not None else panel_data
 
     @app.post(
         f"{settings.api_prefix}/projects/{{project_id}}/analysis-readiness/previews",
@@ -431,6 +448,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     )
     def analysis_readiness_preview(project_id: str, target_id: str) -> AnalysisReadinessPreview:
         project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        for preview in readiness_previews_by_project.get(project.id, []):
+            if preview.target_id == target_id:
+                return preview
         try:
             return build_analysis_readiness_preview(project, target_id)
         except PartNotFoundError as exc:
