@@ -1056,12 +1056,18 @@ const projectFileValidationError = (file) => {
         const connectorComponentIds = [route.from_connector.component_id, route.to_connector.component_id].filter(Boolean);
         if (!connectorComponentIds.every((id) => (route.electronics_component_ids ?? []).includes(id))) return `wiring route ${route.id} is missing connector component links`;
         for (const bomId of route.harness_bom ?? []) if (!bomIds.has(bomId)) return `wiring route ${route.id} references unknown BOM item ${bomId}`;
-        for (const segmentId of route.wire_segment_ids ?? []) {
-          const segment = candidate.wire_segments.find((item) => item.id === segmentId);
-          const expected = [[route.from_connector.id, route.from_connector.part_id], [route.to_connector.id, route.to_connector.part_id]];
-          const actual = [[segment?.from_endpoint?.connector_id, segment?.from_endpoint?.part_id], [segment?.to_endpoint?.connector_id, segment?.to_endpoint?.part_id]];
-          if (!segment || JSON.stringify(actual) !== JSON.stringify(expected)) return `wiring route ${route.id} references wire segment ${segmentId} with mismatched endpoints`;
-          if (segment.bom_item_id && !route.harness_bom.includes(segment.bom_item_id)) return `wiring route ${route.id} is missing BOM link for wire segment ${segmentId}`;
+        const routeSegments = (route.wire_segment_ids ?? []).map((segmentId) => candidate.wire_segments.find((item) => item.id === segmentId));
+        if (routeSegments.some((segment) => !segment)) return `wiring route ${route.id} references an unknown wire segment`;
+        if (routeSegments.length !== new Set(route.wire_segment_ids ?? []).size) return `wiring route ${route.id} contains duplicate wire segments`;
+        if (routeSegments.length > 0) {
+          const first = routeSegments[0];
+          const last = routeSegments.at(-1);
+          if (first.from_endpoint.connector_id !== route.from_connector.id || first.from_endpoint.part_id !== route.from_connector.part_id || last.to_endpoint.connector_id !== route.to_connector.id || last.to_endpoint.part_id !== route.to_connector.part_id) return `wiring route ${route.id} references wire segments with mismatched terminals`;
+          for (const [index, segment] of routeSegments.entries()) {
+            if (segment.bom_item_id && !route.harness_bom.includes(segment.bom_item_id)) return `wiring route ${route.id} is missing BOM link for wire segment ${route.wire_segment_ids[index]}`;
+            const next = routeSegments[index + 1];
+            if (next && (segment.to_endpoint.connector_id !== next.from_endpoint.connector_id || segment.to_endpoint.part_id !== next.from_endpoint.part_id)) return `wiring route ${route.id} references disconnected wire segments`;
+          }
         }
       }
     }

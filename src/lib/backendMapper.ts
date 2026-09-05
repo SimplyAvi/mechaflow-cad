@@ -753,13 +753,14 @@ const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElec
       const connector = [route.from_connector, route.to_connector].find((candidate) => candidate.id === endpoint.connector_id);
       return connector?.part_id === endpoint.part_id;
     })
-    && route.wire_segment_ids.every((id) => {
+    && route.wire_segment_ids.every((id, index) => {
       const segment = segments.find((candidate) => candidate.id === id);
+      const previous = index > 0 ? segments.find((candidate) => candidate.id === route.wire_segment_ids[index - 1]) : null;
+      const next = index + 1 < route.wire_segment_ids.length ? segments.find((candidate) => candidate.id === route.wire_segment_ids[index + 1]) : null;
       return segment != null
-        && segment.from_endpoint?.connector_id === route.from_connector.id
-        && segment.from_endpoint.part_id === route.from_connector.part_id
-        && segment.to_endpoint?.connector_id === route.to_connector.id
-        && segment.to_endpoint.part_id === route.to_connector.part_id
+        && (previous == null || (previous.to_endpoint?.connector_id === segment.from_endpoint?.connector_id && previous.to_endpoint.part_id === segment.from_endpoint.part_id))
+        && (index > 0 || (segment.from_endpoint?.connector_id === route.from_connector.id && segment.from_endpoint.part_id === route.from_connector.part_id))
+        && (next != null || (segment.to_endpoint?.connector_id === route.to_connector.id && segment.to_endpoint.part_id === route.to_connector.part_id))
         && (segment.bom_item_id == null || route.harness_bom.includes(segment.bom_item_id));
     })
     && route.clearance_min_mm != null

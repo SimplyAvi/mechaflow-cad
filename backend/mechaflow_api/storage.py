@@ -249,24 +249,37 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                 raise InvalidWiringEndpointError(
                     f"wiring route {route.id!r} references unknown wire segments: {unknown_wire_segments}"
                 )
-            expected_segment_endpoints = (
-                (route.from_connector.id, route.from_connector.part_id),
-                (route.to_connector.id, route.to_connector.part_id),
-            )
+            if len(route.wire_segment_ids) != len(set(route.wire_segment_ids)):
+                raise InvalidWiringEndpointError(f"wiring route {route.id!r} contains duplicate wire segments")
+            route_segments = []
             for segment_id in route.wire_segment_ids:
                 segment = next(segment for segment in project.wire_segments if segment.id == segment_id)
-                actual_segment_endpoints = (
-                    (segment.from_endpoint.connector_id, segment.from_endpoint.part_id),
-                    (segment.to_endpoint.connector_id, segment.to_endpoint.part_id),
-                )
-                if actual_segment_endpoints != expected_segment_endpoints:
-                    raise InvalidWiringEndpointError(
-                        f"wiring route {route.id!r} references wire segment {segment_id!r} with mismatched endpoints"
-                    )
+                route_segments.append(segment)
                 if segment.bom_item_id is not None and segment.bom_item_id not in route.harness_bom:
                     raise InvalidWiringEndpointError(
                         f"wiring route {route.id!r} is missing BOM link for wire segment {segment_id!r}"
                     )
+            if route_segments:
+                actual_segment_endpoints = [
+                    (route_segments[0].from_endpoint.connector_id, route_segments[0].from_endpoint.part_id),
+                    *[
+                        (segment.to_endpoint.connector_id, segment.to_endpoint.part_id)
+                        for segment in route_segments
+                    ],
+                ]
+                expected_segment_endpoints = [
+                    (route.from_connector.id, route.from_connector.part_id),
+                    (route.to_connector.id, route.to_connector.part_id),
+                ]
+                if actual_segment_endpoints[0] != expected_segment_endpoints[0] or actual_segment_endpoints[-1] != expected_segment_endpoints[-1]:
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} references wire segments with mismatched terminals"
+                    )
+                for previous, current in zip(route_segments, route_segments[1:]):
+                    if (previous.to_endpoint.connector_id, previous.to_endpoint.part_id) != (current.from_endpoint.connector_id, current.from_endpoint.part_id):
+                        raise InvalidWiringEndpointError(
+                            f"wiring route {route.id!r} references disconnected wire segments"
+                        )
             if route.rule_set_id is not None and route.rule_set_id not in wiring_rule_ids:
                 raise InvalidWiringEndpointError(
                     f"wiring route {route.id!r} references unknown wiring rule set {route.rule_set_id!r}"
