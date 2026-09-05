@@ -767,7 +767,10 @@ def _route_path_length_mm(route: WiringRoute) -> float | None:
         return None
     total = 0.0
     for start, end in zip(route.path_points_mm, route.path_points_mm[1:]):
-        total += math.dist((start.x, start.y, start.z), (end.x, end.y, end.z))
+        segment_length = math.dist((start.x, start.y, start.z), (end.x, end.y, end.z))
+        if segment_length <= 0:
+            return None
+        total += segment_length
     return total
 
 

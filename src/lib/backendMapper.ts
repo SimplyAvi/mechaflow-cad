@@ -967,8 +967,8 @@ export function mapProjectPanelDataToReferenceDesign(
         ? panelData.wiring_routes
         : backendAssemblies.flatMap((candidate) => candidate.wiring_routes),
       panelData.wiring_review,
-      panelData.electronics_components ?? [],
-      panelData.wire_segments ?? [],
+      panelData.electronics_components ?? project.electronics_components ?? [],
+      panelData.wire_segments ?? project.wire_segments ?? [],
       new Set((panelData.bom_items ?? []).map((item) => item.id)),
     ),
     wiringReview: mapWiringReview(panelData.wiring_review),
