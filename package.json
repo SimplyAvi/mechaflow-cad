@@ -15,6 +15,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint": "oxlint src --react-plugin --deny-warnings",
     "smoke": "node scripts/smoke-local.mjs",
     "ports:find": "node scripts/find-ports.mjs",
     "mock:api": "node scripts/mock-backend.mjs"
@@ -33,6 +34,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "electron": "^44.2.0",
     "jsdom": "^30.0.1",
+    "oxlint": "^1.81.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"

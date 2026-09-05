@@ -149,21 +149,21 @@ function App() {
 
   const selectedOption = materialOptions.find((option) => option.id === selectedOptionId) ?? materialOptions[0];
 
-  useEffect(() => {
-    if (materialOptions.length > 0 && !materialOptions.some((option) => option.id === selectedOptionId)) {
-      setSelectedOptionId(materialOptions[0].id);
-    }
-  }, [materialOptions, selectedOptionId]);
-
-  useEffect(() => {
+  const selectPart = (partId: string) => {
+    setSelectedPartId(partId);
     setSubstitutionPreview(null);
-  }, [selectedPart?.id, selectedOption?.id]);
+  };
+
+  const selectMaterialOption = (optionId: string) => {
+    setSelectedOptionId(optionId);
+    setSubstitutionPreview(null);
+  };
 
   const selectAssembly = (assemblyId: string) => {
     const assembly = design?.assemblies.find((candidate) => candidate.id === assemblyId);
     if (!assembly) return;
     setSelectedAssemblyId(assembly.id);
-    setSelectedPartId(assembly.parts[0]?.id ?? '');
+    selectPart(assembly.parts[0]?.id ?? '');
   };
 
   const runMaterialSubstitutionAction = async (action: 'preview' | 'apply') => {
@@ -371,7 +371,7 @@ function App() {
               onSelect={selectAssembly}
             />
           ) : null}
-          <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={setSelectedPartId} />
+          <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={selectPart} />
         </aside>
 
         <section className="viewer-card panel">
@@ -441,7 +441,7 @@ function App() {
                     aria-pressed={part.id === selectedPart.id}
                     className={`part-shape shape-${part.visual.shape ?? 'plate'} risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
                     key={part.id}
-                    onClick={() => setSelectedPartId(part.id)}
+                    onClick={() => selectPart(part.id)}
                     style={{
                       '--x': `${part.visual.x}%`,
                       '--y': `${part.visual.y}%`,
@@ -514,7 +514,7 @@ function App() {
             message={substitutionMessage}
             onApply={() => runMaterialSubstitutionAction('apply')}
             onPreview={() => runMaterialSubstitutionAction('preview')}
-            onSelect={setSelectedOptionId}
+            onSelect={selectMaterialOption}
             options={materialOptions}
             pending={substitutionPending}
             previewActive={Boolean(substitutionPreview)}
