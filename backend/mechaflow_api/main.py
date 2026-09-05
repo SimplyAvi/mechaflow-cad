@@ -15,14 +15,19 @@ from .adapters import choose_adapter, get_adapter_for_job, list_adapter_statuses
 from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS
 from .models import (
     AnalysisArtifact,
+    AnalysisConstraint,
     AnalysisJob,
     AnalysisJobPlan,
     AnalysisJobRequest,
     AnalysisJobStatus,
+    AnalysisLoadCase,
+    AnalysisReadinessPreview,
+    AnalysisReadinessRequest,
     AnalysisReport,
     Assembly,
     BOMItem,
     CatalogSeedResponse,
+    ExpectedAnalysisResultArtifact,
     ManufacturingOption,
     Material,
     Modification,
@@ -32,6 +37,8 @@ from .models import (
     ProjectModificationResponse,
     ProjectPanelData,
     ReferenceDesign,
+    SolverInputSpec,
+    SolverPipelineStep,
     TaskRequirement,
     WiringRoute,
     validate_project_id,
@@ -42,6 +49,7 @@ from .services import (
     MaterialNotFoundError,
     PartNotFoundError,
     apply_project_modification,
+    build_analysis_readiness_preview,
     build_project_panel_data,
     collect_project_bom_items,
     collect_project_manufacturing_options,
@@ -106,6 +114,13 @@ SCHEMA_MODELS = [
     ManufacturingOption,
     WiringRoute,
     AnalysisReport,
+    AnalysisReadinessPreview,
+    AnalysisReadinessRequest,
+    AnalysisLoadCase,
+    AnalysisConstraint,
+    ExpectedAnalysisResultArtifact,
+    SolverInputSpec,
+    SolverPipelineStep,
     Modification,
     ProjectModificationResponse,
     CatalogSeedResponse,
@@ -123,6 +138,7 @@ CONCEPTS = {
     "materials": "Open or sourced material properties with confidence labels and manufacturing compatibility.",
     "task_requirements": "Task-preserving constraints such as payload, reach, cycle time, envelope, fatigue, and serviceability.",
     "analysis_jobs": "Queued orchestration work for FreeCAD, FEA, wiring, BOM, manufacturing, and report generation workers.",
+    "analysis_readiness": "Pre-solver load cases, constraints, material provenance, thermal guidance, and expected FEA artifacts without claiming a solve.",
     "manufacturing_options": "Ways to make or buy a part, including cost range, lead time, supplier link, and risk notes.",
     "wiring_routes": "Connector-to-connector harness paths with bend-radius, clearance, and harness BOM metadata.",
     "reports": "Advisory summaries of task status, payload re-rating, cost, manufacturing, wiring, risks, and unknowns.",
@@ -306,6 +322,37 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if project_id == "sample":
             project_id = "project-open-gripper-demo"
         return build_project_panel_data(get_project_or_404(project_id))
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/analysis-readiness/previews",
+        response_model=AnalysisReadinessPreview,
+        tags=["analysis-readiness"],
+    )
+    def create_analysis_readiness_preview(
+        project_id: str,
+        request: AnalysisReadinessRequest,
+    ) -> AnalysisReadinessPreview:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        try:
+            return build_analysis_readiness_preview(
+                project,
+                request.target_id,
+                include_demo_estimates=request.include_demo_estimates,
+            )
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="analysis target not found") from exc
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/analysis-readiness/{{target_id}}",
+        response_model=AnalysisReadinessPreview,
+        tags=["analysis-readiness"],
+    )
+    def analysis_readiness_preview(project_id: str, target_id: str) -> AnalysisReadinessPreview:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        try:
+            return build_analysis_readiness_preview(project, target_id)
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="analysis target not found") from exc
 
     @app.get(
         f"{settings.api_prefix}/projects/{{project_id}}/task-requirements",

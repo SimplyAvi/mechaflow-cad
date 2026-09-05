@@ -42,13 +42,37 @@ class FreeCADAdapter(StubAdapter):
     )
 
 
+class FreeCADFeaPrepAdapter(StubAdapter):
+    adapter_id = "freecad-fea-prep"
+    capabilities = (
+        AdapterCapability(
+            name="prepare-analysis-geometry",
+            input_formats=("FCStd", "STEP", "part-map JSON", "load-case JSON"),
+            output_formats=("BREP", "STEP", "named-face JSON", "material-property JSON"),
+            required_tools=("FreeCAD",),
+        ),
+    )
+
+
+class GmshMeshingAdapter(StubAdapter):
+    adapter_id = "gmsh-meshing"
+    capabilities = (
+        AdapterCapability(
+            name="generate-finite-element-mesh",
+            input_formats=("BREP", "STEP", "named-face JSON", "mesh-control JSON"),
+            output_formats=("MSH", "mesh-quality JSON"),
+            required_tools=("Gmsh",),
+        ),
+    )
+
+
 class CalculixGmshAdapter(StubAdapter):
     adapter_id = "calculix-gmsh"
     capabilities = (
         AdapterCapability(
             name="static-structural-fea",
-            input_formats=("STEP", "BREP", "FreeCAD FEM case JSON"),
-            output_formats=("FRD", "VTK", "JSON rating report"),
+            input_formats=("STEP", "BREP", "MSH", "load-case JSON", "constraint JSON", "material-property JSON"),
+            output_formats=("INP", "FRD", "DAT", "VTK", "JSON rating report"),
             required_tools=("CalculiX", "Gmsh"),
         ),
     )

@@ -65,6 +65,7 @@ def test_metadata_exposes_frontend_concepts_and_schema_names() -> None:
         "materials",
         "task_requirements",
         "analysis_jobs",
+        "analysis_readiness",
         "manufacturing_options",
         "wiring_routes",
         "reports",
@@ -76,6 +77,8 @@ def test_metadata_exposes_frontend_concepts_and_schema_names() -> None:
     assert "Project" in schema_payload
     assert "ReferenceDesign" in schema_payload
     assert "AnalysisReport" in schema_payload
+    assert "AnalysisReadinessPreview" in schema_payload
+    assert "SolverInputSpec" in schema_payload
 
 
 def test_catalog_and_sample_project_are_structured() -> None:
@@ -118,7 +121,12 @@ def test_catalog_and_sample_project_are_structured() -> None:
 
     panel = client.get("/api/projects/sample/panel-data")
     assert panel.status_code == 200
-    assert panel.json()["project"]["id"] == "project-open-gripper-demo"
+    panel_payload = panel.json()
+    assert panel_payload["project"]["id"] == "project-open-gripper-demo"
+    assert any(
+        preview["target_id"] == "part-finger-link"
+        for preview in panel_payload["analysis_readiness_previews"]
+    )
 
 
 def test_frontend_mock_projection_keeps_backend_handoff_identity() -> None:
@@ -677,6 +685,75 @@ def test_project_modification_requires_explicit_compatibility_data() -> None:
 
     assert response.status_code == 422
     assert "requires review" in response.json()["detail"]
+
+
+def test_analysis_readiness_preview_exposes_pre_solver_contract_without_running_fea() -> None:
+    response = client.get("/api/projects/project-open-gripper-demo/analysis-readiness/part-finger-link")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["target_id"] == "part-finger-link"
+    assert payload["state"] == "pre_solver_ready"
+    assert payload["trust_label"] == "pre_solver_input"
+    assert "not a real FEA result" in payload["summary"]
+    assert payload["load_cases"][0]["load_type"] == "force"
+    assert payload["load_cases"][0]["magnitude"] == 50
+    assert payload["material_properties"]["material_id"] == "mat-aluminum-6061-t6"
+    assert payload["thermal_guidance"]["review_required"] is True
+    assert {artifact["kind"] for artifact in payload["expected_result_artifacts"]} >= {
+        "geometry_prep",
+        "mesh",
+        "solver_deck",
+        "solver_results",
+    }
+    assert [step["open_source_tool"] for step in payload["solver_pipeline"]] == [
+        "FreeCAD",
+        "Gmsh",
+        "CalculiX",
+        "Python, VTK, and open report templates",
+    ]
+    assert any("Demo estimate only" in estimate for estimate in payload["demo_estimates"])
+
+    created_preview = client.post(
+        "/api/projects/project-open-gripper-demo/analysis-readiness/previews",
+        json={"target_id": "part-controller-pcb"},
+    )
+    assert created_preview.status_code == 200
+    assert created_preview.json()["target_id"] == "part-controller-pcb"
+    assert created_preview.json()["state"] in {"pre_solver_ready", "blocked_missing_inputs"}
+    assert client.get("/api/projects/project-open-gripper-demo/analysis-readiness/part-typo").status_code == 404
+
+
+def test_analysis_readiness_preview_covers_assemblies_and_honors_demo_estimate_flag() -> None:
+    assembly_response = client.get(
+        "/api/projects/project-open-gripper-demo/analysis-readiness/asm-open-gripper-demo"
+    )
+
+    assert assembly_response.status_code == 200
+    assembly = assembly_response.json()
+    assert assembly["target_kind"] == "assembly"
+    assert assembly["state"] == "blocked_missing_inputs"
+    assert assembly["material_properties"] is None
+    assert any("aggregate" in message.lower() for message in assembly["review_required"])
+
+    without_estimates = client.post(
+        "/api/projects/project-open-gripper-demo/analysis-readiness/previews",
+        json={"target_id": "part-finger-link", "include_demo_estimates": False},
+    )
+
+    assert without_estimates.status_code == 200
+    assert without_estimates.json()["demo_estimates"] == []
+
+
+def test_project_rejects_ambiguous_part_and_assembly_target_ids() -> None:
+    project = deepcopy(sample)
+    project["id"] = "project-ambiguous-targets"
+    project["assemblies"][0]["id"] = project["assemblies"][0]["parts"][0]["id"]
+
+    response = local_client.post("/api/projects", json=project)
+
+    assert response.status_code == 422
+    assert "must not overlap" in response.json()["detail"]
 
 
 def test_create_analysis_job_selects_matching_stub_adapter() -> None:

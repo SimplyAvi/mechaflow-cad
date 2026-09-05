@@ -32,6 +32,10 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(finger?.visual.explodeX).toBe(32);
     expect(finger?.visual.shape).toBe('tool');
     expect(finger?.designCriteria[0]?.sourceConfidence).toMatch(/Part metadata demo estimate/i);
+    expect(finger?.analysisReadiness.state).toBe('pre_solver_ready');
+    expect(finger?.analysisReadiness.summary).toMatch(/not a real FEA result/i);
+    expect(finger?.analysisReadiness.expected_result_artifacts.map((artifact) => artifact.kind))
+      .toContain('mesh');
   });
 
   it('does not derive a physical payload rating from the task target', () => {
@@ -78,6 +82,23 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(steelOption?.safetyFactor).toBeNull();
     expect(steelOption?.status).toBe('watch');
     expect(steelOption?.taskImpact).toMatch(/no worker-supplied payload rating.*review is required/i);
+  });
+
+  it('builds aggregate fallback readiness for assemblies', () => {
+    const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
+    const readiness = design.assembly.analysisReadiness;
+
+    expect(readiness.target_id).toBe(design.assembly.id);
+    expect(readiness.target_kind).toBe('assembly');
+    expect(readiness.load_cases[0]?.target_part_ids).toEqual(design.assembly.parts.map((part) => part.id));
+    expect(readiness.constraints[0]?.target_part_ids).toEqual(design.assembly.parts.map((part) => part.id));
+    expect(readiness.recommended_job_request?.target_id).toBe(design.assembly.id);
+    expect(readiness.state).toBe('blocked_missing_inputs');
+    expect(readiness.material_properties).toBeNull();
+    expect(readiness.criteria).toEqual(expect.arrayContaining([
+      expect.stringMatching(/assembly load path/i),
+    ]));
+    expect(readiness.demo_estimates).toEqual([]);
   });
 
   it('keeps unrated material previews material-only', () => {
@@ -212,4 +233,5 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.assembly.parts.length).toBeGreaterThan(0);
     expect(design.backend.integrationStubs).toContain('kicad-electronics-worker');
   });
+
 });

@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Use Gmsh for mesh generation and CalculiX for static structural checks that support advisory capability re-rating.
+Use FreeCAD, Gmsh, and CalculiX as separable future workers for geometry preparation, mesh generation, and static structural checks that support advisory capability re-rating. The current MVP records pre-solver inputs and expected artifacts only; it does not run FEA.
 
 ## Initial capabilities
 
 - Create meshes for selected parts or simplified assemblies.
 - Apply material data from `data/materials.seed.json`.
 - Apply load cases from task definitions.
-- Run static stress and displacement checks.
-- Return factor of safety, limiting part, displacement, and confidence.
+- Future worker: run static stress and displacement checks.
+- Future worker: return factor of safety, limiting part, displacement, and confidence.
 
 ## Inputs
 
@@ -21,10 +21,10 @@ Use Gmsh for mesh generation and CalculiX for static structural checks that supp
 
 ## Outputs
 
-- Mesh files.
-- CalculiX input and result files.
-- Images or VTK-style visualization artifacts.
-- JSON rating report with assumptions and warnings.
+- Future artifacts: mesh files.
+- Future artifacts: CalculiX input and result files.
+- Future artifacts: images or VTK-style visualization artifacts.
+- Future artifact: JSON rating report with assumptions and warnings.
 
 ## Implementation notes
 
@@ -32,6 +32,7 @@ Use Gmsh for mesh generation and CalculiX for static structural checks that supp
 - Include mesh quality, convergence status, and boundary condition assumptions.
 - Fail closed when material values are unknown.
 - Let cheap local workers run small jobs before cloud compute is considered.
+- Replace demo estimates only after a real solver attaches result artifacts and a qualified reviewer approves them.
 
 ## Stub
 

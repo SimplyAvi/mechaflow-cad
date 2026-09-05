@@ -16,6 +16,7 @@ export const mockBackendMetadata = {
     'materials',
     'task_requirements',
     'analysis_jobs',
+    'analysis_readiness',
     'manufacturing_options',
     'wiring_routes',
     'reports',
@@ -29,6 +30,8 @@ export const mockBackendMetadata = {
   },
   integration_stubs: [
     { name: 'freecad-worker', status: 'stubbed' },
+    { name: 'freecad-fea-prep-worker', status: 'stubbed' },
+    { name: 'gmsh-meshing-worker', status: 'stubbed' },
     { name: 'calculix-fea-worker', status: 'stubbed' },
     { name: 'kicad-electronics-worker', status: 'stubbed' },
     { name: 'wireviz-harness-worker', status: 'stubbed' },

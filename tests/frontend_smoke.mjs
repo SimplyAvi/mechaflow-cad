@@ -102,10 +102,7 @@ const moduleSource = await moduleResponse.text();
 // Browser-like globals: the module's page bootstrap runs on import and resolves
 // its relative endpoints against the page origin, exactly as a browser would.
 const pageDocument = documentFromHtml(html);
-const pageWindow = {
-  document: pageDocument,
-  location: new URL(`${baseUrl}/`),
-};
+const pageWindow = { document: pageDocument, location: new URL(`${baseUrl}/`) };
 for (const script of scripts.filter((match) => !/\btype="module"/.test(match[1]))) {
   const scriptUrl = new URL(script[2], `${baseUrl}/`).href;
   const scriptResponse = await originFetch(scriptUrl);
@@ -184,8 +181,8 @@ await frontend.renderCatalog({
   endpoint: '/stub',
   fetch: stubFetch(hostileItems),
 });
-const hostileCard = hostileDoc.byId['catalog-reference-designs'].children[0];
-const hostileHeading = descendants(hostileCard).find((node) => node.tagName === 'strong');
+const hostileCard = hostileDoc.byId.catalog.children[0];
+const hostileHeading = descendants(hostileCard).find((node) => node.tagName === 'h2');
 assert.equal(hostileHeading.ownText, hostileItems[0].name, 'names must be set as text, not markup');
 assert.equal(
   descendants(hostileCard).find((node) => node.tagName === 'a'),
@@ -202,7 +199,7 @@ await frontend.renderCatalog({
   fetch: stubFetch([{ id: 'partial', name: 'Partial entry' }]),
 });
 assert.equal(
-  missingFieldsDoc.byId['catalog-reference-designs'].children.length,
+  missingFieldsDoc.byId.catalog.children.length,
   1,
   'an incomplete entry must still render instead of blanking the catalog',
 );

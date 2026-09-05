@@ -166,11 +166,12 @@ function App() {
     <main className="app-shell">
       <header className="hero-card">
         <div>
-          <p className="eyebrow">Review-ready visual MVP</p>
+          <p className="eyebrow">Analysis-ready visual MVP</p>
           <h1>Robot arm CAD review cockpit</h1>
           <p className="hero-copy">
             Open the desktop-style demo, orbit a robot arm assembly, explode or collapse the mechanism, select
-            individual parts, and read honest design criteria before real FreeCAD or FEA workers exist.
+            individual parts, and read explicit pre-solver load cases, stiffness guidance, thermal limits, and
+            review-required notes before real FreeCAD or FEA workers exist.
           </p>
         </div>
         <div className="task-card" aria-label="Preserved task">
@@ -355,6 +356,8 @@ function App() {
             targetPayloadLb={design.task.targetPayloadLb}
           />
           <StrengthInfoPanel part={selectedPart} />
+          <PreSolverReadinessPanel readiness={activeAssembly.analysisReadiness} title="Assembly readiness" />
+          <PreSolverReadinessPanel readiness={selectedPart.analysisReadiness} title="Part readiness" />
           <MaterialSubstitution options={materialOptions} selectedOption={selectedOption} onSelect={setSelectedOptionId} />
           <ModificationPreview selectedOption={selectedOption} />
         </aside>
@@ -489,6 +492,97 @@ function StrengthInfoPanel({ part }: { part: Part }) {
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+function PreSolverReadinessPanel({ readiness, title }: { readiness: Part['analysisReadiness']; title: string }) {
+  const material = readiness.material_properties;
+  const thermal = readiness.thermal_guidance;
+  const stateLabel = readiness.state === 'pre_solver_ready'
+    ? 'Pre-solver ready'
+    : readiness.state === 'solver_result_available'
+      ? 'Real solver result available'
+      : 'Review required before solve';
+  const trustLabel = readiness.trust_label === 'solver_result'
+    ? 'real solver result'
+    : readiness.trust_label === 'demo_estimate'
+      ? 'demo estimate only'
+      : 'pre-solver input only';
+  const thermalLimit = thermal?.heat_deflection_temp_c ?? thermal?.max_service_temp_c ?? null;
+
+  return (
+    <section className="readiness-panel" aria-label={`${title} pre-solver analysis readiness`}>
+      <p className="eyebrow">{title}</p>
+      <div className={`readiness-banner state-${readiness.state}`}>
+        <span>{stateLabel}</span>
+        <strong>{trustLabel} - no FEA claim unless a solver result is present</strong>
+      </div>
+      <p>{readiness.summary}</p>
+      <dl className="readiness-summary">
+        <div>
+          <dt>Stiffness input</dt>
+          <dd>
+            {material?.properties.elastic_modulus_gpa == null
+              ? 'Review required'
+              : `${formatMeasurement(material.properties.elastic_modulus_gpa)} GPa elastic modulus`}
+          </dd>
+        </div>
+        <div>
+          <dt>Yield input</dt>
+          <dd>
+            {material?.properties.yield_strength_mpa == null
+              ? 'Review required'
+              : `${formatMeasurement(material.properties.yield_strength_mpa)} MPa yield strength`}
+          </dd>
+        </div>
+        <div>
+          <dt>Heat limit</dt>
+          <dd>{thermalLimit == null ? 'Review required' : `${formatMeasurement(thermalLimit)} C screening limit`}</dd>
+        </div>
+        <div>
+          <dt>Material provenance</dt>
+          <dd>{material?.provenance.replaceAll('_', ' ') ?? 'review required'}</dd>
+        </div>
+      </dl>
+      <div className="readiness-stack">
+        <div>
+          <h4>Explicit load cases</h4>
+          {readiness.load_cases.length > 0 ? readiness.load_cases.map((load) => (
+            <p key={load.id}>
+              <strong>{load.name}</strong>: {load.magnitude == null ? 'magnitude review required' : `${formatMeasurement(load.magnitude)} ${load.unit ?? ''}`} on {load.application_region}.
+            </p>
+          )) : <p>Load case review required before a worker can solve this part.</p>}
+        </div>
+        <div>
+          <h4>Constraints</h4>
+          {readiness.constraints.map((constraint) => (
+            <p key={constraint.id}>
+              <strong>{constraint.name}</strong>: {constraint.constraint_type.replaceAll('_', ' ')} at {constraint.region}.
+            </p>
+          ))}
+        </div>
+        <div>
+          <h4>Solver handoff artifacts</h4>
+          <ul>
+            {readiness.expected_result_artifacts.slice(0, 4).map((artifact) => (
+              <li key={artifact.kind}>{artifact.title} from {artifact.produced_by} ({artifact.file_format})</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h4>Review required</h4>
+          <ul>
+            {readiness.review_required.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+      {readiness.demo_estimates.length > 0 ? (
+        <div className="demo-estimate-note">
+          <strong>Demo estimates, not FEA</strong>
+          <ul>{readiness.demo_estimates.map((estimate) => <li key={estimate}>{estimate}</li>)}</ul>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -669,6 +763,8 @@ function BackendContractPanel({ design }: { design: ReferenceDesign }) {
     '/api/catalog/seed',
     '/api/projects/sample',
     design.backend.endpoint,
+    `/api/projects/${design.backend.projectId}/analysis-readiness/${design.assembly.parts[0]?.id ?? 'part-id'}`,
+    `/api/projects/${design.backend.projectId}/analysis-readiness/previews`,
     `/api/projects/${design.backend.projectId}/modifications`,
   ];
 

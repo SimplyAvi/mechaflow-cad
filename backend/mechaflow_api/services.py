@@ -4,14 +4,28 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import uuid4
 
 from pydantic import ValidationError
 
 from .models import (
+    AnalysisConstraint,
+    AnalysisConstraintType,
+    AnalysisJobRequest,
+    AnalysisJobType,
+    AnalysisLoadCase,
+    AnalysisLoadType,
+    AnalysisMaterialPropertySet,
+    AnalysisReadinessPreview,
+    AnalysisReadinessState,
     AnalysisReport,
+    AnalysisResultTrust,
+    AnalysisThermalGuidance,
     BOMItem,
+    ExpectedAnalysisResultArtifact,
     ManufacturingProcess,
+    Material,
     Modification,
     Part,
     PartDimensions,
@@ -19,8 +33,13 @@ from .models import (
     Project,
     ProjectModificationResponse,
     ProjectPanelData,
+    RecommendationConfidence,
     ReportStatus,
+    SolverInputSpec,
+    SolverPipelineStep,
+    SolverPipelineStepStatus,
     TaskRequirement,
+    Vector3,
     WiringRoute,
 )
 
@@ -46,6 +65,7 @@ class InvalidDimensionChangeError(ProjectModificationError):
 
 
 _EDITABLE_DIMENSION_FIELDS = {"length_mm", "width_mm", "height_mm", "thickness_mm"}
+DEFAULT_SOLVER_MESH_SIZE_MM = 4.0
 
 
 def apply_project_modification(project: Project, modification: Modification) -> ProjectModificationResponse:
@@ -265,6 +285,299 @@ def _build_modification_report(
     )
 
 
+def _find_material(project: Project, part: Part) -> Material | None:
+    if part.material_id is None:
+        return None
+    return next((material for material in project.materials if material.id == part.material_id), None)
+
+
+def _part_demo_estimate(part: Part) -> tuple[float | None, str | None]:
+    demo_criteria = part.metadata.get("demo_design_criteria")
+    if not isinstance(demo_criteria, dict):
+        return None, None
+    capacity = demo_criteria.get("load_capacity_lb")
+    note = demo_criteria.get("load_capacity_note")
+    return (
+        capacity if isinstance(capacity, (int, float)) and math.isfinite(capacity) else None,
+        note if isinstance(note, str) and note.strip() else None,
+    )
+
+
+def _analysis_expected_artifacts() -> list[ExpectedAnalysisResultArtifact]:
+    return [
+        ExpectedAnalysisResultArtifact(
+            kind="geometry_prep",
+            title="FreeCAD analysis geometry package",
+            file_format="STEP or BREP plus part-map JSON",
+            produced_by="freecad-fea-prep-worker",
+        ),
+        ExpectedAnalysisResultArtifact(
+            kind="mesh",
+            title="Gmsh finite-element mesh",
+            file_format=".msh plus mesh-quality JSON",
+            produced_by="gmsh-meshing-worker",
+        ),
+        ExpectedAnalysisResultArtifact(
+            kind="solver_deck",
+            title="CalculiX static structural input deck",
+            file_format=".inp",
+            produced_by="calculix-fea-worker",
+        ),
+        ExpectedAnalysisResultArtifact(
+            kind="solver_results",
+            title="Stress, displacement, and safety-factor result package",
+            file_format=".frd, .vtk, and advisory JSON report",
+            produced_by="calculix-fea-worker",
+        ),
+    ]
+
+
+def _analysis_solver_pipeline() -> list[SolverPipelineStep]:
+    return [
+        SolverPipelineStep(
+            order=1,
+            adapter_name="freecad-fea-prep-worker",
+            open_source_tool="FreeCAD",
+            action="Prepare defeatured analysis geometry, named faces, and units.",
+            consumes=["source_file", "assembly nodes", "part metadata"],
+            produces=["STEP or BREP analysis solid", "part-map JSON", "named-face set"],
+            status=SolverPipelineStepStatus.ready_for_worker,
+            review_notes=["Geometry prep is a contract only; the API does not import FreeCAD yet."],
+        ),
+        SolverPipelineStep(
+            order=2,
+            adapter_name="gmsh-meshing-worker",
+            open_source_tool="Gmsh",
+            action="Generate mesh with quality metrics and element-size provenance.",
+            consumes=["analysis solid", "named faces", "mesh sizing policy"],
+            produces=[".msh mesh", "mesh-quality JSON"],
+            review_notes=["Mesh convergence and local refinement rules are future work."],
+        ),
+        SolverPipelineStep(
+            order=3,
+            adapter_name="calculix-fea-worker",
+            open_source_tool="CalculiX",
+            action="Run static structural solve from explicit loads, constraints, and material properties.",
+            consumes=[".msh mesh", "material property JSON", "load and constraint JSON"],
+            produces=[".inp deck", ".frd results", ".dat solver log"],
+            review_notes=["No solver is invoked by the readiness preview endpoint."],
+        ),
+        SolverPipelineStep(
+            order=4,
+            adapter_name="fea-report-worker",
+            open_source_tool="Python, VTK, and open report templates",
+            action="Extract stress, displacement, safety factor, assumptions, and review-required flags.",
+            consumes=["CalculiX results", "mesh-quality JSON", "task requirements"],
+            produces=["analysis report JSON", "preview images", "review checklist"],
+            review_notes=["Report artifacts will replace demo estimates only after a real solver completes."],
+        ),
+    ]
+
+
+def build_analysis_readiness_preview(
+    project: Project,
+    target_id: str,
+    include_demo_estimates: bool = True,
+) -> AnalysisReadinessPreview:
+    """Build an honest pre-solver preview without running CAD, meshing, or FEA."""
+
+    target_part = next((part for assembly in project.assemblies for part in assembly.parts if part.id == target_id), None)
+    target_assembly = next((assembly for assembly in project.assemblies if assembly.id == target_id), None)
+    if target_part is None and target_assembly is None:
+        raise PartNotFoundError(target_id)
+
+    if target_part is not None:
+        part_ids = [target_part.id]
+        target_name = target_part.name
+        target_kind: Literal["part", "assembly"] = "part"
+        material = _find_material(project, target_part)
+        source_file = target_part.source_file.strip() if target_part.source_file and target_part.source_file.strip() else None
+        dimensions_ready = any(
+            value is not None
+            for value in (
+                target_part.dimensions.length_mm,
+                target_part.dimensions.width_mm,
+                target_part.dimensions.height_mm,
+                target_part.dimensions.thickness_mm,
+            )
+        )
+        fastener_region = ", ".join(target_part.related_fasteners) or "fixture faces need CAD naming"
+        demo_capacity_lb, demo_note = _part_demo_estimate(target_part)
+    else:
+        part_ids = [part.id for part in target_assembly.parts]
+        target_name = target_assembly.name
+        target_kind = "assembly"
+        material_ids = {part.material_id for part in target_assembly.parts}
+        material = (
+            _find_material(project, target_assembly.parts[0])
+            if len(material_ids) == 1 and target_assembly.parts and None not in material_ids
+            else None
+        )
+        source_files = [part.source_file for part in target_assembly.parts]
+        source_file = ", ".join(source.strip() for source in source_files) if source_files and all(
+            source and source.strip() for source in source_files
+        ) else None
+        dimensions_ready = bool(part_ids) and all(
+            any(value is not None for value in (
+                part.dimensions.length_mm,
+                part.dimensions.width_mm,
+                part.dimensions.height_mm,
+                part.dimensions.thickness_mm,
+            ))
+            for part in target_assembly.parts
+        )
+        fastener_region = "assembly fixtures and contact sets need CAD naming"
+        demo_capacity_lb, demo_note = None, None
+
+    task = project.active_task
+    has_payload_task = task is not None and task.kind.value == "lift_payload" and task.target_value is not None
+    load_cases = []
+    if has_payload_task:
+        load_cases.append(
+            AnalysisLoadCase(
+                id=f"load-{target_id}-active-task",
+                name="Preserved task static payload screening load",
+                description=(
+                    f"Use the active task target of {task.target_value:g} {task.unit or ''} as a pre-solver static load. "
+                    "Load direction and contact patch must be reviewed before any real solve."
+                ),
+                load_type=AnalysisLoadType.force,
+                target_part_ids=part_ids,
+                magnitude=task.target_value,
+                unit=task.unit,
+                direction=Vector3(z=-1),
+                application_region="estimated grip or reaction region from seed metadata",
+                confidence=RecommendationConfidence.heuristic,
+            )
+        )
+
+    constraints = [
+        AnalysisConstraint(
+            id=f"constraint-{target_id}-fixtures",
+            name="Fixture and fastener support set",
+            constraint_type=AnalysisConstraintType.pinned if target_part is not None else AnalysisConstraintType.review_required,
+            target_part_ids=part_ids,
+            region=fastener_region,
+            degrees_of_freedom=["translation_x", "translation_y", "translation_z"],
+            confidence=RecommendationConfidence.heuristic,
+        )
+    ]
+
+    review_required = [
+        "Named faces, contact regions, and fixture assumptions must be reviewed in CAD before solving.",
+        "A qualified reviewer must approve any factor-of-safety interpretation before release.",
+    ]
+    if not has_payload_task:
+        review_required.append("No load-bearing task was available for an explicit structural load case.")
+    if source_file is None:
+        review_required.append(
+            "No source CAD file reference is attached to this part."
+            if target_part is not None
+            else "No source CAD file references are attached to every assembly part."
+        )
+    if material is None:
+        review_required.append(
+            "No material property set is attached to this part."
+            if target_part is not None
+            else "A single aggregate material property set is not attached to this assembly."
+        )
+    if not dimensions_ready:
+        review_required.append("Geometry dimensions are incomplete for mesh sizing.")
+
+    if material is not None:
+        material_properties = AnalysisMaterialPropertySet(
+            material_id=material.id,
+            material_name=material.name,
+            properties=material.properties,
+            provenance=material.confidence,
+            source=material.source,
+            review_notes=[*material.notes, "Replace seed properties with a sourced material record before engineering use."],
+        )
+        heat_limit = material.properties.heat_deflection_temp_c or material.properties.max_service_temp_c
+        thermal_guidance = AnalysisThermalGuidance(
+            max_service_temp_c=material.properties.max_service_temp_c,
+            heat_deflection_temp_c=material.properties.heat_deflection_temp_c,
+            guidance=(
+                "Seed material temperature guidance is present but not a thermal simulation. "
+                "Use a sourced datasheet and thermal load case before heat-sensitive release decisions."
+                if heat_limit is not None
+                else "Temperature limit is missing and must be reviewed from a material datasheet."
+            ),
+            confidence=material.confidence,
+            review_required=True,
+        )
+    else:
+        material_properties = None
+        thermal_guidance = AnalysisThermalGuidance(
+            guidance="Material selection is missing, so thermal limits cannot be screened yet.",
+            confidence=RecommendationConfidence.unknown,
+        )
+
+    blocking_inputs_missing = any(
+        message.startswith(("No source CAD", "No material", "A single aggregate", "Geometry dimensions", "No load-bearing"))
+        for message in review_required
+    )
+    state = AnalysisReadinessState.blocked_missing_inputs if blocking_inputs_missing else AnalysisReadinessState.pre_solver_ready
+    summary = (
+        "Pre-solver ready: explicit loads, constraints, material properties, and expected solver artifacts are recorded. "
+        "This is not a real FEA result."
+        if state is AnalysisReadinessState.pre_solver_ready
+        else "Review required before meshing or solving: one or more required analysis inputs are missing. No FEA was run."
+    )
+    demo_estimates = []
+    if include_demo_estimates and demo_capacity_lb is not None:
+        demo_estimates.append(
+            f"Demo estimate only: seeded capacity {demo_capacity_lb:g} lb. This must be replaced by solver and test evidence."
+        )
+    if include_demo_estimates and demo_note:
+        demo_estimates.append(demo_note)
+
+    criteria = [
+        "Load path: tie the active task load to named CAD faces, fasteners, bearings, or contact pads.",
+        "Stiffness: use elastic modulus as material input only; real displacement must come from a solver or test.",
+        "Thermal: use heat-deflection or service temperature as a screening limit, not a thermal result.",
+        "Manufacturing: process, grain direction, print orientation, and fastener preload remain review-required.",
+    ]
+
+    return AnalysisReadinessPreview(
+        project_id=project.id,
+        target_id=target_id,
+        target_name=target_name,
+        target_kind=target_kind,
+        state=state,
+        trust_label=AnalysisResultTrust.pre_solver_input,
+        summary=summary,
+        criteria=criteria,
+        load_cases=load_cases,
+        constraints=constraints,
+        material_properties=material_properties,
+        thermal_guidance=thermal_guidance,
+        solver_inputs=SolverInputSpec(
+            geometry_source=source_file,
+            mesh_size_mm=DEFAULT_SOLVER_MESH_SIZE_MM if dimensions_ready else None,
+            freecad_document="future FreeCAD document or STEP import path",
+            gmsh_model="future Gmsh .geo or API-generated mesh model",
+            calculix_input_deck="future CalculiX .inp deck",
+            notes=["Units and coordinate frames must be normalized by the worker before solve."],
+        ),
+        expected_result_artifacts=_analysis_expected_artifacts(),
+        solver_pipeline=_analysis_solver_pipeline(),
+        demo_estimates=demo_estimates,
+        review_required=review_required,
+        recommended_job_request=AnalysisJobRequest(
+            job_type=AnalysisJobType.run_fea,
+            target_id=target_id,
+            project_id=project.id,
+            input_summary={
+                "readiness_state": state.value,
+                "load_case_ids": [load_case.id for load_case in load_cases],
+                "constraint_ids": [constraint.id for constraint in constraints],
+                "message": "Create a solver job only after review-required inputs are resolved.",
+            },
+        ),
+    )
+
+
 def collect_project_task_requirements(project: Project) -> list[TaskRequirement]:
     return [project.active_task] if project.active_task else []
 
@@ -314,6 +627,14 @@ def collect_project_wiring_routes(project: Project) -> list[WiringRoute]:
 
 
 def build_project_panel_data(project: Project) -> ProjectPanelData:
+    previews = [
+        build_analysis_readiness_preview(project, part.id)
+        for assembly in project.assemblies
+        for part in assembly.parts
+    ] + [
+        build_analysis_readiness_preview(project, assembly.id)
+        for assembly in project.assemblies
+    ]
     return ProjectPanelData(
         project=project,
         task_requirements=collect_project_task_requirements(project),
@@ -321,4 +642,5 @@ def build_project_panel_data(project: Project) -> ProjectPanelData:
         manufacturing_options=collect_project_manufacturing_options(project),
         wiring_routes=collect_project_wiring_routes(project),
         reports=project.reports,
+        analysis_readiness_previews=previews,
     )

@@ -6,6 +6,8 @@ from .contracts import IntegrationAdapter
 from .stub_adapters import (
     CalculixGmshAdapter,
     FreeCADAdapter,
+    FreeCADFeaPrepAdapter,
+    GmshMeshingAdapter,
     KiCadStepUpAdapter,
     ManufacturingPacketAdapter,
     MaterialsStandardsAdapter,
@@ -19,6 +21,8 @@ def build_stub_adapters() -> tuple[IntegrationAdapter, ...]:
 
     return (
         FreeCADAdapter(),
+        FreeCADFeaPrepAdapter(),
+        GmshMeshingAdapter(),
         CalculixGmshAdapter(),
         KiCadStepUpAdapter(),
         WireVizAdapter(),

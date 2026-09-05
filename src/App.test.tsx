@@ -28,6 +28,10 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not real FEA results/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/140 lb demo limit/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Source and confidence/i);
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/pre-solver input only/i);
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/no FEA claim/i);
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Gmsh finite-element mesh/i);
     expect(screen.getByText(/Background analysis status/i)).toBeInTheDocument();
     expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
     expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
@@ -86,6 +90,8 @@ describe('MechaFlow cockpit', () => {
 
     expect(screen.getByRole('heading', { name: /Upper arm link/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/72 lb demo limit/i);
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Demo estimate only/i);
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/CalculiX static structural input deck/i);
     expect(screen.getByText(/Main arm harness/i)).toBeInTheDocument();
     expect(screen.queryByText(/Finger force sensor lead/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/service loop review required/i).length).toBeGreaterThan(0);
@@ -123,6 +129,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Review required/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not a load-bearing part/i);
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Source and confidence/i);
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Board support, connector loads, and heat dissipation need review/i);
     expect(screen.getByText(/No compatible substitution options are available/i)).toHaveTextContent(
       /compatibility review is required/i,
     );
@@ -174,6 +181,33 @@ describe('MechaFlow cockpit', () => {
 
     expect(await screen.findByRole('heading', { name: '$0.80-$1.60 open estimate' })).toBeInTheDocument();
     expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(8);
+  });
+
+  it('keeps unsupported safety estimates review-required for a selected part', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.project.active_task!.target_value = 50;
+    panelData.project.active_task!.safety_factor_min = 2;
+    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.dimensions.thickness_mm = 16.5;
+    panelData.project.materials.find((material) => material.id === finger.material_id)!.family = 'other';
+    panelData.project.materials.find((material) => material.id === 'mat-low-carbon-steel')!.family = 'other';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      return new Response('Not found', { status: 404 });
+    }));
+
+    render(<App />);
+    const partTree = await screen.findByText('Selectable parts');
+    const treeContainer = partTree.closest('.part-tree');
+    expect(treeContainer).not.toBeNull();
+    await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Parallel gripper jaw link/i }));
+
+    expect(await screen.findByText(/Payload rating review required/i)).toBeInTheDocument();
+    expect(screen.queryByText(/2\.0 safety factor below the preserved 2\.0 minimum/i)).not.toBeInTheDocument();
   });
 
   it('renders missing backend engineering values as review-required', async () => {

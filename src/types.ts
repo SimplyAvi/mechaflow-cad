@@ -1,6 +1,8 @@
 export type JobStatus = 'queued' | 'running' | 'blocked' | 'failed' | 'complete';
 export type RiskLevel = 'low' | 'medium' | 'high' | 'unknown';
 export type RatingStatus = 'passes' | 'watch' | 'fails';
+export type AnalysisReadinessState = 'pre_solver_ready' | 'review_required' | 'blocked_missing_inputs' | 'solver_result_available';
+export type AnalysisResultTrust = 'demo_estimate' | 'pre_solver_input' | 'solver_result';
 
 export interface ReferenceDesign {
   id: string;
@@ -44,6 +46,7 @@ export interface Assembly {
   id: string;
   name: string;
   explodedProgress: number | null;
+  analysisReadiness: AnalysisReadinessPreview;
   parts: Part[];
 }
 
@@ -62,6 +65,7 @@ export interface Part {
   relatedWires: string[];
   rating: CapabilityRating;
   designCriteria: DesignCriterion[];
+  analysisReadiness: AnalysisReadinessPreview;
   visual: PartVisual;
 }
 
@@ -72,6 +76,100 @@ export interface DesignCriterion {
   status: 'measured' | 'estimated' | 'review-required';
   plainEnglish: string;
   sourceConfidence: string;
+}
+
+export interface AnalysisLoadCase {
+  id: string;
+  name: string;
+  description: string;
+  load_type: string;
+  target_part_ids: string[];
+  magnitude?: number | null;
+  unit?: string | null;
+  direction: BackendVector3;
+  application_region: string;
+  confidence: string;
+  review_required: boolean;
+}
+
+export interface AnalysisConstraint {
+  id: string;
+  name: string;
+  constraint_type: string;
+  target_part_ids: string[];
+  region: string;
+  degrees_of_freedom: string[];
+  confidence: string;
+  review_required: boolean;
+}
+
+export interface AnalysisMaterialPropertySet {
+  material_id?: string | null;
+  material_name: string;
+  properties: BackendMaterial['properties'];
+  provenance: string;
+  source?: unknown;
+  review_notes: string[];
+}
+
+export interface AnalysisThermalGuidance {
+  max_service_temp_c?: number | null;
+  heat_deflection_temp_c?: number | null;
+  guidance: string;
+  confidence: string;
+  review_required: boolean;
+}
+
+export interface ExpectedAnalysisResultArtifact {
+  kind: string;
+  title: string;
+  file_format: string;
+  produced_by: string;
+  replaces_demo_estimate: boolean;
+  review_required_before_release: boolean;
+}
+
+export interface SolverInputSpec {
+  geometry_source?: string | null;
+  units: string;
+  mesh_size_mm?: number | null;
+  freecad_document?: string | null;
+  gmsh_model?: string | null;
+  calculix_input_deck?: string | null;
+  notes: string[];
+}
+
+export interface SolverPipelineStep {
+  order: number;
+  adapter_name: string;
+  open_source_tool: string;
+  action: string;
+  consumes: string[];
+  produces: string[];
+  status: string;
+  review_notes: string[];
+}
+
+export interface AnalysisReadinessPreview {
+  project_id: string;
+  target_id: string;
+  target_name: string;
+  target_kind: 'part' | 'assembly';
+  state: AnalysisReadinessState;
+  trust_label: AnalysisResultTrust;
+  summary: string;
+  criteria: string[];
+  load_cases: AnalysisLoadCase[];
+  constraints: AnalysisConstraint[];
+  material_properties?: AnalysisMaterialPropertySet | null;
+  thermal_guidance?: AnalysisThermalGuidance | null;
+  solver_inputs: SolverInputSpec;
+  expected_result_artifacts: ExpectedAnalysisResultArtifact[];
+  solver_pipeline: SolverPipelineStep[];
+  demo_estimates: string[];
+  review_required: string[];
+  recommended_job_request?: BackendAnalysisJobRequest | null;
+  generated_at?: string;
 }
 
 export interface PartVisual {
@@ -191,6 +289,7 @@ export interface BackendProjectPanelData {
   manufacturing_options: BackendPartManufacturingOptions[];
   wiring_routes: BackendWiringRoute[];
   reports: BackendAnalysisReport[];
+  analysis_readiness_previews?: AnalysisReadinessPreview[];
 }
 
 export interface BackendProject {
@@ -349,6 +448,14 @@ export interface BackendConnector {
   name: string;
   pin_count?: number | null;
   part_id?: string | null;
+}
+
+export interface BackendAnalysisJobRequest {
+  job_type: string;
+  target_id: string;
+  project_id: string;
+  local_compute_preferred?: boolean;
+  input_summary?: Record<string, unknown>;
 }
 
 export interface BackendAnalysisJob {
