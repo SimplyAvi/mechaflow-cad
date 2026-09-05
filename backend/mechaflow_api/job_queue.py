@@ -498,6 +498,7 @@ def _artifact_cache_status(
         or item["name"] in {".", ".."}
         or "/" in item["name"]
         or "\\" in item["name"]
+        or any(ord(char) < 32 or ord(char) == 127 for char in item["name"])
         for item in produced
     ):
         return CachedArtifactStatus.stale_missing_files, "Artifact manifest contains an unsafe file name."
@@ -601,7 +602,13 @@ def build_analysis_job_queue(
 ) -> AnalysisJobQueue:
     jobs = [enrich_analysis_job_for_queue(project, job, tool_statuses, artifact_file_exists) for job in project.analysis_jobs]
     counts = Counter(job.status.value for job in jobs)
-    local_ready_count = sum(1 for job in jobs if job.recommendation and job.recommendation.recommended_target == AnalysisExecutionTarget.local)
+    local_ready_count = sum(
+        1
+        for job in jobs
+        if job.recommendation
+        and job.recommendation.recommended_target == AnalysisExecutionTarget.local
+        and job.recommendation.status == AnalysisExecutionRecommendationStatus.ready
+    )
     cloud_planning_count = sum(1 for job in jobs if job.recommendation and job.recommendation.recommended_target == AnalysisExecutionTarget.cloud_recommended_when_configured)
     review_required_count = sum(1 for job in jobs if job.recommendation and job.recommendation.status == AnalysisExecutionRecommendationStatus.review_required)
     unavailable_count = sum(1 for job in jobs if job.recommendation and job.recommendation.status == AnalysisExecutionRecommendationStatus.unavailable)
@@ -637,7 +644,14 @@ def normalize_cached_references(
                 raise ValueError(f"analysis artifact {artifact.id!r} has malformed file_manifest item")
             name = item.get("name")
             download_url = item.get("download_url")
-            if not isinstance(name, str) or not name.strip() or name in {".", ".."} or "/" in name or "\\" in name:
+            if (
+                not isinstance(name, str)
+                or not name.strip()
+                or name in {".", ".."}
+                or "/" in name
+                or "\\" in name
+                or any(ord(char) < 32 or ord(char) == 127 for char in name)
+            ):
                 raise ValueError(f"analysis artifact {artifact.id!r} has a file reference without a stable name")
             if download_url is not None and download_url != f"/api/analysis-artifacts/{artifact.id}/{name}":
                 raise ValueError(f"analysis artifact {artifact.id!r} has stale or impossible download_url metadata")
