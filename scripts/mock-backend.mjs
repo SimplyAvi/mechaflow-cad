@@ -291,6 +291,27 @@ const projectFileValidationError = (file) => {
     return null;
   };
   const requireDateString = (value, path) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? null : `${path} must be a valid datetime string`;
+  const validateSource = (value, path) => {
+    if (value == null) return null;
+    let error = rejectUnknownFields(value, ['label', 'url', 'retrieved_at', 'license'], path);
+    if (error) return error;
+    error = requiredFields(value, ['label'], path) || requireString(value.label, `${path}.label`);
+    if (error) return error;
+    if (value.url != null) {
+      try {
+        const url = new URL(value.url);
+        if (!['http:', 'https:'].includes(url.protocol)) return `${path}.url must be an HTTP URL`;
+      } catch {
+        return `${path}.url must be a valid URL`;
+      }
+    }
+    if (value.retrieved_at != null) {
+      error = requireDateString(value.retrieved_at, `${path}.retrieved_at`);
+      if (error) return error;
+    }
+    if (value.license != null) return requireString(value.license, `${path}.license`);
+    return null;
+  };
   const uniqueIds = (items, path) => {
     const seen = new Set();
     for (const [index, item] of items.entries()) {
@@ -423,6 +444,12 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         error = requireString(part.name, `${assemblyPath}.parts.name`) || requireString(part.category, `${assemblyPath}.parts.category`);
         if (error) return error;
+        for (const field of ['purpose', 'source_file']) {
+          if (part[field] != null) {
+            error = requireString(part[field], `${assemblyPath}.parts.${field}`);
+            if (error) return error;
+          }
+        }
         for (const field of ['dimensions', 'metadata']) {
           error = requireObject(part[field], `${assemblyPath}.parts.${field}`);
           if (error) return error;
@@ -541,6 +568,8 @@ const projectFileValidationError = (file) => {
         if (error) return error;
       }
       if (material.confidence != null && !readinessConfidenceValues.has(material.confidence)) return `project.materials.${material.id}.confidence is invalid`;
+      error = validateSource(material.source, `project.materials.${material.id}.source`);
+      if (error) return error;
       for (const process of material.compatible_processes) if (!manufacturingProcesses.has(process)) return `material ${material.id} has an invalid compatible process`;
     }
     for (const assembly of candidate.assemblies) {
@@ -677,7 +706,7 @@ const projectFileValidationError = (file) => {
         error = requireObject(preview.material_properties, `${previewPath}.material_properties`) || rejectUnknownFields(preview.material_properties, ['material_id', 'material_name', 'properties', 'provenance', 'source', 'review_notes'], `${previewPath}.material_properties`);
         if (error) return error;
         if (preview.material_properties.material_name != null) {
-          error = requireString(preview.material_properties.material_name, `${previewPath}.material_properties.material_name`);
+        error = requireString(preview.material_properties.material_name, `${previewPath}.material_properties.material_name`);
           if (error) return error;
         }
         if (preview.material_properties.properties != null) {
@@ -692,6 +721,8 @@ const projectFileValidationError = (file) => {
           error = requireStringArray(preview.material_properties.review_notes, `${previewPath}.material_properties.review_notes`);
           if (error) return error;
         }
+        error = validateSource(preview.material_properties.source, `${previewPath}.material_properties.source`);
+        if (error) return error;
         if (preview.material_properties.material_id != null) {
           error = requireString(preview.material_properties.material_id, `${previewPath}.material_properties.material_id`);
           if (error) return error;
