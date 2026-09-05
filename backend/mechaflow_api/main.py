@@ -747,7 +747,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
                 raise HTTPException(status_code=404, detail="artifact file not found")
             artifact_root = settings.artifact_dir.resolve()
-            path = (artifact_root / job.id / file_name).resolve()
+            bundle_id = artifact.payload.get("storage_bundle_id", job.id)
+            path = (artifact_root / bundle_id / file_name).resolve()
             if not path.is_relative_to(artifact_root):
                 raise HTTPException(status_code=404, detail="artifact file not found")
             if not path.is_file():

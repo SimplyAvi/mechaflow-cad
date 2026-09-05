@@ -216,14 +216,14 @@ def _prepare_artifact_root(artifact_root: Path, reserved_bundles: int = 0) -> No
         shutil.rmtree(path)
 
 
-def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, job_id: str) -> Path:
+def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, bundle_id: str) -> Path:
     try:
         with ARTIFACT_STORE_LOCK:
             _prepare_artifact_root(artifact_root, reserved_bundles=1)
             artifact_root = artifact_root.resolve()
-            destination = (artifact_root / job_id).resolve()
+            destination = (artifact_root / bundle_id).resolve()
             if not destination.is_relative_to(artifact_root):
-                raise ValueError("analysis job id must remain within the artifact store")
+                raise ValueError("artifact bundle id must remain within the artifact store")
             destination.mkdir()
             for path in fixture.workdir.iterdir():
                 if path.is_file():
@@ -295,6 +295,7 @@ def run_calculix_fixture(
         ),
         "input_deck_name": fixture.input_deck.name,
         "expected_outputs": fixture.expected_outputs,
+        "storage_bundle_id": artifact_id,
         "tool_boundaries": [status.model_dump(mode="json") for status in statuses],
         "review_required": [
             "This fixture is real solver execution only when CalculiX runs successfully.",
@@ -304,7 +305,7 @@ def run_calculix_fixture(
     }
 
     if calculix.availability != LocalSolverToolAvailability.available or not calculix.resolved_command:
-        durable_workdir = _persist_fixture_files(fixture, artifact_root, job.id)
+        durable_workdir = _persist_fixture_files(fixture, artifact_root, artifact_id)
         shutil.rmtree(fixture.workdir, ignore_errors=True)
         file_manifest = _artifact_file_manifest(durable_workdir, api_prefix, artifact_id, fixture.expected_outputs)
         artifact = AnalysisArtifact(
@@ -368,7 +369,7 @@ def run_calculix_fixture(
         stderr = str(exc)
         stdout = ""
 
-    durable_workdir = _persist_fixture_files(fixture, artifact_root, job.id)
+    durable_workdir = _persist_fixture_files(fixture, artifact_root, artifact_id)
     shutil.rmtree(fixture.workdir, ignore_errors=True)
     file_manifest = _artifact_file_manifest(
         durable_workdir,
