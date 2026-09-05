@@ -592,7 +592,7 @@ const mapMaterialOptions = (
     });
   });
 
-const mapJob = (job: BackendAnalysisJob): AnalysisJob => {
+export const mapBackendAnalysisJob = (job: BackendAnalysisJob): AnalysisJob => {
   const status = jobStatus(job.status);
   const progress = job.result_summary.progress;
   return {
@@ -605,7 +605,16 @@ const mapJob = (job: BackendAnalysisJob): AnalysisJob => {
       typeof job.result_summary.message === 'string'
         ? job.result_summary.message
         : `Adapter ${job.adapter_name} is reserved for ${toTitle(job.job_type)} handoff.`,
-    expectedArtifact: job.artifacts[0]?.kind ?? undefined,
+    expectedArtifact: job.artifacts.at(-1)?.kind ?? job.artifacts[0]?.kind ?? undefined,
+    artifacts: job.artifacts.map((artifact) => ({
+      kind: artifact.kind,
+      title: artifact.title,
+      summary: artifact.summary,
+      confidence: artifact.confidence,
+      generatedBy: artifact.generated_by,
+    })),
+    reviewStatus: typeof job.result_summary.review_status === 'string' ? job.result_summary.review_status : undefined,
+    trustLabel: typeof job.result_summary.trust_label === 'string' ? job.result_summary.trust_label : undefined,
   };
 };
 
@@ -731,7 +740,7 @@ export function mapProjectPanelDataToReferenceDesign(
     ),
     bom: mapBOM(panelData.bom_items, allParts),
     manufacturingOptions: mapManufacturing(panelData.manufacturing_options),
-    analysisJobs: project.analysis_jobs.map(mapJob),
+    analysisJobs: project.analysis_jobs.map(mapBackendAnalysisJob),
     wiringRoutes: mapWiring(
       panelData.wiring_routes.length > 0
         ? panelData.wiring_routes

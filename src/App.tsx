@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { loadCockpitDesign } from './lib/api';
+import { loadCockpitDesign, runLocalPreSolverAnalysis } from './lib/api';
 import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import './App.css';
 
@@ -80,6 +80,8 @@ function App() {
   const [explodePercent, setExplodePercent] = useState(100);
   const [rotationDeg, setRotationDeg] = useState(18);
   const [orbitPitchDeg, setOrbitPitchDeg] = useState(10);
+  const [analysisRunMessage, setAnalysisRunMessage] = useState<string | null>(null);
+  const [analysisRunPending, setAnalysisRunPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +133,32 @@ function App() {
     if (!assembly) return;
     setSelectedAssemblyId(assembly.id);
     setSelectedPartId(assembly.parts[0]?.id ?? '');
+  };
+
+  const runSelectedPartPreSolver = async () => {
+    if (!design?.backend.apiBaseUrl || !selectedPart) {
+      setAnalysisRunMessage('Start the local backend with VITE_API_BASE_URL to run a persisted pre-solver job.');
+      return;
+    }
+    setAnalysisRunPending(true);
+    setAnalysisRunMessage('Running local pre-solver screening...');
+    try {
+      const job = await runLocalPreSolverAnalysis(
+        design.backend.apiBaseUrl,
+        design.backend.projectId,
+        selectedPart.id,
+      );
+      setDesign((current) => current && {
+        ...current,
+        analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
+      });
+      setAnalysisRunMessage('Local pre-solver job completed. Artifact is review-required and not FEA.');
+    } catch (error) {
+      console.warn('Local pre-solver run failed.', error);
+      setAnalysisRunMessage('Local pre-solver job failed. Check the backend status and review-required details.');
+    } finally {
+      setAnalysisRunPending(false);
+    }
   };
 
   if (!design) {
@@ -364,7 +392,13 @@ function App() {
       </section>
 
       <section className="insight-grid" aria-label="Analysis and delivery panels">
-        <AnalysisPanel design={design} />
+        <AnalysisPanel
+          design={design}
+          onRunPreSolver={runSelectedPartPreSolver}
+          runMessage={analysisRunMessage}
+          runPending={analysisRunPending}
+          selectedPart={selectedPart}
+        />
         <BomPanel design={design} total={bomTotal} />
         <ManufacturingPanel design={design} />
         <WiringPanel design={design} selectedPart={selectedPart} />
@@ -651,11 +685,35 @@ function ModificationPreview({ selectedOption }: { selectedOption?: MaterialOpti
   );
 }
 
-function AnalysisPanel({ design }: { design: ReferenceDesign }) {
+function AnalysisPanel({
+  design,
+  onRunPreSolver,
+  runMessage,
+  runPending,
+  selectedPart,
+}: {
+  design: ReferenceDesign;
+  onRunPreSolver: () => void;
+  runMessage: string | null;
+  runPending: boolean;
+  selectedPart: Part;
+}) {
+  const canRun = Boolean(design.backend.apiBaseUrl) && !runPending;
   return (
     <article className="panel">
       <p className="eyebrow">Background analysis status</p>
-      <h2>Worker queue</h2>
+      <h2>Local pre-solver job runner</h2>
+      <p>
+        Trigger a local Python screening job for {selectedPart.name}. It packages readiness inputs and checks FreeCAD,
+        Gmsh, and CalculiX command boundaries, but any artifact remains review-required and not FEA.
+      </p>
+      <button className="runner-button" disabled={!canRun} onClick={onRunPreSolver} type="button">
+        {runPending ? 'Running pre-solver screening...' : `Run pre-solver screening for ${selectedPart.name}`}
+      </button>
+      {!design.backend.apiBaseUrl ? (
+        <small className="runner-note">Connect the React desktop demo to the local FastAPI backend to persist a runner job.</small>
+      ) : null}
+      {runMessage ? <p className="runner-message" aria-live="polite">{runMessage}</p> : null}
       <div className="job-list">
         {design.analysisJobs.map((job) => (
           <div className="job-row" key={job.id}>
@@ -671,6 +729,21 @@ function AnalysisPanel({ design }: { design: ReferenceDesign }) {
             </div>
             <span className={`job-status ${job.status}`}>{job.status}</span>
             <p>{job.summary}</p>
+            {job.trustLabel || job.reviewStatus ? (
+              <small className="runner-note">
+                {job.trustLabel?.replaceAll('_', ' ') ?? 'analysis job'} - {job.reviewStatus?.replaceAll('_', ' ') ?? 'status review required'}
+              </small>
+            ) : null}
+            {job.artifacts.length > 0 ? (
+              <ul className="artifact-list" aria-label={`${job.name} artifacts`}>
+                {job.artifacts.map((artifact) => (
+                  <li key={`${job.id}-${artifact.kind}-${artifact.title}`}>
+                    {artifact.title} ({artifact.kind.replaceAll('_', ' ')})
+                    {artifact.generatedBy ? ` from ${artifact.generatedBy}` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         ))}
       </div>
@@ -765,6 +838,8 @@ function BackendContractPanel({ design }: { design: ReferenceDesign }) {
     design.backend.endpoint,
     `/api/projects/${design.backend.projectId}/analysis-readiness/${design.assembly.parts[0]?.id ?? 'part-id'}`,
     `/api/projects/${design.backend.projectId}/analysis-readiness/previews`,
+    `/api/projects/${design.backend.projectId}/analysis-jobs/pre-solver-runs`,
+    '/api/local-analysis/tool-boundaries',
     `/api/projects/${design.backend.projectId}/modifications`,
   ];
 

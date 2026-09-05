@@ -745,7 +745,96 @@ def test_analysis_readiness_preview_covers_assemblies_and_honors_demo_estimate_f
     assert without_estimates.json()["demo_estimates"] == []
 
 
+def test_local_solver_tool_boundaries_report_availability_without_invoking_tools() -> None:
+    response = client.get("/api/local-analysis/tool-boundaries")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["open_source_tool"] for item in payload] == ["FreeCAD", "Gmsh", "CalculiX"]
+    assert {item["adapter_name"] for item in payload} == {
+        "freecad-fea-prep-worker",
+        "gmsh-meshing-worker",
+        "calculix-fea-worker",
+    }
+    assert all(item["availability"] in {"available", "unavailable"} for item in payload)
+    assert all(
+        item["review_status"] in {"available_not_invoked", "unavailable_review_required"}
+        for item in payload
+    )
+
+
+def test_project_pre_solver_run_creates_review_required_artifact(monkeypatch) -> None:
+    monkeypatch.setattr("mechaflow_api.runners.shutil.which", lambda _candidate: None)
+    local_client = TestClient(main_module.create_app())
+
+    response = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs",
+        json={"target_id": "part-finger-link"},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["adapter_name"] == "local-pre-solver-runner"
+    assert payload["status"] == "completed"
+    assert payload["result_summary"]["progress"] == 100
+    assert payload["result_summary"]["trust_label"] == "demo_pre_solver_not_fea"
+    assert payload["result_summary"]["review_status"] == "review_required"
+    assert set(payload["result_summary"]["unavailable_solver_tools"]) == {"FreeCAD", "Gmsh", "CalculiX"}
+    artifact = payload["artifacts"][-1]
+    assert artifact["kind"] == "fea_summary"
+    assert artifact["generated_by"] == "local-pre-solver-runner"
+    assert artifact["payload"]["trust_label"] == "demo_pre_solver_not_fea"
+    assert artifact["payload"]["demo_screening_estimates"]["nominal_section_stress_mpa_demo"] is not None
+    assert {tool["review_status"] for tool in artifact["payload"]["tool_boundaries"]} == {
+        "unavailable_review_required"
+    }
+
+    fetched = local_client.get(f"/api/analysis-jobs/{payload['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["status"] == "completed"
+    panel_jobs = local_client.get("/api/projects/project-open-gripper-demo/panel-data").json()["project"]["analysis_jobs"]
+    assert any(job["id"] == payload["id"] for job in panel_jobs)
+
+
+def test_existing_analysis_job_can_run_local_pre_solver_boundary() -> None:
+    local_client = TestClient(main_module.create_app())
+    created = local_client.post(
+        "/api/analysis-jobs",
+        json={
+            "job_type": AnalysisJobType.run_fea.value,
+            "target_id": "part-palm-plate",
+            "project_id": "project-open-gripper-demo",
+        },
+    ).json()
+
+    completed = local_client.post(f"/api/analysis-jobs/{created['id']}/run-local")
+
+    assert completed.status_code == 200
+    payload = completed.json()
+    assert payload["adapter_name"] == "calculix-fea-worker"
+    assert payload["status"] == "completed"
+    assert payload["artifacts"][-1]["title"] == "Local pre-solver screening package, not FEA"
+    assert payload["artifacts"][-1]["payload"]["result_label"] == "review_required_not_fea"
+
+
+def test_project_pre_solver_run_rejects_unknown_targets_and_unsupported_jobs() -> None:
+    local_client = TestClient(main_module.create_app())
+    missing = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs",
+        json={"target_id": "part-typo"},
+    )
+    unsupported = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs",
+        json={"target_id": "part-finger-link", "job_type": AnalysisJobType.generate_bom.value},
+    )
+
+    assert missing.status_code == 404
+    assert unsupported.status_code == 422
+
+
 def test_project_rejects_ambiguous_part_and_assembly_target_ids() -> None:
+    local_client = TestClient(main_module.create_app())
+    sample = local_client.get("/api/projects/sample").json()
     project = deepcopy(sample)
     project["id"] = "project-ambiguous-targets"
     project["assemblies"][0]["id"] = project["assemblies"][0]["parts"][0]["id"]
@@ -753,7 +842,7 @@ def test_project_rejects_ambiguous_part_and_assembly_target_ids() -> None:
     response = local_client.post("/api/projects", json=project)
 
     assert response.status_code == 422
-    assert "must not overlap" in response.json()["detail"]
+    assert "must not overlap" in json.dumps(response.json()["detail"])
 
 
 def test_create_analysis_job_selects_matching_stub_adapter() -> None:

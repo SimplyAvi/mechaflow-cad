@@ -20,6 +20,7 @@ from .models import (
     AnalysisJobPlan,
     AnalysisJobRequest,
     AnalysisJobStatus,
+    AnalysisJobType,
     AnalysisLoadCase,
     AnalysisReadinessPreview,
     AnalysisReadinessRequest,
@@ -30,6 +31,7 @@ from .models import (
     ExpectedAnalysisResultArtifact,
     ManufacturingOption,
     Material,
+    LocalSolverToolStatus,
     Modification,
     Part,
     PartManufacturingOptions,
@@ -42,6 +44,11 @@ from .models import (
     TaskRequirement,
     WiringRoute,
     validate_project_id,
+)
+from .runners import (
+    LOCAL_PRE_SOLVER_RUNNER_NAME,
+    PRE_SOLVER_SCREENING_RUNNER,
+    list_local_solver_tool_statuses,
 )
 from .services import (
     InvalidDimensionChangeError,
@@ -121,6 +128,7 @@ SCHEMA_MODELS = [
     ExpectedAnalysisResultArtifact,
     SolverInputSpec,
     SolverPipelineStep,
+    LocalSolverToolStatus,
     Modification,
     ProjectModificationResponse,
     CatalogSeedResponse,
@@ -413,25 +421,47 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def analysis_jobs(project_id: str | None = None) -> list[AnalysisJob]:
         return project_store.list_analysis_jobs(project_id)
 
-    @app.post(f"{settings.api_prefix}/analysis-jobs", response_model=AnalysisJob, status_code=202, tags=["jobs"])
-    def create_analysis_job(request: AnalysisJobRequest) -> AnalysisJob:
-        adapter = choose_adapter(request)
+    @app.get(
+        f"{settings.api_prefix}/local-analysis/tool-boundaries",
+        response_model=list[LocalSolverToolStatus],
+        tags=["jobs"],
+    )
+    def local_analysis_tool_boundaries() -> list[LocalSolverToolStatus]:
+        return list_local_solver_tool_statuses()
+
+    def add_queued_analysis_job(request: AnalysisJobRequest, adapter_name: str | None = None) -> AnalysisJob:
+        adapter = choose_adapter(request) if adapter_name is None else None
         now = datetime.now(timezone.utc)
         plan = adapter.plan(request) if adapter else None
+        resolved_adapter_name = adapter_name or (adapter.status.name if adapter else "unassigned")
+        queue_name = (
+            "pre-solver-local"
+            if adapter_name == LOCAL_PRE_SOLVER_RUNNER_NAME
+            else plan.queue_name if plan else None
+        )
+        expected_artifacts = (
+            ["fea_summary" if request.job_type == AnalysisJobType.run_fea else "load_heuristic"]
+            if adapter_name == LOCAL_PRE_SOLVER_RUNNER_NAME
+            else [artifact.value for artifact in plan.expected_artifacts] if plan else []
+        )
         while True:
             job = AnalysisJob(
                 id=f"job-{uuid4()}",
                 job_type=request.job_type,
-                status=AnalysisJobStatus.queued if adapter else AnalysisJobStatus.blocked_missing_adapter,
+                status=(
+                    AnalysisJobStatus.queued
+                    if resolved_adapter_name != "unassigned"
+                    else AnalysisJobStatus.blocked_missing_adapter
+                ),
                 target_id=request.target_id,
                 project_id=request.project_id,
-                adapter_name=adapter.status.name if adapter else "unassigned",
+                adapter_name=resolved_adapter_name,
                 local_compute_preferred=request.local_compute_preferred,
                 input_summary=request.input_summary,
                 result_summary={
                     "message": "Job accepted as orchestration metadata only; no heavy CAD or simulation tool was invoked.",
-                    "queue_name": plan.queue_name if plan else None,
-                    "expected_artifacts": [artifact.value for artifact in plan.expected_artifacts] if plan else [],
+                    "queue_name": queue_name,
+                    "expected_artifacts": expected_artifacts,
                 },
                 created_at=now,
                 updated_at=now,
@@ -442,8 +472,12 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 continue
             except ProjectNotFoundError as exc:
                 raise HTTPException(status_code=404, detail="project not found") from exc
-            except NonFiniteStorageValueError as exc:
+            except (InvalidAnalysisJobAdapterError, NonFiniteStorageValueError) as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.post(f"{settings.api_prefix}/analysis-jobs", response_model=AnalysisJob, status_code=202, tags=["jobs"])
+    def create_analysis_job(request: AnalysisJobRequest) -> AnalysisJob:
+        return add_queued_analysis_job(request)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}", response_model=AnalysisJob, tags=["jobs"])
     def analysis_job(job_id: str) -> AnalysisJob:
@@ -463,6 +497,81 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if adapter is None:
             raise HTTPException(status_code=409, detail="analysis job has no matching adapter")
         return adapter.plan(request)
+
+    def run_local_pre_solver_job(job_id: str) -> AnalysisJob:
+        def mark_running(job: AnalysisJob) -> AnalysisJob:
+            return job.model_copy(
+                update={"status": AnalysisJobStatus.running, "updated_at": datetime.now(timezone.utc)},
+                deep=True,
+            )
+
+        running_job = project_store.update_analysis_job(job_id, mark_running)
+        if running_job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        project = get_project_or_404(running_job.project_id)
+        try:
+            completed_job = PRE_SOLVER_SCREENING_RUNNER.run(project, running_job)
+        except PartNotFoundError as exc:
+            def mark_failed(job: AnalysisJob) -> AnalysisJob:
+                return job.model_copy(
+                    update={
+                        "status": AnalysisJobStatus.failed,
+                        "result_summary": {**job.result_summary, "message": "analysis target not found"},
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                    deep=True,
+                )
+
+            project_store.update_analysis_job(job_id, mark_failed)
+            raise HTTPException(status_code=404, detail="analysis target not found") from exc
+        stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
+        if stored_job is None:
+            raise HTTPException(status_code=404, detail="analysis job not found")
+        return stored_job
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/analysis-jobs/pre-solver-runs",
+        response_model=AnalysisJob,
+        status_code=202,
+        tags=["jobs"],
+    )
+    def create_project_pre_solver_run(project_id: str, request: AnalysisReadinessRequest) -> AnalysisJob:
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
+        project = get_project_or_404(project_id)
+        if request.job_type not in {AnalysisJobType.run_fea, AnalysisJobType.quick_load_heuristic}:
+            raise HTTPException(
+                status_code=422,
+                detail="pre-solver runner supports run_fea and quick_load_heuristic jobs",
+            )
+        try:
+            readiness = build_analysis_readiness_preview(
+                project,
+                request.target_id,
+                include_demo_estimates=request.include_demo_estimates,
+            )
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="analysis target not found") from exc
+        job = add_queued_analysis_job(
+            AnalysisJobRequest(
+                job_type=request.job_type,
+                target_id=request.target_id,
+                project_id=project_id,
+                local_compute_preferred=True,
+                input_summary={
+                    "readiness_state": readiness.state.value,
+                    "load_case_ids": [load_case.id for load_case in readiness.load_cases],
+                    "constraint_ids": [constraint.id for constraint in readiness.constraints],
+                    "source": "project pre-solver run endpoint",
+                },
+            ),
+            adapter_name=LOCAL_PRE_SOLVER_RUNNER_NAME,
+        )
+        return run_local_pre_solver_job(job.id)
+
+    @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-local", response_model=AnalysisJob, tags=["jobs"])
+    def run_analysis_job_local(job_id: str) -> AnalysisJob:
+        return run_local_pre_solver_job(job_id)
 
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])
     def run_analysis_job_stub(job_id: str) -> AnalysisJob:

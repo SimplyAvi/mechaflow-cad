@@ -24,6 +24,8 @@ This command starts three local pieces:
 - The Vite React cockpit at a free local port.
 - An Electron desktop window titled `MechaFlow CAD local desktop demo` that loads the local cockpit URL.
 
+The mock API is enough to open the desktop cockpit and inspect analysis-readiness data. To persist and run the new FastAPI local pre-solver runner, start the Python backend instead, then launch the frontend or desktop shell with `VITE_API_BASE_URL` pointing at it.
+
 You can pin ports when needed:
 
 ```sh
@@ -43,8 +45,34 @@ The desktop demo centers on a robot arm visual MVP with a wrist gripper. The leg
 5. Read plain-English design criteria for the selected part, including intended load or lift role, material, stiffness and elasticity, heat or temperature limitation, manufacturing process, known versus estimated versus review-required values, and source confidence.
 6. Open the selected-part and selected-assembly pre-solver readiness panels and confirm they show explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes. Assembly readiness should cover all included parts and omit unsupported aggregate estimates.
 7. Confirm that seeded or heuristic values are labeled as demo estimates or seeded material guidance, and that missing or unsupported engineering values are marked review-required.
+8. When connected to the FastAPI backend, click `Run pre-solver screening for ...` in the analysis panel. Confirm the new job appears with a review-required artifact titled `Local pre-solver screening package, not FEA`.
 
-No real FEA solver is running in this slice. The FEA row is a blocked adapter handoff, the readiness panel is pre-solver input only, and the visible strength criteria are advisory demo seed data only. Later FEA integration should replace the load-capacity cards with solver artifacts such as stress, deflection, boundary conditions, mesh provenance, and solver logs.
+No real FEA solver is running in this slice. The FEA row is a blocked adapter handoff, the readiness panel is pre-solver input only, the local runner artifact is a pre-solver package, and the visible strength criteria are advisory demo seed data only. Later FEA integration should replace the load-capacity cards with solver artifacts such as stress, deflection, boundary conditions, mesh provenance, and solver logs.
+
+## FastAPI pre-solver runner demo
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+MECHAFLOW_API_HOST=127.0.0.1 MECHAFLOW_API_PORT=8123 mechaflow-api
+```
+
+In another terminal:
+
+```sh
+VITE_API_BASE_URL=http://127.0.0.1:8123 MECHAFLOW_FRONTEND_PORT=7332 npm run dev
+```
+
+Open the Vite URL and use the analysis panel button. You can also inspect the same path directly:
+
+```sh
+curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs \
+  -H 'Content-Type: application/json' \
+  -d '{"target_id":"part-finger-link"}' | python -m json.tool
+```
+
+If FreeCAD, Gmsh, or CalculiX are absent, the job still completes the pre-solver package and reports those tool boundaries as unavailable and review-required. It does not fail with an unclear solver error.
 
 ## Checks
 

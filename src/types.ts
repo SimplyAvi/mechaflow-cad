@@ -218,6 +218,14 @@ export interface BackendModificationPreview {
   reportStatus: string;
 }
 
+export interface AnalysisJobArtifactSummary {
+  kind: string;
+  title: string;
+  summary?: string;
+  confidence?: string;
+  generatedBy?: string;
+}
+
 export interface AnalysisJob {
   id: string;
   name: string;
@@ -226,6 +234,9 @@ export interface AnalysisJob {
   progress: number | null;
   summary: string;
   expectedArtifact?: string;
+  artifacts: AnalysisJobArtifactSummary[];
+  reviewStatus?: string;
+  trustLabel?: string;
 }
 
 export interface BOMItem {
@@ -468,7 +479,14 @@ export interface BackendAnalysisJob {
   local_compute_preferred: boolean;
   input_summary: Record<string, unknown>;
   result_summary: Record<string, unknown>;
-  artifacts: Array<{ kind: string; title: string }>;
+  artifacts: Array<{
+    kind: string;
+    title: string;
+    summary?: string;
+    confidence?: string;
+    generated_by?: string;
+    payload?: Record<string, unknown>;
+  }>;
   created_at?: string;
   updated_at?: string;
 }

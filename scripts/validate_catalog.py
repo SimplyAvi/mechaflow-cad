@@ -301,8 +301,9 @@ def validate_handoff(
     ids_by_name: dict[str, set[str]],
     design_ids: set[str],
     adapter_ids: set[str],
-    adapter_contracts: dict[str, AdapterContract],
+    adapter_contracts: dict[str, AdapterContract] | None = None,
 ) -> None:
+    adapter_contracts = adapter_contracts or {}
     handoff = load_json(BACKEND_FRONTEND_HANDOFF)
     ensure(isinstance(handoff, dict), "backend frontend handoff root must be an object", errors)
     if not isinstance(handoff, dict):

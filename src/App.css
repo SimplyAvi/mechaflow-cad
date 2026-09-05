@@ -702,6 +702,35 @@ small,
   gap: 12px;
 }
 
+.runner-button {
+  background: linear-gradient(135deg, #38bdf8, #34d399);
+  border: 0;
+  border-radius: 999px;
+  color: #03111f;
+  cursor: pointer;
+  font-weight: 900;
+  justify-self: start;
+  padding: 10px 14px;
+}
+
+.runner-button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.8);
+  opacity: 0.6;
+}
+
+.runner-message,
+.runner-note {
+  color: #bae6fd;
+}
+
+.artifact-list {
+  color: #cbd5e1;
+  font-size: 0.84rem;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .job-row,
 .bom-list div,
 .manufacturing-card,

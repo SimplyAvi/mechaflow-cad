@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import {
   mockBackendMetadata,
@@ -92,6 +93,39 @@ const projectManufacturingOptions = () =>
     })),
   );
 
+const localSolverToolBoundaries = () => [
+  {
+    adapter_name: 'freecad-fea-prep-worker',
+    open_source_tool: 'FreeCAD',
+    role: 'Prepare source CAD into analysis geometry, named regions, materials, and normalized units.',
+    binary_candidates: ['freecadcmd', 'freecad', 'FreeCAD'],
+    resolved_command: null,
+    availability: 'unavailable',
+    review_status: 'unavailable_review_required',
+    message: 'Mock backend does not invoke FreeCAD. Use the FastAPI backend to inspect local command availability.',
+  },
+  {
+    adapter_name: 'gmsh-meshing-worker',
+    open_source_tool: 'Gmsh',
+    role: 'Generate finite-element mesh and mesh-quality metadata from prepared geometry.',
+    binary_candidates: ['gmsh'],
+    resolved_command: null,
+    availability: 'unavailable',
+    review_status: 'unavailable_review_required',
+    message: 'Mock backend does not invoke Gmsh. Use the FastAPI backend to inspect local command availability.',
+  },
+  {
+    adapter_name: 'calculix-fea-worker',
+    open_source_tool: 'CalculiX',
+    role: 'Run static structural solve and emit logs, result files, and a review report.',
+    binary_candidates: ['ccx', 'calculix'],
+    resolved_command: null,
+    availability: 'unavailable',
+    review_status: 'unavailable_review_required',
+    message: 'Mock backend does not invoke CalculiX. Use the FastAPI backend to inspect local command availability.',
+  },
+];
+
 const projectPanelData = () => ({
   ...mockBackendPanelData,
   project,
@@ -99,6 +133,74 @@ const projectPanelData = () => ({
   manufacturing_options: projectManufacturingOptions(),
   reports: project.reports,
 });
+
+const findTarget = (targetId) => {
+  for (const assembly of project.assemblies) {
+    const part = assembly.parts.find((candidate) => candidate.id === targetId);
+    if (part) return { target: part, kind: 'part', partIds: [part.id] };
+    if (assembly.id === targetId) return { target: assembly, kind: 'assembly', partIds: assembly.parts.map((part) => part.id) };
+  }
+  return null;
+};
+
+const createMockPreSolverJob = (targetId) => {
+  const found = findTarget(targetId);
+  if (!found) return null;
+  const now = new Date().toISOString();
+  const jobId = `job-${randomUUID()}`;
+  const artifact = {
+    id: `artifact-${randomUUID()}`,
+    job_id: jobId,
+    kind: 'fea_summary',
+    title: 'Local pre-solver screening package, not FEA',
+    summary: 'Mock backend packaged readiness-shaped inputs. No FreeCAD geometry prep, Gmsh mesh, or CalculiX solve was run.',
+    payload: {
+      artifact_contract: 'local_pre_solver_screening_v1_mock',
+      trust_label: 'demo_pre_solver_not_fea',
+      target: {
+        project_id: projectId,
+        target_id: targetId,
+        target_name: found.target.name,
+        target_kind: found.kind,
+      },
+      demo_screening_estimates: {
+        method: 'mock_pre_solver_screen_v1',
+        disclaimer: 'Mock estimate only. This is not FEA and must be replaced by real solver and test evidence.',
+      },
+      tool_boundaries: localSolverToolBoundaries(),
+      result_label: 'review_required_not_fea',
+    },
+    confidence: 'estimated_from_heuristic',
+    generated_by: 'local-pre-solver-runner',
+    created_at: now,
+  };
+  return {
+    id: jobId,
+    job_type: 'run_fea',
+    status: 'completed',
+    target_id: targetId,
+    project_id: projectId,
+    adapter_name: 'local-pre-solver-runner',
+    local_compute_preferred: true,
+    input_summary: {
+      source: 'mock pre-solver run endpoint',
+      target_part_ids: found.partIds,
+    },
+    result_summary: {
+      message: 'Mock local pre-solver screening completed. This is not a real FEA result; review remains required.',
+      progress: 100,
+      runner: 'local-pre-solver-runner',
+      trust_label: 'demo_pre_solver_not_fea',
+      review_status: 'review_required',
+      artifact_id: artifact.id,
+      artifact_kind: artifact.kind,
+      unavailable_solver_tools: ['FreeCAD', 'Gmsh', 'CalculiX'],
+    },
+    artifacts: [artifact],
+    created_at: now,
+    updated_at: now,
+  };
+};
 
 const isOriginAllowed = (request) => {
   const origin = request.headers.origin;
@@ -235,6 +337,46 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/reports')) {
       send(200, project.reports);
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/local-analysis/tool-boundaries') {
+      send(200, localSolverToolBoundaries());
+      return;
+    }
+
+    if (request.method === 'POST' && isProjectPath(url.pathname, '/analysis-jobs/pre-solver-runs')) {
+      if (!isOriginAllowed(request)) {
+        send(403, { error: 'origin is not allowed' });
+        return;
+      }
+      const contentType = request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
+        send(415, { error: 'content-type must be application/json' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(request);
+      } catch {
+        send(422, { error: 'request body must contain valid JSON' });
+        return;
+      }
+      if (!body || typeof body.target_id !== 'string') {
+        send(422, { error: 'target_id is required' });
+        return;
+      }
+      const job = createMockPreSolverJob(body.target_id);
+      if (!job) {
+        send(404, { error: 'analysis target not found' });
+        return;
+      }
+      project = {
+        ...project,
+        analysis_jobs: [job, ...project.analysis_jobs],
+        updated_at: new Date().toISOString(),
+      };
+      send(202, job);
       return;
     }
 

@@ -142,8 +142,19 @@ class AnalysisConstraintType(str, Enum):
 class SolverPipelineStepStatus(str, Enum):
     stub_contract = "stub_contract"
     ready_for_worker = "ready_for_worker"
+    unavailable_review_required = "unavailable_review_required"
     blocked_missing_input = "blocked_missing_input"
     completed_by_solver = "completed_by_solver"
+
+
+class LocalSolverToolAvailability(str, Enum):
+    available = "available"
+    unavailable = "unavailable"
+
+
+class LocalSolverToolReviewStatus(str, Enum):
+    available_not_invoked = "available_not_invoked"
+    unavailable_review_required = "unavailable_review_required"
 
 
 class StrictModel(BaseModel):
@@ -474,6 +485,17 @@ class SolverPipelineStep(StrictModel):
     produces: list[str] = Field(default_factory=list)
     status: SolverPipelineStepStatus = SolverPipelineStepStatus.stub_contract
     review_notes: list[str] = Field(default_factory=list)
+
+
+class LocalSolverToolStatus(StrictModel):
+    adapter_name: str
+    open_source_tool: str
+    role: str
+    binary_candidates: list[str] = Field(default_factory=list)
+    resolved_command: str | None = None
+    availability: LocalSolverToolAvailability = LocalSolverToolAvailability.unavailable
+    review_status: LocalSolverToolReviewStatus = LocalSolverToolReviewStatus.unavailable_review_required
+    message: str
 
 
 class AnalysisReadinessRequest(BaseModel):
