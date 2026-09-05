@@ -723,14 +723,21 @@ const routeLengthMm = (route: BackendWiringRoute): number | null => {
   return round(length, 1);
 };
 
-const fallbackWiringStatus = (route: BackendWiringRoute): WiringRoute['reviewStatus'] => {
+const fallbackWiringStatus = (route: BackendWiringRoute, componentIds: Set<string>, segmentIds: Set<string>, bomIds: Set<string>): WiringRoute['reviewStatus'] => {
   const connectorIds = new Set([route.from_connector.id, route.to_connector.id]);
   const completeEvidence = route.path_points_mm.length >= 2
     && route.endpoints?.length === 2
     && route.endpoints.every((endpoint) => connectorIds.has(endpoint.connector_id))
     && route.wire_segment_ids.length > 0
+    && route.wire_segment_ids.every((id) => segmentIds.has(id))
     && route.electronics_component_ids.length > 0
+    && route.electronics_component_ids.every((id) => componentIds.has(id))
     && route.harness_bom.length > 0
+    && route.harness_bom.every((id) => bomIds.has(id))
+    && route.endpoints.every((endpoint) => {
+      const connector = [route.from_connector, route.to_connector].find((candidate) => candidate.id === endpoint.connector_id);
+      return connector?.part_id === endpoint.part_id;
+    })
     && route.clearance_min_mm != null
     && route.bend_radius_min_mm != null
     && route.service_loop_mm != null;
@@ -817,11 +824,11 @@ const mapWiringReview = (review?: BackendWiringReviewReport | null) => review ==
   })),
 });
 
-const mapWiring = (routes: BackendWiringRoute[], review?: BackendWiringReviewReport | null): WiringRoute[] => {
+const mapWiring = (routes: BackendWiringRoute[], review: BackendWiringReviewReport | null | undefined, componentIds: Set<string>, segmentIds: Set<string>, bomIds: Set<string>): WiringRoute[] => {
   const routeReviews = mapWiringEvidence(review);
   return routes.map((route) => {
     const routeReview = routeReviews.get(route.id);
-    const reviewStatus = routeReview?.status ?? fallbackWiringStatus(route);
+    const reviewStatus = routeReview?.status ?? fallbackWiringStatus(route, componentIds, segmentIds, bomIds);
     return {
       id: route.id,
       name: route.name,
@@ -945,6 +952,9 @@ export function mapProjectPanelDataToReferenceDesign(
         ? panelData.wiring_routes
         : backendAssemblies.flatMap((candidate) => candidate.wiring_routes),
       panelData.wiring_review,
+      new Set((panelData.electronics_components ?? []).map((component) => component.id)),
+      new Set((panelData.wire_segments ?? []).map((segment) => segment.id)),
+      new Set((panelData.bom_items ?? []).map((item) => item.id)),
     ),
     wiringReview: mapWiringReview(panelData.wiring_review),
     reports,

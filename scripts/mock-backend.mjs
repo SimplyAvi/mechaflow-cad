@@ -371,6 +371,16 @@ const projectPanelData = (sourceProject = project, readinessPreviews = null) => 
       };
     })),
     ...mockBackendPanelData.bom_items.filter((item) => item.id.includes('wire') || item.id.includes('harness')),
+    ...sourceProject.electronics_components.flatMap((component) => (component.bom_item_ids ?? []).map((id) => ({
+      id, part_id: component.mounted_part_id ?? null, name: component.name, quantity: 1, unit: 'each',
+      price: null, lead_time_days_min: null, lead_time_days_max: null,
+      license_or_terms: 'Imported electronics BOM addition; review required.',
+    }))),
+    ...sourceProject.wire_segments.filter((segment) => segment.bom_item_id).map((segment) => ({
+      id: segment.bom_item_id, part_id: null, name: segment.name, quantity: 1, unit: 'm',
+      price: null, lead_time_days_min: null, lead_time_days_max: null,
+      license_or_terms: 'Imported harness BOM addition; review required.',
+    }))),
   ],
   analysis_readiness_previews: readinessPreviews ?? (sourceProject === project ? currentReadinessPreviews() : []),
   manufacturing_options: projectManufacturingOptions(sourceProject),
@@ -827,6 +837,7 @@ const projectFileValidationError = (file) => {
     );
     if (partIds.size !== candidate.assemblies.flatMap((assembly) => (Array.isArray(assembly?.parts) ? assembly.parts.map((part) => part?.id) : [])).length) return 'part ids must be unique across project assemblies';
     const routeIds = new Set();
+    const routeConnectors = new Map();
     for (const [assemblyIndex, assembly] of candidate.assemblies.entries()) {
       const assemblyPath = `project.assemblies[${assemblyIndex}]`;
       error = requiredFields(assembly, ['id', 'name', 'root_node_id', 'nodes', 'parts', 'wiring_routes'], assemblyPath);
@@ -998,6 +1009,10 @@ const projectFileValidationError = (file) => {
           if (route[connectorField].component_id != null && !electronicsComponentIds.has(route[connectorField].component_id)) {
             return `wiring route ${route.id} references unknown electronics component ${route[connectorField].component_id}`;
           }
+          const connector = route[connectorField];
+          const ownership = `${connector.part_id ?? ''}:${connector.component_id ?? ''}`;
+          if (routeConnectors.has(connector.id) && routeConnectors.get(connector.id) !== ownership) return `connector ${connector.id} has inconsistent ownership`;
+          routeConnectors.set(connector.id, ownership);
           if (route[connectorField].pin_labels != null) {
             error = requireStringArray(route[connectorField].pin_labels, `${assemblyPath}.wiring_routes.${connectorField}.pin_labels`);
             if (error) return error;
@@ -1009,6 +1024,24 @@ const projectFileValidationError = (file) => {
             }
           }
         }
+        if ((route.endpoints ?? []).length !== 2) return `wiring route ${route.id} requires two endpoints`;
+        for (const [endpointIndex, endpoint] of route.endpoints.entries()) {
+          const connector = route[endpointIndex === 0 ? 'from_connector' : 'to_connector'];
+          if (endpoint.connector_id !== connector.id || endpoint.part_id !== connector.part_id) return `wiring route ${route.id} endpoints do not match route connectors`;
+        }
+      }
+    }
+    for (const component of candidate.electronics_components) {
+      for (const connectorId of component.connector_ids ?? []) {
+        const expected = `${component.mounted_part_id ?? ''}:${component.id}`;
+        if (routeConnectors.get(connectorId) !== expected) return `electronics component ${component.id} has inconsistent connector ownership`;
+      }
+    }
+    for (const segment of candidate.wire_segments) {
+      if (!segment.from_endpoint || !segment.to_endpoint) return `wire segment ${segment.id} requires both route endpoints`;
+      for (const endpoint of [segment.from_endpoint, segment.to_endpoint]) {
+        const ownership = routeConnectors.get(endpoint.connector_id);
+        if (!ownership || ownership.split(':')[0] !== (endpoint.part_id ?? '')) return `wire segment ${segment.id} endpoint has inconsistent connector ownership`;
       }
     }
     const materialIds = new Set(candidate.materials.map((material) => material?.id));
