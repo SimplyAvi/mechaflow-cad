@@ -8,7 +8,9 @@
     "this_branch_dataset_prefix": "/api/data/{dataset}",
     "backend_metadata": "/api/metadata",
     "backend_project_panel": "/api/projects/{project_id}/panel-data",
-    "backend_project_modification": "/api/projects/{project_id}/modifications"
+    "backend_project_modification": "/api/projects/{project_id}/modifications",
+    "backend_analysis_readiness_previews": "/api/projects/{project_id}/analysis-readiness/previews",
+    "backend_analysis_readiness_preview": "/api/projects/{project_id}/analysis-readiness/{target_id}"
   },
   "concepts": [
     "projects",
