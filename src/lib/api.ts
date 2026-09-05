@@ -1,6 +1,6 @@
 import { mockBackendMetadata, mockProjectPanelData, mockReferenceDesign } from '../data/mockDesign';
-import { mapProjectPanelDataToReferenceDesign } from './backendMapper';
-import type { BackendApiMetadata, BackendProjectPanelData, ReferenceDesign } from '../types';
+import { mapBackendAnalysisJob, mapProjectPanelDataToReferenceDesign } from './backendMapper';
+import type { AnalysisJob, BackendAnalysisJob, BackendApiMetadata, BackendProjectPanelData, ReferenceDesign } from '../types';
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
@@ -11,8 +11,8 @@ export const getApiBaseUrl = (): string | undefined => {
   return configured ? trimTrailingSlash(configured) : undefined;
 };
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = init === undefined ? await fetch(url) : await fetch(url, init);
   if (!response.ok) {
     throw new Error(`${url} returned ${response.status}`);
   }
@@ -33,6 +33,22 @@ async function loadProjectPanelData(apiBaseUrl: string, projectId: string): Prom
   const endpoint = projectId === 'sample' ? '/api/projects/sample/panel-data' : `/api/projects/${projectId}/panel-data`;
   const panelData = await fetchJson<BackendProjectPanelData>(`${apiBaseUrl}${endpoint}`);
   return mapProjectPanelDataToReferenceDesign(panelData, metadata, apiBaseUrl);
+}
+
+export async function runLocalPreSolverAnalysis(
+  apiBaseUrl: string,
+  projectId: string,
+  targetId: string,
+): Promise<AnalysisJob> {
+  const job = await fetchJson<BackendAnalysisJob>(
+    `${trimTrailingSlash(apiBaseUrl)}/api/projects/${projectId}/analysis-jobs/pre-solver-runs`,
+    {
+      body: JSON.stringify({ target_id: targetId }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    },
+  );
+  return mapBackendAnalysisJob(job);
 }
 
 export async function loadCockpitDesign(projectId = DEFAULT_PROJECT_ID): Promise<ReferenceDesign> {

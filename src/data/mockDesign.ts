@@ -27,6 +27,7 @@ export const mockBackendMetadata: BackendApiMetadata = {
   },
   integration_stubs: [
     { name: 'freecad-worker', status: 'stubbed' },
+    { name: 'local-pre-solver-runner', status: 'local_prototype' },
     { name: 'freecad-fea-prep-worker', status: 'stubbed' },
     { name: 'gmsh-meshing-worker', status: 'stubbed' },
     { name: 'calculix-fea-worker', status: 'stubbed' },

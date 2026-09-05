@@ -158,6 +158,57 @@ describe('MechaFlow cockpit', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
   });
 
+  it('triggers a backend local pre-solver run and shows review-required artifacts', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
+    const backendJob = {
+      id: 'job-local-presolver',
+      job_type: 'run_fea',
+      status: 'completed',
+      target_id: 'part-finger-link',
+      project_id: 'project-open-gripper-demo',
+      adapter_name: 'local-pre-solver-runner',
+      local_compute_preferred: true,
+      input_summary: {},
+      result_summary: {
+        message: 'Local pre-solver screening completed. This is not a real FEA result; review remains required.',
+        progress: 100,
+        review_status: 'review_required',
+        trust_label: 'demo_pre_solver_not_fea',
+      },
+      artifacts: [{
+        kind: 'fea_summary',
+        title: 'Local pre-solver screening package, not FEA',
+        summary: 'No FreeCAD geometry prep, Gmsh mesh, or CalculiX solve was run.',
+        confidence: 'estimated_from_heuristic',
+        generated_by: 'local-pre-solver-runner',
+      }],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs')) {
+        return Response.json(backendJob, { status: 202 });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const runButton = await screen.findByRole('button', { name: /Run pre-solver screening for Base pedestal plate/i });
+    await user.click(runButton);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(await screen.findByText(/Local pre-solver job completed/i)).toBeInTheDocument();
+    expect(screen.getByText(/Local pre-solver screening package, not FEA/i)).toBeInTheDocument();
+    expect(screen.getByText(/demo pre solver not fea/i)).toBeInTheDocument();
+  });
+
   it('renders explicit BOM prices and totals as ranges', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const panelData = structuredClone(mockProjectPanelData);

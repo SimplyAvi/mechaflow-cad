@@ -181,8 +181,8 @@ await frontend.renderCatalog({
   endpoint: '/stub',
   fetch: stubFetch(hostileItems),
 });
-const hostileCard = hostileDoc.byId.catalog.children[0];
-const hostileHeading = descendants(hostileCard).find((node) => node.tagName === 'h2');
+const hostileCard = hostileDoc.byId['catalog-reference-designs'].children[0];
+const hostileHeading = descendants(hostileCard).find((node) => node.tagName === 'strong');
 assert.equal(hostileHeading.ownText, hostileItems[0].name, 'names must be set as text, not markup');
 assert.equal(
   descendants(hostileCard).find((node) => node.tagName === 'a'),
@@ -199,7 +199,7 @@ await frontend.renderCatalog({
   fetch: stubFetch([{ id: 'partial', name: 'Partial entry' }]),
 });
 assert.equal(
-  missingFieldsDoc.byId.catalog.children.length,
+  missingFieldsDoc.byId['catalog-reference-designs'].children.length,
   1,
   'an incomplete entry must still render instead of blanking the catalog',
 );

@@ -126,6 +126,22 @@ ADAPTERS: tuple[StubAdapter, ...] = (
     ),
     StubAdapter(
         AdapterStatus(
+            name="local-pre-solver-runner",
+            capability="Demo-safe local pre-solver screening from readiness contracts without invoking CAD, meshing, or FEA",
+            open_source_candidate="Python standard library",
+            status="local_prototype",
+            queue_name="pre-solver-local",
+            supported_job_types=[AnalysisJobType.quick_load_heuristic, AnalysisJobType.run_fea],
+            expected_artifacts=[AnalysisArtifactKind.load_heuristic, AnalysisArtifactKind.fea_summary],
+            notes=[
+                "Produces persisted pre-solver artifacts only; results are not FEA and remain review-required.",
+                "Checks FreeCAD, Gmsh, and CalculiX command availability without invoking them.",
+            ],
+        ),
+        command_hint="Run the local pre-solver screening endpoint to package readiness inputs and tool availability.",
+    ),
+    StubAdapter(
+        AdapterStatus(
             name="freecad-fea-prep-worker",
             capability="Analysis geometry preparation, named faces, material assignment, and unit normalization",
             open_source_candidate="FreeCAD FEM workbench",
