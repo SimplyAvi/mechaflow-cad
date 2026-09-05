@@ -258,6 +258,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 unknown = set(constraint.target_part_ids) - part_ids
                 if unknown:
                     raise ValueError(f"analysis readiness constraint {constraint.id!r} references unknown parts: {sorted(unknown)}")
+        if previews and preview_target_ids != set(target_ids):
+            raise ValueError("analysis readiness previews must cover every imported project target")
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:

@@ -331,6 +331,8 @@ const projectFileValidationError = (file) => {
       }
     }
     if (candidate.active_task != null) {
+      error = rejectUnknownFields(candidate.active_task, ['id', 'kind', 'description', 'target_value', 'unit', 'safety_factor_min', 'validation_method', 'assumptions'], 'project.active_task');
+      if (error) return error;
       error = requiredFields(candidate.active_task, ['id', 'kind', 'description'], 'project.active_task');
       if (error) return error;
       for (const field of ['id', 'kind', 'description']) {
@@ -354,7 +356,7 @@ const projectFileValidationError = (file) => {
         if (error) return error;
       }
       if (candidate.active_task.assumptions != null) {
-        error = requireArray(candidate.active_task.assumptions, 'project.active_task.assumptions');
+        error = requireStringArray(candidate.active_task.assumptions, 'project.active_task.assumptions');
         if (error) return error;
       }
     }
@@ -421,6 +423,10 @@ const projectFileValidationError = (file) => {
           error = requireObject(part[field], `${assemblyPath}.parts.${field}`);
           if (error) return error;
         }
+        error = rejectUnknownFields(part.dimensions, ['length_mm', 'width_mm', 'height_mm', 'thickness_mm', 'metadata'], `${assemblyPath}.parts.dimensions`);
+        if (error) return error;
+        error = requireStringArray(part.related_fasteners, `${assemblyPath}.parts.related_fasteners`) || requireStringArray(part.wiring_route_ids, `${assemblyPath}.parts.wiring_route_ids`);
+        if (error) return error;
         for (const field of ['length_mm', 'width_mm', 'height_mm', 'thickness_mm']) {
           if (part.dimensions[field] != null) {
             error = requireFiniteNumber(part.dimensions[field], `${assemblyPath}.parts.dimensions.${field}`, Number.MIN_VALUE);
@@ -474,6 +480,8 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         if (!readinessConfidenceValues.has(route.confidence)) return `${assemblyPath}.wiring_routes.confidence is invalid`;
         for (const [pointIndex, point] of route.path_points_mm.entries()) {
+          error = rejectUnknownFields(point, ['x', 'y', 'z'], `${assemblyPath}.wiring_routes.path_points_mm[${pointIndex}]`);
+          if (error) return error;
           error = requiredFields(point, ['x', 'y', 'z'], `${assemblyPath}.wiring_routes.path_points_mm[${pointIndex}]`);
           if (error) return error;
           for (const axis of ['x', 'y', 'z']) {
@@ -609,6 +617,7 @@ const projectFileValidationError = (file) => {
     ]));
     const targetIds = file.project.assemblies.flatMap((assembly) => [assembly.id, ...assembly.parts.map((part) => part.id)]);
     if (targetIds.length !== new Set(targetIds).size) return 'readiness target ids must be unique across assemblies and parts';
+    if (file.analysis_readiness_previews.length > 0 && new Set(file.analysis_readiness_previews.map((preview) => preview?.target_id)).size !== new Set(targetIds).size) return 'analysis_readiness_previews must cover every project target';
     const partIds = new Set(file.project.assemblies.flatMap((assembly) => assembly.parts.map((part) => part.id)));
     const previewTargetIds = new Set();
     for (const [index, preview] of file.analysis_readiness_previews.entries()) {
