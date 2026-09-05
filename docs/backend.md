@@ -133,6 +133,8 @@ reports that no corresponding change occurred.
 
 Analysis readiness previews are pre-solver artifacts. They record what a future solver worker needs and what still requires review:
 
+The API accepts either a part or an assembly target. Assembly previews aggregate every included part, require complete aggregate geometry, dimensions, and material inputs before reporting `pre_solver_ready`, and remain review-required when those inputs are missing or mixed. Aggregate previews do not invent part-level demo estimates.
+
 - Load cases with magnitude, unit, direction, application region, and confidence.
 - Constraints with fixture or fastener regions and constrained degrees of freedom.
 - Material property sets with provenance and seeded-property confidence.
