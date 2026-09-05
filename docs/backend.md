@@ -126,7 +126,7 @@ The project and job stores are intentionally in-memory for the local MVP. Restar
 
 ## Project file persistence
 
-The MVP project file is a JSON envelope documented in [Project files](project-files.md). It uses `format: "mechaflow-cad.project"` and `schema_version: "1.0"`. The authoritative payload is the backend `Project` schema, so assemblies, parts, materials, wiring routes, active task requirements, modifications, analysis jobs, reports, and analysis job artifacts round-trip through the same validation used by normal project writes.
+The MVP project file contract is documented in [Project files](project-files.md). The authoritative payload is the backend `Project` schema, so assemblies, parts, materials, wiring routes, active task requirements, modifications, analysis jobs, reports, and analysis job artifacts round-trip through the same validation used by normal project writes.
 
 Export example:
 
@@ -143,7 +143,7 @@ curl -s -X POST http://127.0.0.1:8123/api/projects/import-file \
   --data-binary @project-open-gripper-demo.mfcad.json | python -m json.tool
 ```
 
-Real STEP and FreeCAD import remains future work. The `extensions` object reserves clean attachment points for those workers without making this MVP importer pretend it can parse heavy CAD files.
+See [Project files](project-files.md) for the envelope fields, validation behavior, and future STEP and FreeCAD extension points.
 
 ## Modification contract
 

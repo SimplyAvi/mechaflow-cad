@@ -25,7 +25,11 @@ const corsOrigins = new Set(
     .filter(Boolean),
 );
 let projectId = mockBackendPanelData.project.id;
-let project = structuredClone(mockBackendPanelData.project);
+const seedProject = structuredClone(mockBackendPanelData.project);
+if (seedProject.assemblies[0]?.wiring_routes?.length === 0 && mockBackendPanelData.wiring_routes?.length) {
+  seedProject.assemblies[0].wiring_routes = structuredClone(mockBackendPanelData.wiring_routes);
+}
+let project = seedProject;
 let analysisReadinessPreviews = structuredClone(mockBackendPanelData.analysis_readiness_previews ?? []);
 const editableDimensionFields = new Set(['length_mm', 'width_mm', 'height_mm', 'thickness_mm']);
 const modificationFields = new Set([
