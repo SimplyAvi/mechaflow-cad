@@ -484,11 +484,13 @@ def _artifact_cache_status(
     artifact: AnalysisArtifact,
     artifact_file_exists: Callable[[AnalysisArtifact, str], bool] | None = None,
 ) -> tuple[CachedArtifactStatus, str | None]:
-    manifest = artifact.payload.get("file_manifest", [])
-    if not manifest:
+    if "file_manifest" not in artifact.payload:
         return CachedArtifactStatus.metadata_only, "Artifact metadata is cached, but no downloadable local files are attached."
+    manifest = artifact.payload["file_manifest"]
     if not isinstance(manifest, list):
         return CachedArtifactStatus.stale_missing_files, "Artifact file manifest is malformed."
+    if not manifest:
+        return CachedArtifactStatus.metadata_only, "Artifact metadata is cached, but no downloadable local files are attached."
     produced = [item for item in manifest if isinstance(item, dict) and not item.get("missing")]
     if not produced:
         return CachedArtifactStatus.stale_missing_files, "Artifact manifest has no currently downloadable files."
@@ -637,7 +639,7 @@ def normalize_cached_references(
     reports = list(reports)
     for artifact in job.artifacts:
         manifest = artifact.payload.get("file_manifest", [])
-        if manifest and not isinstance(manifest, list):
+        if "file_manifest" in artifact.payload and not isinstance(manifest, list):
             raise ValueError(f"analysis artifact {artifact.id!r} has malformed file_manifest")
         for item in manifest if isinstance(manifest, list) else []:
             if not isinstance(item, dict):

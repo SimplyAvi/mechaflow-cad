@@ -1101,7 +1101,12 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         job = get_analysis_job_or_404(job_id)
         if job.adapter_name == LOCAL_SOLVER_FIXTURE_RUNNER_NAME:
             return run_local_solver_fixture_job(job_id)
-        return run_local_pre_solver_job(job_id)
+        if job.adapter_name == LOCAL_PRE_SOLVER_RUNNER_NAME:
+            return run_local_pre_solver_job(job_id)
+        raise HTTPException(
+            status_code=409,
+            detail="local execution is unavailable for this analysis job adapter",
+        )
 
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])
     def run_analysis_job_stub(job_id: str) -> AnalysisJob:

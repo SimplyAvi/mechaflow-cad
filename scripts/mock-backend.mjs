@@ -338,7 +338,7 @@ const analysisJobQueue = (sourceProject = project) => {
   const jobs = sourceProject.analysis_jobs.map((job) => ({
     ...job,
     recommendation: mockJobRecommendation(job, sourceProject),
-    cached_artifact_refs: job.cached_artifact_refs ?? cachedArtifactRefsFor(job, sourceProject),
+    cached_artifact_refs: cachedArtifactRefsFor(job, sourceProject),
     cached_report_refs: job.cached_report_refs ?? [],
   }));
   for (const job of jobs) {
