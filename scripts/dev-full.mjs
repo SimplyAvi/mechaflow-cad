@@ -56,6 +56,7 @@ const start = (name, command, args, env) => {
   const child = spawn(command, args, {
     cwd: repoRoot,
     env: { ...process.env, ...env },
+    shell: process.platform === 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   children.push(child);
