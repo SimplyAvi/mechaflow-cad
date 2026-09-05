@@ -17,8 +17,10 @@ from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESI
 from .models import (
     AnalysisArtifact,
     AnalysisConstraint,
+    AnalysisExecutionTargetRecommendation,
     AnalysisJob,
     AnalysisJobPlan,
+    AnalysisJobQueue,
     AnalysisJobRequest,
     AnalysisJobStatus,
     AnalysisJobType,
@@ -56,6 +58,11 @@ from .models import (
     WiringRuleSet,
     WiringRoute,
     validate_project_id,
+)
+from .job_queue import (
+    build_analysis_job_queue,
+    build_execution_target_recommendation,
+    enrich_analysis_job_for_queue,
 )
 from .runners import (
     LOCAL_PRE_SOLVER_RUNNER_NAME,
@@ -140,6 +147,8 @@ SCHEMA_MODELS = [
     TaskRequirement,
     AnalysisJob,
     AnalysisJobPlan,
+    AnalysisJobQueue,
+    AnalysisExecutionTargetRecommendation,
     AnalysisArtifact,
     ManufacturingOption,
     WiringRoute,
@@ -194,7 +203,30 @@ CATALOG_TASKS_PATH = Path(__file__).resolve().parents[2] / "data" / "tasks.seed.
 
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
-    project_store = project_store or build_default_project_store()
+    def artifact_bundle_path(artifact: AnalysisArtifact) -> Path | None:
+        bundle_id = artifact.payload.get("storage_bundle_id", artifact.id)
+        if (
+            not isinstance(bundle_id, str)
+            or not bundle_id
+            or bundle_id in {".", ".."}
+            or "/" in bundle_id
+            or "\\" in bundle_id
+            or Path(bundle_id).name != bundle_id
+            or bundle_id != artifact.id
+        ):
+            return None
+        artifact_root = settings.artifact_dir.resolve()
+        bundle_path = (artifact_root / bundle_id).resolve()
+        return bundle_path if bundle_path.is_relative_to(artifact_root) else None
+
+    def artifact_file_exists(artifact: AnalysisArtifact, name: str) -> bool:
+        bundle_path = artifact_bundle_path(artifact)
+        if bundle_path is None:
+            return False
+        file_path = (bundle_path / name).resolve()
+        return file_path.is_relative_to(bundle_path) and file_path.is_file()
+
+    project_store = project_store or build_default_project_store(artifact_file_exists)
     readiness_previews_by_project: dict[str, list[AnalysisReadinessPreview]] = {}
 
     def invalidate_readiness(project_id: str) -> None:
@@ -249,6 +281,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 notes=[
                     "MVP JSON project file. Real STEP, FreeCAD, KiCad, and WireViz imports are future extensions.",
                     "Analysis readiness records are exported as portable previews and can be regenerated from the project.",
+                    "Analysis job queue recommendations and cached artifact references are planning metadata; local files may expire under retention rules.",
                 ],
             ),
             project=project,
@@ -458,14 +491,16 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             for preview in project_file.analysis_readiness_previews
         ]
         panel_data = build_project_panel_data(stored_project)
+        queue = build_analysis_job_queue(stored_project, list_local_solver_tool_statuses(), artifact_file_exists)
         if imported_previews:
             readiness_previews_by_project[stored_project.id] = imported_previews
             panel_data = panel_data.model_copy(
-                update={"analysis_readiness_previews": imported_previews},
+                update={"analysis_readiness_previews": imported_previews, "analysis_job_queue": queue},
                 deep=True,
             )
         else:
             readiness_previews_by_project[stored_project.id] = panel_data.analysis_readiness_previews
+            panel_data = panel_data.model_copy(update={"analysis_job_queue": queue}, deep=True)
         return ProjectFileImportResponse(
             project_id=stored_project.id,
             message=f"Imported MechaFlow project file for {stored_project.id}.",
@@ -495,6 +530,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             NonFiniteStorageValueError,
         ) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.put(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def upsert_project(project_id: str, project: Project) -> Project:
@@ -515,10 +552,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         project = get_project_or_404(project_id)
         previews = readiness_previews_by_project.get(project.id)
         panel_data = build_project_panel_data(project)
+        queue = build_analysis_job_queue(project, list_local_solver_tool_statuses(), artifact_file_exists)
         return panel_data.model_copy(
-            update={"analysis_readiness_previews": previews},
+            update={"analysis_readiness_previews": previews, "analysis_job_queue": queue},
             deep=True,
-        ) if previews is not None else panel_data
+        ) if previews is not None else panel_data.model_copy(update={"analysis_job_queue": queue}, deep=True)
 
     @app.post(
         f"{settings.api_prefix}/projects/{{project_id}}/analysis-readiness/previews",
@@ -629,8 +667,18 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if stored_project is None or preview is None:
             raise HTTPException(status_code=404, detail="project not found")
         invalidate_readiness(stored_project.id)
+        panel_data = build_project_panel_data(stored_project).model_copy(
+            update={
+                "analysis_job_queue": build_analysis_job_queue(
+                    stored_project,
+                    list_local_solver_tool_statuses(),
+                    artifact_file_exists,
+                )
+            },
+            deep=True,
+        )
         return preview.model_copy(
-            update={"panel_data": build_project_panel_data(stored_project)},
+            update={"panel_data": panel_data},
             deep=True,
         )
 
@@ -721,7 +769,51 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
     def analysis_jobs(project_id: str | None = None) -> list[AnalysisJob]:
-        return project_store.list_analysis_jobs(project_id)
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
+        jobs = project_store.list_analysis_jobs(project_id)
+        if not jobs:
+            return jobs
+        tool_statuses = list_local_solver_tool_statuses()
+        project = project_store.get_project(project_id) if project_id is not None else None
+        enriched_jobs = []
+        for job in jobs:
+            owning_project = project or project_store.get_project(job.project_id)
+            if owning_project is None:
+                enriched_jobs.append(job)
+                continue
+            enriched_jobs.append(enrich_analysis_job_for_queue(owning_project, job, tool_statuses, artifact_file_exists))
+        return enriched_jobs
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/analysis-job-queue",
+        response_model=AnalysisJobQueue,
+        tags=["jobs"],
+    )
+    def project_analysis_job_queue(project_id: str) -> AnalysisJobQueue:
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
+        return build_analysis_job_queue(get_project_or_404(project_id), list_local_solver_tool_statuses(), artifact_file_exists)
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/analysis-jobs",
+        response_model=list[AnalysisJob],
+        tags=["jobs"],
+    )
+    def project_analysis_jobs(project_id: str) -> list[AnalysisJob]:
+        return project_analysis_job_queue(project_id).jobs
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/analysis-jobs/recommendation",
+        response_model=AnalysisExecutionTargetRecommendation,
+        tags=["jobs"],
+    )
+    def recommend_project_analysis_job(project_id: str, request: AnalysisJobRequest) -> AnalysisExecutionTargetRecommendation:
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
+        project = get_project_or_404(project_id)
+        request = request.model_copy(update={"project_id": project.id}, deep=True)
+        return build_execution_target_recommendation(project, request, list_local_solver_tool_statuses())
 
     @app.get(
         f"{settings.api_prefix}/local-analysis/tool-boundaries",
@@ -781,7 +873,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 updated_at=now,
             )
             try:
-                stored_job = project_store.add_analysis_job(job)
+                project = get_project_or_404(request.project_id)
+                enriched_job = enrich_analysis_job_for_queue(project, job, list_local_solver_tool_statuses(), artifact_file_exists)
+                stored_job = project_store.add_analysis_job(enriched_job)
                 return stored_job
             except AnalysisJobAlreadyExistsError:
                 continue
@@ -796,28 +890,30 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}", response_model=AnalysisJob, tags=["jobs"])
     def analysis_job(job_id: str) -> AnalysisJob:
-        return get_analysis_job_or_404(job_id)
+        job = get_analysis_job_or_404(job_id)
+        project = get_project_or_404(job.project_id)
+        return enrich_analysis_job_for_queue(project, job, list_local_solver_tool_statuses(), artifact_file_exists)
 
     @app.get(f"{settings.api_prefix}/analysis-artifacts/{{artifact_id}}/{{file_name}}", tags=["jobs"])
     def analysis_artifact_file(artifact_id: str, file_name: str) -> FileResponse:
         if Path(file_name).name != file_name:
             raise HTTPException(status_code=404, detail="artifact file not found")
-        for job in project_store.list_analysis_jobs():
-            artifact = next((item for item in job.artifacts if item.id == artifact_id), None)
-            if artifact is None:
-                continue
-            manifest = artifact.payload.get("file_manifest", [])
-            if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
-                raise HTTPException(status_code=404, detail="artifact file not found")
-            artifact_root = settings.artifact_dir.resolve()
-            bundle_id = artifact.payload.get("storage_bundle_id", job.id)
-            path = (artifact_root / bundle_id / file_name).resolve()
-            if not path.is_relative_to(artifact_root):
-                raise HTTPException(status_code=404, detail="artifact file not found")
-            if not path.is_file():
-                raise HTTPException(status_code=404, detail="artifact file expired")
-            return FileResponse(path, filename=file_name)
-        raise HTTPException(status_code=404, detail="artifact not found")
+        artifact_owner = project_store.get_analysis_artifact(artifact_id)
+        if artifact_owner is None:
+            raise HTTPException(status_code=404, detail="artifact not found")
+        _, artifact = artifact_owner
+        manifest = artifact.payload.get("file_manifest", [])
+        if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        bundle_path = artifact_bundle_path(artifact)
+        if bundle_path is None:
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        path = (bundle_path / file_name).resolve()
+        if not path.is_relative_to(bundle_path):
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="artifact file expired")
+        return FileResponse(path, filename=file_name)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/plan", response_model=AnalysisJobPlan, tags=["jobs"])
     def analysis_job_plan(job_id: str) -> AnalysisJobPlan:
@@ -858,9 +954,10 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                     deep=True,
                 )
 
-            failed_job = project_store.update_analysis_job(job_id, mark_failed)
+            project_store.update_analysis_job(job_id, mark_failed)
             raise HTTPException(status_code=404, detail="analysis target not found") from exc
-        stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
+        enriched_job = enrich_analysis_job_for_queue(project, completed_job, list_local_solver_tool_statuses(), artifact_file_exists)
+        stored_job = project_store.update_analysis_job(job_id, lambda _: enriched_job)
         if stored_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return stored_job
@@ -962,7 +1059,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
             project_store.update_analysis_job(job_id, mark_failed)
             raise HTTPException(status_code=500, detail="solver fixture execution failed") from exc
-        stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
+        enriched_job = enrich_analysis_job_for_queue(project, completed_job, list_local_solver_tool_statuses(), artifact_file_exists)
+        stored_job = project_store.update_analysis_job(job_id, lambda _: enriched_job)
         if stored_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return stored_job
@@ -1012,7 +1110,12 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         job = get_analysis_job_or_404(job_id)
         if job.adapter_name == LOCAL_SOLVER_FIXTURE_RUNNER_NAME:
             return run_local_solver_fixture_job(job_id)
-        return run_local_pre_solver_job(job_id)
+        if job.adapter_name == LOCAL_PRE_SOLVER_RUNNER_NAME:
+            return run_local_pre_solver_job(job_id)
+        raise HTTPException(
+            status_code=409,
+            detail="local execution is unavailable for this analysis job adapter",
+        )
 
     @app.post(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/run-stub", response_model=AnalysisJob, tags=["jobs"])
     def run_analysis_job_stub(job_id: str) -> AnalysisJob:
@@ -1020,21 +1123,24 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             adapter = get_adapter_for_job(job)
             now = datetime.now(timezone.utc)
             if adapter is None:
-                return job.model_copy(update={"status": AnalysisJobStatus.blocked_missing_adapter, "updated_at": now})
-            artifact = adapter.run_stub(job)
-            return job.model_copy(
-                update={
-                    "status": AnalysisJobStatus.completed,
-                    "artifacts": [*job.artifacts, artifact],
-                    "result_summary": {
-                        **job.result_summary,
-                        "message": "Local stub completed without invoking heavy tools.",
-                        "artifact_id": artifact.id,
-                        "artifact_kind": artifact.kind.value,
-                    },
-                    "updated_at": now,
-                }
-            )
+                updated_job = job.model_copy(update={"status": AnalysisJobStatus.blocked_missing_adapter, "updated_at": now})
+            else:
+                artifact = adapter.run_stub(job)
+                updated_job = job.model_copy(
+                    update={
+                        "status": AnalysisJobStatus.completed,
+                        "artifacts": [*job.artifacts, artifact],
+                        "result_summary": {
+                            **job.result_summary,
+                            "message": "Local stub completed without invoking heavy tools.",
+                            "artifact_id": artifact.id,
+                            "artifact_kind": artifact.kind.value,
+                        },
+                        "updated_at": now,
+                    }
+                )
+            project = get_project_or_404(job.project_id)
+            return enrich_analysis_job_for_queue(project, updated_job, list_local_solver_tool_statuses(), artifact_file_exists)
 
         job = project_store.update_analysis_job(job_id, run_stub)
         if job is None:

@@ -113,6 +113,32 @@ const jobStatus = (status: string): JobStatus => {
   return 'queued';
 };
 
+const unavailableEstimate = (label: string, unit: string) => ({
+  label,
+  min: null,
+  max: null,
+  unit,
+  basis: 'unavailable',
+  confidence: 'unknown_or_needs_review',
+  notice: 'Connect to the FastAPI queue endpoint for a current deterministic estimate.',
+});
+
+const fallbackJobRecommendation = (job: BackendAnalysisJob) => ({
+  recommended_target: 'unavailable' as const,
+  status: 'review_required' as const,
+  summary: 'Execution recommendation is unavailable in bundled mock data. Connect the backend for deterministic local and cloud-planning guidance.',
+  reasons: [`Adapter ${job.adapter_name} and target ${job.target_id} came from static demo data.`],
+  missing_local_tools: [],
+  review_required: ['Use /api/projects/{project_id}/analysis-job-queue for current tool availability and estimate metadata.'],
+  model_complexity_score: 0,
+  expected_runtime_minutes: unavailableEstimate('runtime unavailable in mock data', 'minutes'),
+  cost_estimate: unavailableEstimate('cost unavailable in mock data', 'USD'),
+  wait_time_estimate: unavailableEstimate('wait unavailable in mock data', 'minutes'),
+  cloud_execution_available: false,
+  cloud_configuration_required: true,
+  cloud_notice: 'Cloud execution is not configured in the desktop MVP. Mock data never starts paid compute.',
+});
+
 const riskFromPart = (part: BackendPart): RiskLevel => {
   if (part.mass_kg == null) return 'unknown';
   if (part.mass_kg > 0.2) return 'high';
@@ -637,6 +663,7 @@ export const mapBackendAnalysisJob = (job: BackendAnalysisJob): AnalysisJob => {
     id: job.id,
     name: toTitle(job.job_type),
     worker: job.adapter_name,
+    targetId: job.target_id,
     status,
     progress: typeof progress === 'number' ? Math.max(0, Math.min(100, progress)) : null,
     summary:
@@ -645,6 +672,7 @@ export const mapBackendAnalysisJob = (job: BackendAnalysisJob): AnalysisJob => {
         : `Adapter ${job.adapter_name} is reserved for ${toTitle(job.job_type)} handoff.`,
     expectedArtifact: job.artifacts.at(-1)?.kind ?? job.artifacts[0]?.kind ?? undefined,
     artifacts: job.artifacts.map((artifact) => ({
+      id: artifact.id,
       kind: artifact.kind,
       title: artifact.title,
       summary: artifact.summary,
@@ -652,6 +680,9 @@ export const mapBackendAnalysisJob = (job: BackendAnalysisJob): AnalysisJob => {
       generatedBy: artifact.generated_by,
       payload: artifact.payload,
     })),
+    recommendation: job.recommendation ?? fallbackJobRecommendation(job),
+    cachedArtifactRefs: job.cached_artifact_refs ?? [],
+    cachedReportRefs: job.cached_report_refs ?? [],
     reviewStatus: typeof job.result_summary.review_status === 'string' ? job.result_summary.review_status : undefined,
     trustLabel: typeof job.result_summary.trust_label === 'string' ? job.result_summary.trust_label : undefined,
   };
@@ -757,10 +788,15 @@ const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElec
       const segment = segments.find((candidate) => candidate.id === id);
       const previous = index > 0 ? segments.find((candidate) => candidate.id === route.wire_segment_ids[index - 1]) : null;
       const next = index + 1 < route.wire_segment_ids.length ? segments.find((candidate) => candidate.id === route.wire_segment_ids[index + 1]) : null;
+      const segmentFrom = segment?.from_endpoint;
+      const segmentTo = segment?.to_endpoint;
+      const previousTo = previous?.to_endpoint;
       return segment != null
-        && (previous == null || (previous.to_endpoint?.connector_id === segment.from_endpoint?.connector_id && previous.to_endpoint.part_id === segment.from_endpoint.part_id))
-        && (index > 0 || (segment.from_endpoint?.connector_id === route.from_connector.id && segment.from_endpoint.part_id === route.from_connector.part_id))
-        && (next != null || (segment.to_endpoint?.connector_id === route.to_connector.id && segment.to_endpoint.part_id === route.to_connector.part_id))
+        && segmentFrom != null
+        && segmentTo != null
+        && (previous == null || (previousTo?.connector_id === segmentFrom.connector_id && previousTo.part_id === segmentFrom.part_id))
+        && (index > 0 || (segmentFrom.connector_id === route.from_connector.id && segmentFrom.part_id === route.from_connector.part_id))
+        && (next != null || (segmentTo.connector_id === route.to_connector.id && segmentTo.part_id === route.to_connector.part_id))
         && (segment.bom_item_id == null || route.harness_bom.includes(segment.bom_item_id));
     })
     && route.clearance_min_mm != null
@@ -770,10 +806,24 @@ const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElec
     && rule.required_bend_radius_min_mm != null
     && rule.required_service_loop_min_mm != null;
   if (!completeEvidence) return 'review_required';
+  const clearanceMm = route.clearance_min_mm;
+  const bendRadiusMm = route.bend_radius_min_mm;
+  const serviceLoopMm = route.service_loop_mm;
+  const clearanceThreshold = rule?.required_clearance_min_mm;
+  const bendThreshold = rule?.required_bend_radius_min_mm;
+  const serviceThreshold = rule?.required_service_loop_min_mm;
   if (
-    route.clearance_min_mm < rule.required_clearance_min_mm
-    || route.bend_radius_min_mm < rule.required_bend_radius_min_mm
-    || route.service_loop_mm < rule.required_service_loop_min_mm
+    clearanceMm == null
+    || bendRadiusMm == null
+    || serviceLoopMm == null
+    || clearanceThreshold == null
+    || bendThreshold == null
+    || serviceThreshold == null
+  ) return 'review_required';
+  if (
+    clearanceMm < clearanceThreshold
+    || bendRadiusMm < bendThreshold
+    || serviceLoopMm < serviceThreshold
   ) return 'warning';
   return 'pass';
 };
@@ -950,6 +1000,8 @@ export function mapProjectPanelDataToReferenceDesign(
   const allBackendParts = backendAssemblies.flatMap((candidate) => candidate.parts);
   const allParts = assemblies.flatMap((candidate) => candidate.parts);
   const reports = (panelData.reports.length > 0 ? panelData.reports : project.reports).map(mapReport);
+  const queueJobs = panelData.analysis_job_queue?.jobs;
+  const analysisJobs = (queueJobs && queueJobs.length > 0 ? queueJobs : project.analysis_jobs).map(mapBackendAnalysisJob);
   const isDemoReference = project.reference_design_id === 'ref-open-gripper-demo';
 
   return {
@@ -978,7 +1030,7 @@ export function mapProjectPanelDataToReferenceDesign(
     manufacturingOptions: mapManufacturing(panelData.manufacturing_options),
     electronicsComponents: mapElectronicsComponents(panelData.electronics_components ?? project.electronics_components ?? []),
     wireSegments: mapWireSegments(panelData.wire_segments ?? project.wire_segments ?? []),
-    analysisJobs: project.analysis_jobs.map(mapBackendAnalysisJob),
+    analysisJobs,
     wiringRoutes: mapWiring(
       panelData.wiring_routes.length > 0
         ? panelData.wiring_routes

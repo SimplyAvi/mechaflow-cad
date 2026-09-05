@@ -55,6 +55,8 @@ The desktop demo centers on a robot arm visual MVP with a wrist gripper. The leg
 13. When connected to the FastAPI backend, click `Run pre-solver screening for ...` in the analysis panel. Confirm the new job appears with a review-required artifact titled `Local pre-solver screening package, not FEA`. Export and import again to confirm that result artifact reference is preserved.
 14. Inspect the local solver readiness panel. Confirm it distinguishes selected-target pre-solver readiness, solver-unavailable tools, review-required full-stack project FEA, and any completed CalculiX fixture result.
 15. Click `Run solver-readiness fixture for ...`. If CalculiX is absent, confirm the job returns `solver unavailable` with a generated `.inp` artifact manifest and install guidance. If CalculiX is installed, confirm the job says the fixture ran but is not project FEA.
+16. Inspect the analysis job queue panel. Confirm each row shows its current status, local or cloud-planning recommendation, explanation, runtime and wait estimates, and cached report or artifact references where available. Confirm cloud recommendations are labeled planning-only and never offer execution.
+17. Create or import a queued analysis job and confirm missing tools or review-required inputs remain blocked or unavailable in the queue. Confirm a local pre-solver job can expose its retained artifact metadata and that an expired or unavailable file is not presented as a current downloadable result.
 
 No project FEA solver is running in this slice. The full FEA row remains review-required until FreeCAD geometry prep, Gmsh meshing, and CalculiX project solving workers are implemented. The readiness panel is pre-solver input only, the local pre-solver runner artifact is a pre-solver package, the CalculiX fixture proves executable solver plumbing only, and visible strength criteria are advisory demo seed data unless a future project solver artifact replaces them. Material substitution cost and lead-time values are ranged estimates from explicit seed manufacturing options, not exact supplier quotes.
 
@@ -84,7 +86,7 @@ For the FastAPI backend path, start the backend and frontend as shown below. The
 2. Run pre-solver screening for a selected part.
 3. Click `Export project` and save `project-open-gripper-demo.mfcad.json`.
 4. Click `Import project` and pick the saved file.
-5. Verify the imported cockpit still shows the robot assembly, materials, wiring awareness, readiness details, and pre-solver artifact.
+5. Verify the imported cockpit still shows the robot assembly, materials, wiring awareness, readiness details, analysis queue recommendation metadata, cached report or artifact references, and pre-solver artifact.
 
 If a platform-specific file dialog blocks the demo, use the documented API commands in [Project files](project-files.md) to export and import the same JSON file.
 

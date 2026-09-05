@@ -2183,8 +2183,7 @@
       "bend_radius_min_mm": 18,
       "clearance_min_mm": 1.5,
       "harness_bom": [
-        "4-conductor silicone lead",
-        "micro JST connector"
+        "bom-wire-finger-sensor-lead"
       ],
       "risk_notes": [
         "Runs through wrist rotation and needs slack validation once CAD geometry exists."
@@ -2298,8 +2297,7 @@
       "bend_radius_min_mm": 25,
       "clearance_min_mm": 3,
       "harness_bom": [
-        "robot flex cable bundle",
-        "strain-relief clip"
+        "bom-wire-main-arm-harness"
       ],
       "risk_notes": [
         "Service loop review required at shoulder and elbow before motion is trusted."
@@ -2392,7 +2390,7 @@
       "bend_radius_min_mm": 12,
       "clearance_min_mm": 2,
       "harness_bom": [
-        "shielded encoder lead"
+        "bom-wire-shoulder-encoder"
       ],
       "risk_notes": [
         "Encoder pigtail is visible so electrical review is not hidden by the mechanical model."
@@ -2498,8 +2496,7 @@
       "bend_radius_min_mm": 20,
       "clearance_min_mm": null,
       "harness_bom": [
-        "tool IO cable",
-        "spiral wrap"
+        "bom-wire-wrist-tool"
       ],
       "risk_notes": [
         "Wrist route needs rotation sweep clearance after real geometry import."

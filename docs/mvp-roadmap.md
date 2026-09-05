@@ -110,6 +110,8 @@ Deliverables:
 
 ## Milestone 10: cloud-assisted jobs
 
+Status: complete for the safe local MVP boundary. Cloud execution remains intentionally unconfigured.
+
 Deliverables:
 
 - Job queue.
@@ -118,6 +120,8 @@ Deliverables:
 - Cached reports.
 - Cost and wait-time estimate before paid compute.
 
+The current slice provides deterministic local recommendations, cloud-planning estimates, queue status, and retained local report or artifact references. It does not add a cloud provider, billing, credentials, or remote execution.
+
 ## Recommended immediate next task
 
-Start milestone 10: add cloud-assisted job queueing, local-versus-cloud guidance, job status, cached reports, and cost and wait-time estimates before paid compute.
+Define and explicitly approve the future cloud execution boundary, including provider configuration, credentials, budget guardrails, and remote-worker safety requirements.

@@ -32,7 +32,8 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/no FEA claim/i);
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Gmsh finite-element mesh/i);
-    expect(screen.getByText(/Background analysis status/i)).toBeInTheDocument();
+    expect(screen.getByText(/Analysis job queue/i)).toBeInTheDocument();
+    expect(screen.getByText(/Local-first orchestration and cached reports/i)).toBeInTheDocument();
     expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
     expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
     expect(screen.getByText(/Backend handoff mirrored/i)).toBeInTheDocument();
@@ -157,6 +158,65 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/http:\/\/api.test\/api\/projects\/project-open-gripper-demo\/panel-data/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
+  });
+
+  it('renders queue recommendations, planning estimates, and cached artifact links from the backend', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelData = structuredClone(mockProjectPanelData);
+    const job = panelData.project.analysis_jobs[0]!;
+    job.artifacts[0] = {
+      ...job.artifacts[0]!,
+      id: 'artifact-cad-metadata',
+      payload: {
+        file_manifest: [{ name: 'metadata.json', download_url: '/api/analysis-artifacts/artifact-cad-metadata/metadata.json', bytes: 124 }],
+      },
+    };
+    job.recommendation = {
+      recommended_target: 'cloud_recommended_when_configured',
+      status: 'review_required',
+      summary: 'Cloud planning is recommended only after configuration because local FreeCAD is missing.',
+      reasons: ['FreeCAD is missing locally.', 'Cloud execution remains unavailable in this MVP.'],
+      missing_local_tools: ['FreeCAD'],
+      review_required: ['Configure provider and budget guardrails before remote execution.'],
+      model_complexity_score: 9,
+      expected_runtime_minutes: { label: 'local runtime planning estimate', min: 72, max: 101, unit: 'minutes', basis: 'deterministic_local_heuristic', confidence: 'estimated_from_heuristic', notice: 'Estimate only.' },
+      cost_estimate: { label: 'cloud planning cost estimate, not a quote', min: 3.15, max: 13.25, unit: 'USD', basis: 'cloud_planning_estimate', confidence: 'estimated_from_heuristic', notice: 'Planning estimate only. This is not real billing, a supplier quote, or a compute-provider price.' },
+      wait_time_estimate: { label: 'cloud planning wait estimate', min: 14, max: 36, unit: 'minutes', basis: 'cloud_planning_estimate', confidence: 'estimated_from_heuristic', notice: 'Hypothetical cloud queue only.' },
+      cloud_execution_available: false,
+      cloud_configuration_required: true,
+      cloud_notice: 'Cloud execution is not configured.',
+    };
+    job.cached_artifact_refs = [{
+      artifact_id: 'artifact-cad-metadata',
+      job_id: job.id,
+      project_id: panelData.project.id,
+      kind: 'cad_metadata',
+      title: 'Starter CAD metadata',
+      status: 'current',
+      generated_by: 'freecad-worker',
+      generated_at: '2026-09-03T00:00:00Z',
+      download_urls: ['/api/analysis-artifacts/artifact-cad-metadata/metadata.json'],
+      summary: 'Cached metadata bundle.',
+      stale_reason: null,
+    }];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText(/cloud planning is recommended only after configuration/i)).toBeInTheDocument();
+    expect(screen.getByText(/cloud recommended when configured/i)).toBeInTheDocument();
+    expect(screen.getByText(/Planning estimate only. This is not real billing/i)).toBeInTheDocument();
+    expect(screen.getByText(/Missing local tools: FreeCAD/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Download cached artifact/i })).toHaveAttribute(
+      'href',
+      'http://api.test/api/analysis-artifacts/artifact-cad-metadata/metadata.json',
+    );
   });
 
   it('previews then applies a backend material substitution without mutating during preview', async () => {

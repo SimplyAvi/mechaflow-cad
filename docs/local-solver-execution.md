@@ -6,7 +6,7 @@ MechaFlow CAD now separates three analysis states:
 2. **Solver readiness fixture** - the backend can generate a deterministic CalculiX `.inp` deck and, when `ccx` is on `PATH`, invoke CalculiX against that tiny fixture. A successful fixture proves executable solver plumbing only. It is not analysis of the selected part or assembly.
 3. **Full project FEA** - future work. Real part analysis still requires FreeCAD geometry preparation, Gmsh mesh generation, CalculiX solve execution, mesh quality evidence, solver logs, and engineering review.
 
-No fake FEA results should be presented as real analysis. If a local solver is missing, the API returns `solver_unavailable` or `unavailable_review_required` with exact missing tools and setup guidance.
+No fake FEA results should be presented as real analysis. If a local solver is missing, the API returns `solver_unavailable` or `unavailable_review_required` with exact missing tools and setup guidance. Cloud-assisted execution is not implemented in this MVP; the job queue can only show planning recommendations and estimates until a provider, credentials, budget guardrails, and explicit approval are configured.
 
 ## Intended open-source stack
 
@@ -58,6 +58,20 @@ Inspect combined solver readiness:
 curl -s http://127.0.0.1:8123/api/local-analysis/solver-readiness | python -m json.tool
 ```
 
+Inspect the analysis job queue and recommendation metadata:
+
+```bash
+curl -s http://127.0.0.1:8123/api/projects/project-open-gripper-demo/analysis-job-queue | python -m json.tool
+```
+
+Preview a local/cloud recommendation without creating a job:
+
+```bash
+curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/analysis-jobs/recommendation \
+  -H 'Content-Type: application/json' \
+  -d '{"job_type":"run_fea","target_id":"part-finger-link","project_id":"project-open-gripper-demo"}' | python -m json.tool
+```
+
 Generate a pre-solver package without invoking solvers:
 
 ```bash
@@ -76,7 +90,7 @@ curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/ana
 
 If CalculiX is missing, this endpoint returns a persisted `solver_unavailable` job with the generated `.inp` deck manifest and install guidance. If CalculiX is available, it invokes the deterministic fixture and collects stdout, stderr, and the generated solver files (`.dat`, `.frd`, and `.sta`) where produced.
 
-Fixture files are copied into a versioned `.mechaflow-artifacts/<bundle-id>/` directory and are downloadable through the `download_url` in each file manifest entry. The local artifact store retains bundles for 7 days and caps storage at 100 bundles, pruning older bundles when a new run starts. Temporary execution directories are removed after collection.
+Fixture files are copied into a versioned `.mechaflow-artifacts/<bundle-id>/` directory and are downloadable through the `download_url` in each file manifest entry. The local artifact store retains bundles for 7 days and caps storage at 100 bundles, pruning older bundles when a new run starts. Temporary execution directories are removed after collection. Project files preserve the artifact metadata, but expired local files return `artifact file expired` and imports reject impossible download URLs instead of treating stale paths as current results.
 
 ## What is real analysis today
 
@@ -94,4 +108,4 @@ Not real project FEA yet:
 - Running CalculiX against the selected part or assembly.
 - Reporting project stress, displacement, safety factor, or payload rating as solver results.
 
-The desktop demo labels these states distinctly so pre-solver estimates, unavailable tools, fixture execution, and future solver results are not confused.
+The desktop demo labels these states distinctly so pre-solver estimates, unavailable tools, fixture execution, cached reports, cloud planning estimates, and future solver results are not confused.

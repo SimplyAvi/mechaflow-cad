@@ -235,12 +235,75 @@ export interface BackendModificationPreview {
 }
 
 export interface AnalysisJobArtifactSummary {
+  id?: string;
   kind: string;
   title: string;
   summary?: string;
   confidence?: string;
   generatedBy?: string;
   payload?: Record<string, unknown>;
+}
+
+export interface AnalysisEstimateRange {
+  label: string;
+  min: number | null;
+  max: number | null;
+  unit: string;
+  basis: string;
+  confidence: string;
+  notice: string;
+}
+
+export interface AnalysisExecutionTargetRecommendation {
+  recommended_target: 'local' | 'cloud_recommended_when_configured' | 'unavailable';
+  status: 'ready' | 'review_required' | 'unavailable';
+  summary: string;
+  reasons: string[];
+  missing_local_tools: string[];
+  review_required: string[];
+  model_complexity_score: number;
+  expected_runtime_minutes: AnalysisEstimateRange;
+  cost_estimate: AnalysisEstimateRange;
+  wait_time_estimate: AnalysisEstimateRange;
+  cloud_execution_available: boolean;
+  cloud_configuration_required: boolean;
+  cloud_notice: string;
+}
+
+export interface CachedAnalysisArtifactReference {
+  artifact_id: string;
+  job_id: string;
+  project_id: string;
+  kind: string;
+  title: string;
+  status: 'current' | 'metadata_only' | 'stale_missing_files' | 'superseded';
+  generated_by: string;
+  generated_at: string;
+  download_urls: string[];
+  summary?: string | null;
+  stale_reason?: string | null;
+}
+
+export interface CachedAnalysisReportReference {
+  report_id: string;
+  project_id: string;
+  title: string;
+  status: string;
+  generated_at: string;
+  derived_from_job_id?: string | null;
+  current: boolean;
+  summary?: string | null;
+}
+
+export interface AnalysisJobQueue {
+  project_id: string;
+  jobs: BackendAnalysisJob[];
+  status_counts: Record<string, number>;
+  local_ready_count: number;
+  cloud_planning_count: number;
+  review_required_count: number;
+  unavailable_count: number;
+  summary: string;
 }
 
 export interface LocalSolverToolStatus {
@@ -284,11 +347,15 @@ export interface AnalysisJob {
   id: string;
   name: string;
   worker: string;
+  targetId: string;
   status: JobStatus;
   progress: number | null;
   summary: string;
   expectedArtifact?: string;
   artifacts: AnalysisJobArtifactSummary[];
+  recommendation?: AnalysisExecutionTargetRecommendation | null;
+  cachedArtifactRefs: CachedAnalysisArtifactReference[];
+  cachedReportRefs: CachedAnalysisReportReference[];
   reviewStatus?: string;
   trustLabel?: string;
 }
@@ -452,6 +519,7 @@ export interface BackendProjectPanelData {
   wiring_review?: BackendWiringReviewReport | null;
   reports: BackendAnalysisReport[];
   analysis_readiness_previews?: AnalysisReadinessPreview[];
+  analysis_job_queue?: AnalysisJobQueue | null;
 }
 
 export interface BackendProjectFile {
@@ -752,6 +820,7 @@ export interface BackendAnalysisJob {
   input_summary: Record<string, unknown>;
   result_summary: Record<string, unknown>;
   artifacts: Array<{
+    id?: string;
     kind: string;
     title: string;
     summary?: string;
@@ -759,6 +828,9 @@ export interface BackendAnalysisJob {
     generated_by?: string;
     payload?: Record<string, unknown>;
   }>;
+  recommendation?: AnalysisExecutionTargetRecommendation | null;
+  cached_artifact_refs?: CachedAnalysisArtifactReference[];
+  cached_report_refs?: CachedAnalysisReportReference[];
   created_at?: string;
   updated_at?: string;
 }
