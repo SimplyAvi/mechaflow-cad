@@ -182,7 +182,6 @@ def _write_fixture_input() -> FixtureRunArtifacts:
             f"{CALCULIX_FIXTURE_DECK_NAME}.dat",
             f"{CALCULIX_FIXTURE_DECK_NAME}.frd",
             f"{CALCULIX_FIXTURE_DECK_NAME}.sta",
-            f"{CALCULIX_FIXTURE_DECK_NAME}.cvg",
         ],
     )
 
@@ -229,9 +228,8 @@ def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, bu
                 if path.is_file():
                     shutil.copy2(path, destination / path.name)
             return destination
-    except Exception:
+    finally:
         shutil.rmtree(fixture.workdir, ignore_errors=True)
-        raise
 
 
 def _artifact_file_manifest(
@@ -306,7 +304,6 @@ def run_calculix_fixture(
 
     if calculix.availability != LocalSolverToolAvailability.available or not calculix.resolved_command:
         durable_workdir = _persist_fixture_files(fixture, artifact_root, artifact_id)
-        shutil.rmtree(fixture.workdir, ignore_errors=True)
         file_manifest = _artifact_file_manifest(durable_workdir, api_prefix, artifact_id, fixture.expected_outputs)
         artifact = AnalysisArtifact(
             id=artifact_id,
@@ -370,7 +367,6 @@ def run_calculix_fixture(
         stdout = ""
 
     durable_workdir = _persist_fixture_files(fixture, artifact_root, artifact_id)
-    shutil.rmtree(fixture.workdir, ignore_errors=True)
     file_manifest = _artifact_file_manifest(
         durable_workdir,
         api_prefix,

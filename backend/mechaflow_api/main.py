@@ -843,13 +843,21 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         return run_local_pre_solver_job(job.id)
 
     def run_local_solver_fixture_job(job_id: str) -> AnalysisJob:
+        class ConcurrentSolverRunError(RuntimeError):
+            pass
+
         def mark_running(job: AnalysisJob) -> AnalysisJob:
+            if job.status == AnalysisJobStatus.running:
+                raise ConcurrentSolverRunError("solver fixture is already running")
             return job.model_copy(
                 update={"status": AnalysisJobStatus.running, "updated_at": datetime.now(timezone.utc)},
                 deep=True,
             )
 
-        running_job = project_store.update_analysis_job(job_id, mark_running)
+        try:
+            running_job = project_store.update_analysis_job(job_id, mark_running)
+        except ConcurrentSolverRunError as exc:
+            raise HTTPException(status_code=409, detail="solver fixture is already running") from exc
         if running_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         project = get_project_or_404(running_job.project_id)
@@ -929,7 +937,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                     "readiness_state": readiness.state.value,
                     "source": "project solver-readiness fixture endpoint",
                     "fixture_scope": "CalculiX deterministic fixture only, not project FEA",
-                    "expected_artifacts": [".inp", ".dat", ".frd", ".sta", ".cvg"],
+                    "expected_artifacts": [".inp", ".dat", ".frd", ".sta"],
                 },
             ),
             adapter_name=LOCAL_SOLVER_FIXTURE_RUNNER_NAME,
