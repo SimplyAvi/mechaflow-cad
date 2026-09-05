@@ -26,6 +26,10 @@ from .models import (
     ExpectedAnalysisResultArtifact,
     ManufacturingProcess,
     Material,
+    MoneyRange,
+    MaterialSubstitutionOption,
+    MaterialSubstitutionPreview,
+    MaterialSubstitutionRequest,
     Modification,
     Part,
     PartDimensions,
@@ -66,6 +70,37 @@ class InvalidDimensionChangeError(ProjectModificationError):
 
 _EDITABLE_DIMENSION_FIELDS = {"length_mm", "width_mm", "height_mm", "thickness_mm"}
 DEFAULT_SOLVER_MESH_SIZE_MM = 4.0
+
+
+def _active_manufacturing_option(part: Part):
+    preferred_process = part.metadata.get("preferred_manufacturing_process")
+    if isinstance(preferred_process, str):
+        return next(
+            (option for option in part.manufacturing_options if option.process.value == preferred_process),
+            part.manufacturing_options[0] if part.manufacturing_options else None,
+        )
+    return part.manufacturing_options[0] if part.manufacturing_options else None
+
+
+def _material_name(project: Project, material_id: str | None) -> str | None:
+    if material_id is None:
+        return None
+    material = next((candidate for candidate in project.materials if candidate.id == material_id), None)
+    return material.name if material else material_id
+
+
+def _money_delta(next_cost, current_cost):
+    if next_cost is None or current_cost is None:
+        return None
+    if next_cost.currency.upper() != "USD" or current_cost.currency.upper() != "USD":
+        return None
+    min_delta = None if next_cost.min is None or current_cost.min is None else next_cost.min - current_cost.min
+    max_delta = None if next_cost.max is None or current_cost.max is None else next_cost.max - current_cost.max
+    if min_delta is None and max_delta is None:
+        return None
+    if (min_delta is not None and min_delta < 0) or (max_delta is not None and max_delta < 0):
+        return None
+    return MoneyRange(currency="USD", min=min_delta, max=max_delta, confidence=RecommendationConfidence.heuristic)
 
 
 def apply_project_modification(project: Project, modification: Modification) -> ProjectModificationResponse:
@@ -121,6 +156,148 @@ def _find_part(project: Project, part_id: str) -> Part:
             if part.id == part_id:
                 return part
     raise PartNotFoundError(part_id)
+
+
+def _find_material_by_id(project: Project, material_id: str) -> Material:
+    material = next((candidate for candidate in project.materials if candidate.id == material_id), None)
+    if material is None:
+        raise MaterialNotFoundError(material_id)
+    return material
+
+
+def _compatible_processes(part: Part, material: Material) -> list[ManufacturingProcess]:
+    part_processes = {option.process for option in part.manufacturing_options}
+    material_processes = set(material.compatible_processes)
+    part_processes.discard(ManufacturingProcess.unknown)
+    material_processes.discard(ManufacturingProcess.unknown)
+    return sorted(part_processes & material_processes, key=lambda process: process.value)
+
+
+def _build_material_substitution_option(
+    project: Project,
+    part: Part,
+    material: Material,
+    process: ManufacturingProcess,
+) -> MaterialSubstitutionOption:
+    current_material = next((candidate for candidate in project.materials if candidate.id == part.material_id), None)
+    current_option = _active_manufacturing_option(part)
+    next_option = next((option for option in part.manufacturing_options if option.process == process), None)
+    compatible_processes = _compatible_processes(part, material)
+    blocked_reasons: list[str] = []
+    if material.id == part.material_id:
+        blocked_reasons.append("Requested material is already assigned to this part.")
+    if process not in compatible_processes:
+        blocked_reasons.append(
+            f"{material.name} is not explicitly compatible with {process.value} for {part.name}."
+        )
+    if next_option is None:
+        blocked_reasons.append(f"{part.name} has no explicit manufacturing option for {process.value}.")
+    current_density = current_material.properties.density_kg_m3 if current_material else None
+    next_density = material.properties.density_kg_m3
+    weight_delta_kg = (
+        part.mass_kg * (next_density / current_density - 1)
+        if part.mass_kg is not None and current_density is not None and current_density > 0 and next_density is not None
+        else None
+    )
+    heat_limit = material.properties.heat_deflection_temp_c or material.properties.max_service_temp_c
+    modification = Modification(
+        id=f"mod-{part.id}-{material.id}-{process.value}",
+        target_part_id=part.id,
+        description=f"Preview substituting {part.name} to {material.name} with {process.value} while preserving the active task.",
+        material_id=material.id,
+        manufacturing_process=process,
+    )
+    warnings = [
+        "Substitution uses seed material and manufacturing data only; it is not a quote, CAD update, or FEA result.",
+        "Payload, stiffness, fatigue, thermal limits, and serviceability remain review-required until workers validate them.",
+        *material.notes,
+        *(next_option.risk_notes if next_option is not None else []),
+    ]
+    return MaterialSubstitutionOption(
+        id=f"{part.id}-{material.id}-{process.value}",
+        part_id=part.id,
+        part_name=part.name,
+        current_material_id=part.material_id,
+        current_material_name=_material_name(project, part.material_id),
+        current_process=current_option.process if current_option is not None else None,
+        material_id=material.id,
+        material_name=material.name,
+        process=process,
+        compatible=not blocked_reasons,
+        review_required=True,
+        blocked_reasons=blocked_reasons,
+        warnings=warnings,
+        weight_delta_kg=weight_delta_kg,
+        cost_range=next_option.cost if next_option is not None else None,
+        cost_delta=_money_delta(next_option.cost if next_option is not None else None, current_option.cost if current_option is not None else None),
+        lead_time_days_min=next_option.lead_time_days_min if next_option is not None else None,
+        lead_time_days_max=next_option.lead_time_days_max if next_option is not None else None,
+        stiffness_gpa=material.properties.elastic_modulus_gpa,
+        yield_strength_mpa=material.properties.yield_strength_mpa,
+        heat_limit_c=heat_limit,
+        material_confidence=material.confidence,
+        manufacturing_confidence=next_option.confidence if next_option is not None else RecommendationConfidence.unknown,
+        summary=(
+            f"{part.name}: {material.name} with {process.value} is explicit but review-required. "
+            "No real FEA, supplier quote, or CAD regeneration has run."
+            if not blocked_reasons
+            else f"{part.name}: requested substitution is blocked until compatibility is made explicit."
+        ),
+        task_guidance="Use preserved task loads for comparison only; do not derive a payload rating from this substitution preview.",
+        manufacturing_guidance=(
+            f"{next_option.description} Cost and lead time are heuristic ranges, not supplier quotes."
+            if next_option is not None
+            else "Manufacturing process needs an explicit part option before preview or apply."
+        ),
+        wiring_guidance=(
+            "Linked wiring routes require clearance and bend-radius review after CAD geometry changes."
+            if part.wiring_route_ids
+            else "No linked wiring route is known for this part in current assembly metadata."
+        ),
+        modification=modification,
+    )
+
+
+def build_material_substitution_options(project: Project, part_id: str) -> list[MaterialSubstitutionOption]:
+    part = _find_part(project, part_id)
+    options: list[MaterialSubstitutionOption] = []
+    for material in project.materials:
+        if material.id == part.material_id:
+            continue
+        for process in _compatible_processes(part, material):
+            option = _build_material_substitution_option(project, part, material, process)
+            if option.compatible:
+                options.append(option)
+    return options
+
+
+def build_material_substitution_preview(
+    project: Project,
+    request: MaterialSubstitutionRequest,
+    mode: Literal["preview", "applied"] = "preview",
+) -> MaterialSubstitutionPreview:
+    part = _find_part(project, request.target_part_id)
+    material = _find_material_by_id(project, request.material_id)
+    option = _build_material_substitution_option(project, part, material, request.manufacturing_process)
+    if not option.compatible:
+        raise MaterialProcessCompatibilityError("; ".join(option.blocked_reasons))
+    modification = option.modification.model_copy(
+        update={
+            "id": request.modification_id or option.modification.id,
+            "description": request.description or option.modification.description,
+        },
+        deep=True,
+    )
+    _validate_material_process(project, part, modification)
+    result = apply_project_modification(project, modification)
+    applied_option = option.model_copy(update={"modification": modification}, deep=True)
+    return MaterialSubstitutionPreview(
+        mode=mode,
+        persisted=mode == "applied",
+        option=applied_option,
+        report=result.report,
+        panel_data=build_project_panel_data(result.project),
+    )
 
 
 def _validate_material_process(project: Project, part: Part, modification: Modification) -> None:
@@ -586,6 +763,7 @@ def collect_project_bom_items(project: Project) -> list[BOMItem]:
     items: list[BOMItem] = []
     for assembly in project.assemblies:
         for part in assembly.parts:
+            manufacturing_option = _active_manufacturing_option(part)
             items.append(
                 BOMItem(
                     id=f"bom-{part.id}",
@@ -593,7 +771,14 @@ def collect_project_bom_items(project: Project) -> list[BOMItem]:
                     name=part.name,
                     quantity=1,
                     unit="part",
-                    license_or_terms="Derived from local project assembly metadata",
+                    price=manufacturing_option.cost if manufacturing_option is not None else None,
+                    lead_time_days_min=manufacturing_option.lead_time_days_min if manufacturing_option is not None else None,
+                    lead_time_days_max=manufacturing_option.lead_time_days_max if manufacturing_option is not None else None,
+                    license_or_terms=(
+                        "Estimated from active part manufacturing option; not a supplier quote."
+                        if manufacturing_option is not None
+                        else "Derived from local project assembly metadata; price review required."
+                    ),
                 )
             )
     return items

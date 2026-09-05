@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockBackendMetadata, mockProjectPanelData } from '../data/mockDesign';
-import { exportProjectFile, importProjectFile, loadCockpitDesign, runLocalPreSolverAnalysis } from './api';
+import {
+  applyMaterialSubstitution,
+  exportProjectFile,
+  importProjectFile,
+  loadCockpitDesign,
+  previewMaterialSubstitution,
+  runLocalPreSolverAnalysis,
+} from './api';
+import { mapProjectPanelDataToReferenceDesign } from './backendMapper';
 
 describe('loadCockpitDesign', () => {
   afterEach(() => {
@@ -81,6 +89,106 @@ describe('loadCockpitDesign', () => {
     expect(imported.name).toBe('Robot arm visual MVP task-preserving edit demo');
     expect(imported.backend.projectId).toBe('project-open-gripper-demo');
     expect(imported.assemblies[0]?.parts.map((part) => part.id)).toContain('part-finger-link');
+  });
+
+  it('previews and applies a backend material substitution with mapped panel data', async () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    const previewPanelData = structuredClone(mockProjectPanelData);
+    const finger = previewPanelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
+    finger.material_id = 'mat-carbon-fiber-nylon';
+    finger.metadata.preferred_manufacturing_process = 'additive_fdm';
+    previewPanelData.bom_items[0]!.price = {
+      currency: 'USD',
+      min: 3,
+      max: 12,
+      confidence: 'estimated_from_heuristic',
+    };
+    previewPanelData.bom_items[0]!.lead_time_days_min = 1;
+    previewPanelData.bom_items[0]!.lead_time_days_max = 3;
+    const backendPreview = {
+      mode: 'preview',
+      persisted: false,
+      option: {
+        id: 'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
+        part_id: 'part-finger-link',
+        part_name: 'Parallel gripper jaw link',
+        current_material_id: 'mat-aluminum-6061-t6',
+        current_material_name: 'Aluminum 6061-T6',
+        current_process: 'cnc_machining',
+        material_id: 'mat-carbon-fiber-nylon',
+        material_name: 'Carbon-fiber reinforced nylon',
+        process: 'additive_fdm',
+        compatible: true,
+        review_required: true,
+        blocked_reasons: [],
+        warnings: ['No FEA was run.'],
+        weight_delta_kg: -0.06,
+        cost_range: { currency: 'USD', min: 3, max: 12, confidence: 'estimated_from_heuristic' },
+        cost_delta: null,
+        lead_time_days_min: 1,
+        lead_time_days_max: 3,
+        stiffness_gpa: 7.5,
+        yield_strength_mpa: 70,
+        heat_limit_c: 120,
+        material_confidence: 'estimated_from_heuristic',
+        manufacturing_confidence: 'estimated_from_heuristic',
+        summary: 'Review required.',
+        task_guidance: 'No worker-supplied payload rating.',
+        manufacturing_guidance: 'Not supplier quotes.',
+        wiring_guidance: 'Check wiring clearance.',
+        modification: {
+          id: 'mod-part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
+          target_part_id: 'part-finger-link',
+          description: 'Preview substituting finger link.',
+          material_id: 'mat-carbon-fiber-nylon',
+          dimension_changes: {},
+          manufacturing_process: 'additive_fdm',
+        },
+      },
+      report: {
+        id: 'report-preview',
+        project_id: 'project-open-gripper-demo',
+        title: 'Advisory edit report for Parallel gripper jaw link',
+        status: 'requires_review',
+        summary: 'Preview only, not FEA.',
+        task_results: [],
+        manufacturing_impacts: [],
+        wiring_impacts: [],
+        risks: [],
+        unknowns: [],
+        recommendations: [],
+        assumptions: [],
+      },
+      panel_data: previewPanelData,
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/material-substitutions/preview')) {
+        expect(init?.method).toBe('POST');
+        expect(init?.body).toContain('mat-carbon-fiber-nylon');
+        return Response.json(backendPreview);
+      }
+      if (url.endsWith('/api/projects/project-open-gripper-demo/material-substitutions/apply')) {
+        expect(init?.method).toBe('POST');
+        return Response.json({ ...backendPreview, mode: 'applied', persisted: true });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
+    const option = design.materialOptions.find(
+      (candidate) => candidate.id === 'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
+    )!;
+
+    const preview = await previewMaterialSubstitution('http://api.test/', 'project-open-gripper-demo', option);
+    const applied = await applyMaterialSubstitution('http://api.test/', 'project-open-gripper-demo', option);
+
+    expect(preview.persisted).toBe(false);
+    expect(preview.design.bom[0]?.unitCostRangeUsd).toEqual({ min: 3, max: 12 });
+    expect(preview.option.weightDeltaLb).toBe(-0.13);
+    expect(preview.option.leadTimeRangeDays).toEqual({ min: 1, max: 3 });
+    expect(applied.persisted).toBe(true);
   });
 
   it('runs a local pre-solver job against the configured backend', async () => {

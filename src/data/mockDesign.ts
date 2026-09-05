@@ -16,6 +16,7 @@ export const mockBackendMetadata: BackendApiMetadata = {
     'analysis_jobs',
     'analysis_readiness',
     'manufacturing_options',
+    'material_substitutions',
     'wiring_routes',
     'reports',
   ],

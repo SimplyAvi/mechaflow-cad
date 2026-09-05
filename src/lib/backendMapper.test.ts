@@ -72,7 +72,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata, 'http://api.test');
     const finger = design.assembly.parts.find((part) => part.id === 'part-finger-link');
     const steelOption = design.materialOptions.find(
-      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
+      (option) => option.id === 'part-finger-link-mat-low-carbon-steel-cnc_machining',
     );
 
     expect(finger?.rating.payloadLb).toBeNull();
@@ -108,15 +108,16 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
       'http://api.test',
     );
     const compositeOption = design.materialOptions.find(
-      (option) => option.id === 'part-finger-link-mat-carbon-fiber-nylon',
+      (option) => option.id === 'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
     );
 
     expect(compositeOption?.backendModification.payload.dimension_changes).toEqual({});
     expect(compositeOption?.payloadLb).toBeNull();
     expect(compositeOption?.weightDeltaLb).toBe(-0.13);
+    expect(compositeOption?.leadTimeRangeDays).toEqual({ min: 1, max: 3 });
     expect(compositeOption?.taskImpact).toMatch(/no worker-supplied payload rating/i);
     expect(compositeOption?.backendModification.payload.description).toMatch(
-      /material-only preview/i,
+      /material and process substitution preview/i,
     );
   });
 
@@ -177,7 +178,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
 
     const mappedFinger = design.assembly.parts.find((part) => part.id === finger.id);
     const steelOption = design.materialOptions.find(
-      (option) => option.id === 'part-finger-link-mat-low-carbon-steel',
+      (option) => option.id === 'part-finger-link-mat-low-carbon-steel-cnc_machining',
     );
     expect(mappedFinger?.stressRisk).toBe('unknown');
     expect(mappedFinger?.costRangeUsd).toBeNull();
@@ -205,7 +206,7 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata, 'http://api.test');
     const finger = design.assembly.parts.find((part) => part.id === 'part-finger-link');
     const compositeOption = design.materialOptions.find(
-      (option) => option.id === 'part-finger-link-mat-carbon-fiber-nylon',
+      (option) => option.id === 'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
     );
 
     expect(finger?.costRangeUsd).toEqual({ min: 25, max: 80 });

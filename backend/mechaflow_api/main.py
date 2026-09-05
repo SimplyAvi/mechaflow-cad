@@ -32,6 +32,9 @@ from .models import (
     LocalSolverToolStatus,
     ManufacturingOption,
     Material,
+    MaterialSubstitutionOption,
+    MaterialSubstitutionPreview,
+    MaterialSubstitutionRequest,
     Modification,
     Part,
     PartManufacturingOptions,
@@ -60,6 +63,8 @@ from .services import (
     PartNotFoundError,
     apply_project_modification,
     build_analysis_readiness_preview,
+    build_material_substitution_options,
+    build_material_substitution_preview,
     build_project_panel_data,
     collect_project_bom_items,
     collect_project_manufacturing_options,
@@ -133,6 +138,9 @@ SCHEMA_MODELS = [
     SolverPipelineStep,
     LocalSolverToolStatus,
     Modification,
+    MaterialSubstitutionRequest,
+    MaterialSubstitutionOption,
+    MaterialSubstitutionPreview,
     ProjectModificationResponse,
     CatalogSeedResponse,
     PartManufacturingOptions,
@@ -154,6 +162,7 @@ CONCEPTS = {
     "analysis_jobs": "Queued orchestration work for FreeCAD, FEA, wiring, BOM, manufacturing, and report generation workers.",
     "analysis_readiness": "Pre-solver load cases, constraints, material provenance, thermal guidance, and expected FEA artifacts without claiming a solve.",
     "manufacturing_options": "Ways to make or buy a part, including cost range, lead time, supplier link, and risk notes.",
+    "material_substitutions": "Explicit material and process substitution previews that distinguish non-persisted impact from applied project mutation.",
     "wiring_routes": "Connector-to-connector harness paths with bend-radius, clearance, and harness BOM metadata.",
     "reports": "Advisory summaries of task status, payload re-rating, cost, manufacturing, wiring, risks, and unknowns.",
 }
@@ -542,6 +551,66 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     )
     def project_manufacturing_options(project_id: str) -> list[PartManufacturingOptions]:
         return collect_project_manufacturing_options(get_project_or_404(project_id))
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/parts/{{part_id}}/material-substitutions",
+        response_model=list[MaterialSubstitutionOption],
+        tags=["projects"],
+    )
+    def part_material_substitutions(project_id: str, part_id: str) -> list[MaterialSubstitutionOption]:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        try:
+            return build_material_substitution_options(project, part_id)
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="target part not found") from exc
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/material-substitutions/preview",
+        response_model=MaterialSubstitutionPreview,
+        tags=["projects"],
+    )
+    def preview_material_substitution(
+        project_id: str,
+        request: MaterialSubstitutionRequest,
+    ) -> MaterialSubstitutionPreview:
+        project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        try:
+            return build_material_substitution_preview(project, request, mode="preview")
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="target part not found") from exc
+        except (MaterialNotFoundError, MaterialProcessCompatibilityError, InvalidDimensionChangeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @app.post(
+        f"{settings.api_prefix}/projects/{{project_id}}/material-substitutions/apply",
+        response_model=MaterialSubstitutionPreview,
+        tags=["projects"],
+    )
+    def apply_material_substitution(
+        project_id: str,
+        request: MaterialSubstitutionRequest,
+    ) -> MaterialSubstitutionPreview:
+        resolved_project_id = "project-open-gripper-demo" if project_id == "sample" else project_id
+        preview: MaterialSubstitutionPreview | None = None
+
+        def apply_substitution(stored_project: Project) -> Project:
+            nonlocal preview
+            preview = build_material_substitution_preview(stored_project, request, mode="applied")
+            return preview.panel_data.project
+
+        try:
+            stored_project = project_store.update_project(resolved_project_id, apply_substitution)
+        except PartNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="target part not found") from exc
+        except (MaterialNotFoundError, MaterialProcessCompatibilityError, InvalidDimensionChangeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if stored_project is None or preview is None:
+            raise HTTPException(status_code=404, detail="project not found")
+        invalidate_readiness(stored_project.id)
+        return preview.model_copy(
+            update={"panel_data": build_project_panel_data(stored_project)},
+            deep=True,
+        )
 
     @app.get(
         f"{settings.api_prefix}/projects/{{project_id}}/wiring-routes",

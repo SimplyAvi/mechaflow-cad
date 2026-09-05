@@ -176,6 +176,80 @@ def test_project_panel_endpoints_expose_frontend_handoff_data() -> None:
     assert client.get("/api/projects/project-panel-flow/reports").json() == []
 
 
+def test_material_substitution_options_preview_and_apply_update_bom_without_fake_quotes() -> None:
+    local_client = TestClient(main_module.create_app())
+
+    options = local_client.get(
+        "/api/projects/project-open-gripper-demo/parts/part-finger-link/material-substitutions"
+    )
+
+    assert options.status_code == 200
+    option_payload = options.json()
+    assert any(
+        option["material_id"] == "mat-carbon-fiber-nylon" and option["process"] == "additive_fdm"
+        for option in option_payload
+    )
+    assert all(option["compatible"] and option["review_required"] for option in option_payload)
+    assert all(option["material_id"] != "mat-fr4-generic" for option in option_payload)
+
+    request = {
+        "target_part_id": "part-finger-link",
+        "material_id": "mat-carbon-fiber-nylon",
+        "manufacturing_process": "additive_fdm",
+    }
+    original_project = local_client.get("/api/projects/project-open-gripper-demo").json()
+    preview = local_client.post(
+        "/api/projects/project-open-gripper-demo/material-substitutions/preview",
+        json=request,
+    )
+
+    assert preview.status_code == 200
+    preview_payload = preview.json()
+    assert preview_payload["mode"] == "preview"
+    assert preview_payload["persisted"] is False
+    assert preview_payload["option"]["weight_delta_kg"] < 0
+    assert preview_payload["panel_data"]["project"]["assemblies"][0]["parts"][0]["material_id"] == "mat-carbon-fiber-nylon"
+    assert preview_payload["panel_data"]["bom_items"][0]["price"] == {
+        "currency": "USD",
+        "min": 3,
+        "max": 12,
+        "confidence": "estimated_from_heuristic",
+    }
+    assert "not a supplier quote" in preview_payload["panel_data"]["bom_items"][0]["license_or_terms"]
+    assert local_client.get("/api/projects/project-open-gripper-demo").json() == original_project
+
+    incompatible = local_client.post(
+        "/api/projects/project-open-gripper-demo/material-substitutions/preview",
+        json={**request, "manufacturing_process": "cnc_machining"},
+    )
+    assert incompatible.status_code == 422
+    assert "not explicitly compatible" in incompatible.json()["detail"]
+    assert local_client.get("/api/projects/project-open-gripper-demo").json() == original_project
+
+    applied = local_client.post(
+        "/api/projects/project-open-gripper-demo/material-substitutions/apply",
+        json=request,
+    )
+
+    assert applied.status_code == 200
+    applied_payload = applied.json()
+    assert applied_payload["mode"] == "applied"
+    assert applied_payload["persisted"] is True
+    stored = local_client.get("/api/projects/project-open-gripper-demo").json()
+    stored_finger = stored["assemblies"][0]["parts"][0]
+    assert stored_finger["material_id"] == "mat-carbon-fiber-nylon"
+    assert stored_finger["metadata"]["preferred_manufacturing_process"] == "additive_fdm"
+    panel_after_apply = local_client.get("/api/projects/project-open-gripper-demo/panel-data").json()
+    assert panel_after_apply["bom_items"][0]["price"]["min"] == 3
+    assert panel_after_apply["bom_items"][0]["lead_time_days_max"] == 3
+    finger_readiness = next(
+        preview
+        for preview in panel_after_apply["analysis_readiness_previews"]
+        if preview["target_id"] == "part-finger-link"
+    )
+    assert finger_readiness["material_properties"]["material_id"] == "mat-carbon-fiber-nylon"
+
+
 def test_project_file_export_import_round_trip_preserves_mvp_data() -> None:
     local_client = TestClient(main_module.create_app())
     pre_solver = local_client.post(

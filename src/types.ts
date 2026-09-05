@@ -197,11 +197,24 @@ export interface MaterialOption {
   id: string;
   partId: string;
   material: string;
+  materialId: string;
   process: string;
+  processValue: string;
+  currentMaterial: string | null;
+  currentProcess: string | null;
   payloadLb: number | null;
   safetyFactor: number | null;
   weightDeltaLb: number | null;
   costRangeUsd: UsdRange | null;
+  leadTimeRangeDays: NumberRange | null;
+  stiffnessGpa: number | null;
+  yieldStrengthMpa: number | null;
+  heatLimitC: number | null;
+  materialConfidence: string;
+  manufacturingConfidence: string;
+  reviewRequired: boolean;
+  blockedReasons: string[];
+  warnings: string[];
   taskImpact: string;
   wiringImpact: string;
   manufacturingImpact: string;
@@ -246,6 +259,12 @@ export interface BOMItem {
   source: 'open design' | 'off the shelf' | 'fabricate' | 'wire harness';
   unitCostRangeUsd: UsdRange | null;
   leadTimeDays: number | null;
+  leadTimeRange?: NumberRange | null;
+}
+
+export interface NumberRange {
+  min: number | null;
+  max: number | null;
 }
 
 export interface UsdRange {
@@ -462,6 +481,8 @@ export interface BackendBOMItem {
   supplier?: string | null;
   supplier_part_number?: string | null;
   price?: BackendMoneyRange | null;
+  lead_time_days_min?: number | null;
+  lead_time_days_max?: number | null;
   datasheet_url?: string | null;
   license_or_terms?: string | null;
 }
@@ -542,4 +563,51 @@ export interface BackendModification {
   dimension_changes: Record<string, number>;
   manufacturing_process?: string | null;
   created_at?: string;
+}
+
+export interface BackendMaterialSubstitutionRequest {
+  target_part_id: string;
+  material_id: string;
+  manufacturing_process: string;
+  description?: string | null;
+  modification_id?: string | null;
+}
+
+export interface BackendMaterialSubstitutionOption {
+  id: string;
+  part_id: string;
+  part_name: string;
+  current_material_id?: string | null;
+  current_material_name?: string | null;
+  current_process?: string | null;
+  material_id: string;
+  material_name: string;
+  process: string;
+  compatible: boolean;
+  review_required: boolean;
+  blocked_reasons: string[];
+  warnings: string[];
+  weight_delta_kg?: number | null;
+  cost_range?: BackendMoneyRange | null;
+  cost_delta?: BackendMoneyRange | null;
+  lead_time_days_min?: number | null;
+  lead_time_days_max?: number | null;
+  stiffness_gpa?: number | null;
+  yield_strength_mpa?: number | null;
+  heat_limit_c?: number | null;
+  material_confidence: string;
+  manufacturing_confidence: string;
+  summary: string;
+  task_guidance: string;
+  manufacturing_guidance: string;
+  wiring_guidance: string;
+  modification: BackendModification;
+}
+
+export interface BackendMaterialSubstitutionPreview {
+  mode: 'preview' | 'applied';
+  persisted: boolean;
+  option: BackendMaterialSubstitutionOption;
+  report: BackendAnalysisReport;
+  panel_data: BackendProjectPanelData;
 }
