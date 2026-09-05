@@ -295,6 +295,9 @@ function buildMockWiringReview(sourceProject) {
   ]);
   const reviews = routes.map((route) => {
     const evidence = [];
+    const rule = sourceProject.wiring_rules?.find((candidate) => candidate.id === route.rule_set_id)
+      ?? sourceProject.wiring_rules?.[0]
+      ?? { required_clearance_min_mm: 2, required_bend_radius_min_mm: 15, required_service_loop_min_mm: 25 };
     const endpointComplete = (route.endpoints ?? []).length === 2
       && route.endpoints.every((endpoint) => [route.from_connector.id, route.to_connector.id].includes(endpoint.connector_id));
     evidence.push({
@@ -316,18 +319,22 @@ function buildMockWiringReview(sourceProject) {
       message: connectorsComplete && componentLinksComplete ? 'Route connectors are tied to electronics component records.' : 'Route connector ownership links are incomplete.',
       related_ids: [route.from_connector.id, route.to_connector.id],
     });
-    const geometryComplete = (route.path_points_mm ?? []).length >= 2;
+    const geometryComplete = (route.path_points_mm ?? []).length >= 2
+      && route.path_points_mm.slice(1).every((point, index) => {
+        const previous = route.path_points_mm[index];
+        return point.x !== previous.x || point.y !== previous.y || point.z !== previous.z;
+      });
     evidence.push({
       check: 'route geometry',
       status: geometryComplete ? 'pass' : 'review_required',
       basis: geometryComplete ? 'heuristic_estimate' : 'missing_input',
       message: geometryComplete ? 'Polyline path contains enough points for a screening estimate.' : 'Route needs at least two path points.',
     });
-    const clearanceStatus = route.clearance_min_mm == null ? 'review_required' : route.clearance_min_mm < 2 ? 'warning' : 'pass';
+    const clearanceStatus = route.clearance_min_mm == null || rule.required_clearance_min_mm == null ? 'review_required' : route.clearance_min_mm < rule.required_clearance_min_mm ? 'warning' : 'pass';
     evidence.push({ check: 'clearance', status: clearanceStatus, basis: route.clearance_min_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Clearance is a heuristic screening signal.' });
-    const bendStatus = route.bend_radius_min_mm == null ? 'review_required' : route.bend_radius_min_mm < 15 ? 'warning' : 'pass';
+    const bendStatus = route.bend_radius_min_mm == null || rule.required_bend_radius_min_mm == null ? 'review_required' : route.bend_radius_min_mm < rule.required_bend_radius_min_mm ? 'warning' : 'pass';
     evidence.push({ check: 'bend radius', status: bendStatus, basis: route.bend_radius_min_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Bend radius is a heuristic screening signal.' });
-    const serviceStatus = route.service_loop_mm == null ? 'review_required' : route.service_loop_mm < 25 ? 'warning' : 'pass';
+    const serviceStatus = route.service_loop_mm == null || rule.required_service_loop_min_mm == null ? 'review_required' : route.service_loop_mm < rule.required_service_loop_min_mm ? 'warning' : 'pass';
     evidence.push({ check: 'service loop', status: serviceStatus, basis: route.service_loop_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Service loop is a heuristic screening signal.' });
     const bomStatus = route.wire_segment_ids?.length > 0 && route.wire_segment_ids.every((id) => {
       const segment = segments.find((candidate) => candidate.id === id);
