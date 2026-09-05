@@ -664,8 +664,18 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if stored_project is None or preview is None:
             raise HTTPException(status_code=404, detail="project not found")
         invalidate_readiness(stored_project.id)
+        panel_data = build_project_panel_data(stored_project).model_copy(
+            update={
+                "analysis_job_queue": build_analysis_job_queue(
+                    stored_project,
+                    list_local_solver_tool_statuses(),
+                    artifact_file_exists,
+                )
+            },
+            deep=True,
+        )
         return preview.model_copy(
-            update={"panel_data": build_project_panel_data(stored_project)},
+            update={"panel_data": panel_data},
             deep=True,
         )
 
