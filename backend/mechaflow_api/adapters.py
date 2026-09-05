@@ -142,6 +142,22 @@ ADAPTERS: tuple[StubAdapter, ...] = (
     ),
     StubAdapter(
         AdapterStatus(
+            name="local-calculix-fixture-runner",
+            capability="Executable CalculiX solver-readiness fixture with generated input deck, logs, and output manifest",
+            open_source_candidate="CalculiX",
+            status="local_executable_boundary",
+            queue_name="solver-fixture-local",
+            supported_job_types=[AnalysisJobType.run_fea],
+            expected_artifacts=[AnalysisArtifactKind.fea_summary],
+            notes=[
+                "Runs only a deterministic fixture when CalculiX is installed; it is not project part FEA.",
+                "If CalculiX is missing, it still writes the input deck manifest and returns solver_unavailable.",
+            ],
+        ),
+        command_hint="POST /api/projects/{project_id}/analysis-jobs/solver-readiness-runs to verify local CalculiX execution boundary.",
+    ),
+    StubAdapter(
+        AdapterStatus(
             name="freecad-fea-prep-worker",
             capability="Analysis geometry preparation, named faces, material assignment, and unit normalization",
             open_source_candidate="FreeCAD FEM workbench",

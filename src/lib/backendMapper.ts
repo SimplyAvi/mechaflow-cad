@@ -99,6 +99,8 @@ const leadTime = (option: BackendManufacturingOption): string => formatLeadTimeR
 const jobStatus = (status: string): JobStatus => {
   if (status === 'completed' || status === 'complete') return 'complete';
   if (status === 'failed') return 'failed';
+  if (status === 'solver_unavailable' || status === 'solver-unavailable') return 'solver-unavailable';
+  if (status === 'review_required' || status === 'review-required') return 'review-required';
   if (status === 'blocked_missing_adapter' || status === 'blocked') return 'blocked';
   if (status === 'running') return 'running';
   return 'queued';
@@ -641,6 +643,7 @@ export const mapBackendAnalysisJob = (job: BackendAnalysisJob): AnalysisJob => {
       summary: artifact.summary,
       confidence: artifact.confidence,
       generatedBy: artifact.generated_by,
+      payload: artifact.payload,
     })),
     reviewStatus: typeof job.result_summary.review_status === 'string' ? job.result_summary.review_status : undefined,
     trustLabel: typeof job.result_summary.trust_label === 'string' ? job.result_summary.trust_label : undefined,

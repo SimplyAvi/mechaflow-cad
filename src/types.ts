@@ -1,4 +1,4 @@
-export type JobStatus = 'queued' | 'running' | 'blocked' | 'failed' | 'complete';
+export type JobStatus = 'queued' | 'running' | 'blocked' | 'solver-unavailable' | 'review-required' | 'failed' | 'complete';
 export type RiskLevel = 'low' | 'medium' | 'high' | 'unknown';
 export type RatingStatus = 'passes' | 'watch' | 'fails';
 export type AnalysisReadinessState = 'pre_solver_ready' | 'review_required' | 'blocked_missing_inputs' | 'solver_result_available';
@@ -237,6 +237,44 @@ export interface AnalysisJobArtifactSummary {
   summary?: string;
   confidence?: string;
   generatedBy?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface LocalSolverToolStatus {
+  adapter_name: string;
+  open_source_tool: string;
+  role: string;
+  binary_candidates: string[];
+  resolved_command?: string | null;
+  availability: 'available' | 'unavailable';
+  review_status: string;
+  message: string;
+  required_for_real_run: boolean;
+  install_guidance?: string | null;
+  version_command: string[];
+  detected_version?: string | null;
+}
+
+export interface LocalSolverExecutionMode {
+  id: string;
+  label: string;
+  status: string;
+  summary: string;
+  required_tools: string[];
+  missing_tools: string[];
+  review_required: string[];
+  endpoints: string[];
+}
+
+export interface LocalSolverReadinessSummary {
+  status: string;
+  generated_at?: string;
+  tool_statuses: LocalSolverToolStatus[];
+  available_tools: string[];
+  missing_tools: string[];
+  execution_modes: LocalSolverExecutionMode[];
+  install_guidance: string[];
+  summary: string;
 }
 
 export interface AnalysisJob {

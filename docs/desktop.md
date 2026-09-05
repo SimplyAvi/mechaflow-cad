@@ -26,7 +26,7 @@ npm start
 - The Vite React cockpit at a free local port.
 - An Electron desktop window identified as `MechaFlow CAD` that loads the local cockpit URL.
 
-The mock API is enough to open the desktop cockpit and inspect analysis-readiness data. To persist and run the FastAPI local pre-solver runner, start the Python backend instead, then launch the frontend with `VITE_API_BASE_URL` pointing at it.
+The mock API is enough to open the desktop cockpit, inspect analysis-readiness data, and see solver-unavailable UI states. To persist and run the FastAPI local pre-solver runner or CalculiX solver-readiness fixture, start the Python backend instead, then launch the frontend with `VITE_API_BASE_URL` pointing at it.
 
 You can pin ports when needed:
 
@@ -53,8 +53,10 @@ The desktop demo centers on a robot arm visual MVP with a wrist gripper. The leg
 11. Use the `Portable project file` card in the reference panel to export the current project as a `.mfcad.json` file.
 12. Use `Import project` to reopen that file. Confirm the project name, assembly, selected parts, wiring panel, analysis readiness panels, material substitution state, and analysis job artifacts still appear.
 13. When connected to the FastAPI backend, click `Run pre-solver screening for ...` in the analysis panel. Confirm the new job appears with a review-required artifact titled `Local pre-solver screening package, not FEA`. Export and import again to confirm that result artifact reference is preserved.
+14. Inspect the local solver readiness panel. Confirm it distinguishes selected-target pre-solver readiness, solver-unavailable tools, review-required full-stack project FEA, and any completed CalculiX fixture result.
+15. Click `Run solver-readiness fixture for ...`. If CalculiX is absent, confirm the job returns `solver unavailable` with a generated `.inp` artifact manifest and install guidance. If CalculiX is installed, confirm the job says the fixture ran but is not project FEA.
 
-No real FEA solver is running in this slice. The FEA row is a blocked adapter handoff, the readiness panel is pre-solver input only, the local runner artifact is a pre-solver package, and the visible strength criteria are advisory demo seed data only. Material substitution cost and lead-time values are ranged estimates from explicit seed manufacturing options, not exact supplier quotes. Later FEA integration should replace the load-capacity cards with solver artifacts such as stress, deflection, boundary conditions, mesh provenance, and solver logs.
+No project FEA solver is running in this slice. The full FEA row remains review-required until FreeCAD geometry prep, Gmsh meshing, and CalculiX project solving workers are implemented. The readiness panel is pre-solver input only, the local pre-solver runner artifact is a pre-solver package, the CalculiX fixture proves executable solver plumbing only, and visible strength criteria are advisory demo seed data unless a future project solver artifact replaces them. Material substitution cost and lead-time values are ranged estimates from explicit seed manufacturing options, not exact supplier quotes.
 
 ## macOS Finder launcher
 
@@ -86,7 +88,7 @@ For the FastAPI backend path, start the backend and frontend as shown below. The
 
 If a platform-specific file dialog blocks the demo, use the documented API commands in [Project files](project-files.md) to export and import the same JSON file.
 
-## FastAPI pre-solver runner demo
+## FastAPI pre-solver and solver-readiness demo
 
 ```sh
 python3 -m venv .venv
@@ -101,7 +103,7 @@ In another terminal:
 VITE_API_BASE_URL=http://127.0.0.1:8123 MECHAFLOW_FRONTEND_PORT=7332 npm run dev
 ```
 
-Open the Vite URL and use the analysis panel button. You can also inspect the same path directly:
+Open the Vite URL and use the analysis panel buttons. You can also inspect the pre-solver path directly:
 
 ```sh
 curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs \
@@ -110,6 +112,17 @@ curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/ana
 ```
 
 If FreeCAD, Gmsh, or CalculiX are absent, the job still completes the pre-solver package and reports those tool boundaries as unavailable and review-required. It does not fail with an unclear solver error.
+
+Inspect solver readiness and run the CalculiX fixture boundary:
+
+```sh
+curl -s http://127.0.0.1:8123/api/local-analysis/solver-readiness | python -m json.tool
+curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/analysis-jobs/solver-readiness-runs \
+  -H 'Content-Type: application/json' \
+  -d '{"target_id":"part-finger-link"}' | python -m json.tool
+```
+
+If CalculiX is absent, the fixture endpoint returns `solver_unavailable` with a generated input deck manifest. If CalculiX is installed, it invokes a deterministic fixture and collects logs and output files, but that result is not project FEA.
 
 ## Checks
 

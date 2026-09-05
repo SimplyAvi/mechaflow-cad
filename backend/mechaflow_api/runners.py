@@ -37,12 +37,14 @@ LOCAL_PRE_SOLVER_RUNNER_NAME = "local-pre-solver-runner"
 
 @dataclass(frozen=True)
 class CommandBoundaryAdapter:
-    """A future CLI boundary that the local runner can inspect without invoking."""
+    """A CLI boundary that local runners can inspect before invoking tools."""
 
     adapter_name: str
     open_source_tool: str
     role: str
     binary_candidates: tuple[str, ...]
+    install_guidance: str
+    version_command: tuple[str, ...] = ()
 
     def status(self) -> LocalSolverToolStatus:
         resolved = None
@@ -63,6 +65,8 @@ class CommandBoundaryAdapter:
                     f"{self.open_source_tool} command was not found locally. "
                     "Pre-solver artifact was produced, but real geometry, mesh, or solve output is unavailable."
                 ),
+                install_guidance=self.install_guidance,
+                version_command=list(self.version_command),
             )
         return LocalSolverToolStatus(
             adapter_name=self.adapter_name,
@@ -74,9 +78,11 @@ class CommandBoundaryAdapter:
             review_status=LocalSolverToolReviewStatus.available_not_invoked,
             message=(
                 f"{self.open_source_tool} command is available at {resolved}, "
-                "but the demo-safe runner did not invoke it. A future worker must run and attach solver "
-                "provenance before any result is treated as FEA."
+                "but the pre-solver runner did not invoke it. A real solver boundary must attach logs, "
+                "input files, and provenance before any result is treated as FEA."
             ),
+            install_guidance=self.install_guidance,
+            version_command=list(self.version_command),
         )
 
 
@@ -86,18 +92,23 @@ COMMAND_BOUNDARIES: tuple[CommandBoundaryAdapter, ...] = (
         open_source_tool="FreeCAD",
         role="Prepare source CAD into analysis geometry, named regions, materials, and normalized units.",
         binary_candidates=("freecadcmd", "freecad", "FreeCAD"),
+        install_guidance="Install FreeCAD and make freecadcmd available on PATH for geometry preparation.",
+        version_command=("--version",),
     ),
     CommandBoundaryAdapter(
         adapter_name="gmsh-meshing-worker",
         open_source_tool="Gmsh",
         role="Generate finite-element mesh and mesh-quality metadata from prepared geometry.",
         binary_candidates=("gmsh",),
+        install_guidance="Install Gmsh and make gmsh available on PATH for meshing.",
+        version_command=("--version",),
     ),
     CommandBoundaryAdapter(
         adapter_name="calculix-fea-worker",
         open_source_tool="CalculiX",
         role="Run static structural solve and emit logs, result files, and a review report.",
         binary_candidates=("ccx", "calculix"),
+        install_guidance="Install CalculiX and make ccx available on PATH for local solver fixture runs.",
     ),
 )
 
