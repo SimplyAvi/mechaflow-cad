@@ -1,0 +1,84 @@
+# MVP project file format
+
+MechaFlow CAD project files are portable JSON documents for the desktop MVP. They are meant for save, load, and share workflows before real STEP or FreeCAD import workers are wired.
+
+## File name and media type
+
+Recommended extension: `.mfcad.json`
+
+Recommended media type: `application/json`
+
+## Version 1 envelope
+
+```json
+{
+  "format": "mechaflow-cad.project",
+  "schema_version": "1.0",
+  "metadata": {
+    "exported_at": "2026-09-05T00:00:00Z",
+    "source_api_version": "0.1.0",
+    "exported_by": "mechaflow-cad-api",
+    "notes": []
+  },
+  "project": {},
+  "analysis_readiness_previews": [],
+  "extensions": {}
+}
+```
+
+Fields:
+
+- `format`: must be `mechaflow-cad.project`. Other formats, including raw STEP, FreeCAD, KiCad, and WireViz files, are rejected by this MVP importer.
+- `schema_version`: must be `1.0`.
+- `metadata`: export provenance for humans and tooling.
+- `project`: the backend `Project` schema from `backend/mechaflow_api/models.py`. This is the authoritative persisted data.
+- `analysis_readiness_previews`: portable preview records for desktop display and review. The backend can regenerate these from `project` after import.
+- `extensions`: reserved object for future importer hints. MVP import validates the envelope and stores the project, but it does not invoke real CAD tools.
+
+The project payload preserves the meaningful MVP data: assemblies, parts, materials, wiring routes, active task, modifications, analysis jobs, reports, and analysis job artifacts. BOM, manufacturing option groupings, wiring panels, and analysis readiness panels are rebuilt from the imported project through `ProjectPanelData`.
+
+## API
+
+Export a project:
+
+```sh
+curl -s http://127.0.0.1:8123/api/projects/project-open-gripper-demo/export-file \
+  -o project-open-gripper-demo.mfcad.json
+```
+
+Import or reopen a project file:
+
+```sh
+curl -s -X POST http://127.0.0.1:8123/api/projects/import-file \
+  -H 'Content-Type: application/json' \
+  --data-binary @project-open-gripper-demo.mfcad.json | python -m json.tool
+```
+
+The import endpoint validates and upserts the project id in the file. Use the optional `project_id` query string only when intentionally opening the file under another local id:
+
+```sh
+curl -s -X POST 'http://127.0.0.1:8123/api/projects/import-file?project_id=my-copy' \
+  -H 'Content-Type: application/json' \
+  --data-binary @project-open-gripper-demo.mfcad.json
+```
+
+If a copied project reuses analysis job ids that already belong to another local project, the backend returns `409` so artifacts are not ambiguously shared between projects.
+
+## Validation errors
+
+Malformed JSON returns `422` with a JSON parse detail from FastAPI.
+
+Unsupported envelopes return `422`, for example when `format` is not `mechaflow-cad.project` or `schema_version` is not `1.0`.
+
+Schema errors inside `project` also return `422` and do not overwrite the current in-memory project. Examples include unknown fields, duplicate part ids, unknown material references, invalid wiring endpoints, non-finite numbers, and unsupported analysis artifacts.
+
+## Future import hooks
+
+Real CAD import is intentionally out of scope for this slice. Future workers can add extension records for:
+
+- STEP or FreeCAD geometry source files.
+- KiCad electronics documents.
+- WireViz harness source.
+- Solver artifact bundles from FreeCAD, Gmsh, and CalculiX.
+
+Those workers should keep this JSON envelope as the portable project manifest and attach heavy files by path, content-addressed storage, or a package format rather than overloading the MVP schema.

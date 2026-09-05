@@ -190,6 +190,80 @@ small,
   display: block;
 }
 
+.project-file-panel {
+  background: rgba(15, 23, 42, 0.64);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px;
+}
+
+.project-file-panel strong,
+.project-file-panel small {
+  display: block;
+}
+
+.project-file-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-file-actions button,
+.file-import-button {
+  align-items: center;
+  background: rgba(2, 132, 199, 0.18);
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 10px;
+  text-align: center;
+}
+
+.project-file-actions button:hover:not(:disabled),
+.file-import-button:hover:not(.disabled) {
+  border-color: rgba(56, 189, 248, 0.75);
+}
+
+.project-file-actions button:disabled,
+.file-import-button.disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.file-import-button input {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.project-file-help {
+  color: #bad4e8;
+}
+
+.project-file-message {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 12px;
+  color: #dff7ff;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px;
+}
+
 .assembly-selector {
   color: var(--muted);
   display: grid;

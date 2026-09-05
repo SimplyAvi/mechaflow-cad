@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockBackendMetadata, mockProjectPanelData } from '../data/mockDesign';
-import { loadCockpitDesign, runLocalPreSolverAnalysis } from './api';
+import { exportProjectFile, importProjectFile, loadCockpitDesign, runLocalPreSolverAnalysis } from './api';
 
 describe('loadCockpitDesign', () => {
   afterEach(() => {
@@ -34,6 +34,53 @@ describe('loadCockpitDesign', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
     expect(design.name).toBe('Robot arm visual MVP task-preserving edit demo');
     expect(design.backend.source).toBe('backend-panel-data');
+  });
+
+  it('exports and imports a portable project file through the configured backend', async () => {
+    const projectFile = {
+      format: 'mechaflow-cad.project' as const,
+      schema_version: '1.0' as const,
+      metadata: {
+        exported_at: '2026-09-05T00:00:00Z',
+        source_api_version: '0.1.0',
+        exported_by: 'test',
+        notes: [],
+      },
+      project: mockProjectPanelData.project,
+      analysis_readiness_previews: mockProjectPanelData.analysis_readiness_previews ?? [],
+      extensions: {},
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/export-file')) return Response.json(projectFile);
+      if (url.endsWith('/api/projects/import-file')) {
+        expect(init?.method).toBe('POST');
+        expect(init?.body).toBe(JSON.stringify(projectFile));
+        return Response.json({
+          status: 'imported',
+          project_id: 'project-open-gripper-demo',
+          message: 'Imported MechaFlow project file for project-open-gripper-demo.',
+          warnings: [],
+          project: mockProjectPanelData.project,
+          panel_data: mockProjectPanelData,
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(exportProjectFile('http://api.test/', 'project-open-gripper-demo')).resolves.toEqual(projectFile);
+    const imported = await importProjectFile('http://api.test/', projectFile);
+
+    expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/export-file');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/api/projects/import-file',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(imported.name).toBe('Robot arm visual MVP task-preserving edit demo');
+    expect(imported.backend.projectId).toBe('project-open-gripper-demo');
+    expect(imported.assemblies[0]?.parts.map((part) => part.id)).toContain('part-finger-link');
   });
 
   it('runs a local pre-solver job against the configured backend', async () => {

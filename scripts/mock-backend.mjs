@@ -24,8 +24,9 @@ const corsOrigins = new Set(
     .map((origin) => origin.trim())
     .filter(Boolean),
 );
-const projectId = mockBackendPanelData.project.id;
+let projectId = mockBackendPanelData.project.id;
 let project = structuredClone(mockBackendPanelData.project);
+let analysisReadinessPreviews = structuredClone(mockBackendPanelData.analysis_readiness_previews ?? []);
 const editableDimensionFields = new Set(['length_mm', 'width_mm', 'height_mm', 'thickness_mm']);
 const modificationFields = new Set([
   'id',
@@ -126,13 +127,89 @@ const localSolverToolBoundaries = () => [
   },
 ];
 
+const fallbackReadinessPreviews = () => project.assemblies.flatMap((assembly) => {
+  const assemblyPreview = {
+    project_id: project.id,
+    target_id: assembly.id,
+    target_name: assembly.name,
+    target_kind: 'assembly',
+    state: 'review_required',
+    trust_label: 'pre_solver_input',
+    summary: 'Mock readiness preview regenerated from imported project assembly data.',
+    criteria: ['Review all parts, materials, wiring routes, and solver inputs before FEA.'],
+    load_cases: [],
+    constraints: [],
+    solver_inputs: {
+      geometry_source: null,
+      units: 'mm, N, MPa',
+      mesh_size_mm: null,
+      freecad_document: null,
+      gmsh_model: null,
+      calculix_input_deck: null,
+      notes: ['Mock API does not invoke FreeCAD, Gmsh, or CalculiX.'],
+    },
+    expected_result_artifacts: [],
+    solver_pipeline: [],
+    demo_estimates: [],
+    review_required: ['Regenerate authoritative readiness with the FastAPI backend or a future solver worker.'],
+    generated_at: new Date().toISOString(),
+  };
+  const partPreviews = assembly.parts.map((part) => ({
+    ...assemblyPreview,
+    target_id: part.id,
+    target_name: part.name,
+    target_kind: 'part',
+    summary: 'Mock readiness preview regenerated from imported project part data.',
+  }));
+  return [assemblyPreview, ...partPreviews];
+});
+
+const currentReadinessPreviews = () => (
+  analysisReadinessPreviews.length > 0 ? analysisReadinessPreviews : fallbackReadinessPreviews()
+);
+
 const projectPanelData = () => ({
   ...mockBackendPanelData,
   project,
-  analysis_readiness_previews: [],
+  analysis_readiness_previews: currentReadinessPreviews(),
   manufacturing_options: projectManufacturingOptions(),
   reports: project.reports,
 });
+
+const projectFile = () => ({
+  format: 'mechaflow-cad.project',
+  schema_version: '1.0',
+  metadata: {
+    exported_at: new Date().toISOString(),
+    source_api_version: mockBackendMetadata.version,
+    exported_by: 'mechaflow-cad-mock-api',
+    notes: [
+      'MVP JSON project file from the desktop mock API.',
+      'Real STEP and FreeCAD imports are future extensions.',
+    ],
+  },
+  project,
+  analysis_readiness_previews: currentReadinessPreviews(),
+  extensions: {
+    future_imports: {
+      step: 'reserved for a future FreeCAD-backed geometry import worker',
+      freecad: 'reserved for a future FreeCAD document import worker',
+    },
+  },
+});
+
+const projectFileValidationError = (file) => {
+  if (!file || typeof file !== 'object' || Array.isArray(file)) return 'project file must be a JSON object';
+  if (file.format !== 'mechaflow-cad.project') return 'unsupported project file format';
+  if (file.schema_version !== '1.0') return 'unsupported MechaFlow project file schema_version';
+  if (!file.project || typeof file.project !== 'object' || Array.isArray(file.project)) return 'project is required';
+  if (typeof file.project.id !== 'string' || !file.project.id.trim()) return 'project.id is required';
+  if (!Array.isArray(file.project.assemblies)) return 'project.assemblies must be an array';
+  if (!Array.isArray(file.project.materials)) return 'project.materials must be an array';
+  if (!Array.isArray(file.project.analysis_jobs)) return 'project.analysis_jobs must be an array';
+  if (!Array.isArray(file.project.reports)) return 'project.reports must be an array';
+  return null;
+};
 
 const findTarget = (targetId) => {
   for (const assembly of project.assemblies) {
@@ -302,6 +379,52 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/projects') {
       send(200, [project]);
+      return;
+    }
+
+    if (request.method === 'GET' && isProjectPath(url.pathname, '/export-file')) {
+      send(200, projectFile());
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/projects/import-file') {
+      if (!isOriginAllowed(request)) {
+        send(403, { error: 'origin is not allowed' });
+        return;
+      }
+      const contentType = request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
+        send(415, { error: 'content-type must be application/json' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(request);
+      } catch {
+        send(422, { error: 'request body must contain valid JSON' });
+        return;
+      }
+      const validationError = projectFileValidationError(body);
+      if (validationError) {
+        send(422, { error: validationError });
+        return;
+      }
+      project = {
+        ...structuredClone(body.project),
+        updated_at: new Date().toISOString(),
+      };
+      projectId = project.id;
+      analysisReadinessPreviews = Array.isArray(body.analysis_readiness_previews)
+        ? structuredClone(body.analysis_readiness_previews)
+        : [];
+      send(200, {
+        status: 'imported',
+        project_id: projectId,
+        message: `Imported MechaFlow project file for ${projectId}.`,
+        warnings: [],
+        project,
+        panel_data: projectPanelData(),
+      });
       return;
     }
 

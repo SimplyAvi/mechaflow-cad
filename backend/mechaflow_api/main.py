@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -36,6 +36,9 @@ from .models import (
     Part,
     PartManufacturingOptions,
     Project,
+    ProjectFile,
+    ProjectFileImportResponse,
+    ProjectFileMetadata,
     ProjectModificationResponse,
     ProjectPanelData,
     ReferenceDesign,
@@ -134,6 +137,9 @@ SCHEMA_MODELS = [
     CatalogSeedResponse,
     PartManufacturingOptions,
     ProjectPanelData,
+    ProjectFile,
+    ProjectFileMetadata,
+    ProjectFileImportResponse,
     BOMItem,
 ]
 
@@ -190,6 +196,33 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return job
+
+    def build_project_file(project: Project) -> ProjectFile:
+        readiness_previews: list[AnalysisReadinessPreview] = []
+        for assembly in project.assemblies:
+            target_ids = [assembly.id, *[part.id for part in assembly.parts]]
+            for target_id in target_ids:
+                try:
+                    readiness_previews.append(build_analysis_readiness_preview(project, target_id))
+                except PartNotFoundError:
+                    continue
+        return ProjectFile(
+            metadata=ProjectFileMetadata(
+                source_api_version=settings.version,
+                notes=[
+                    "MVP JSON project file. Real STEP, FreeCAD, KiCad, and WireViz imports are future extensions.",
+                    "Analysis readiness records are exported as portable previews and can be regenerated from the project.",
+                ],
+            ),
+            project=project,
+            analysis_readiness_previews=readiness_previews,
+            extensions={
+                "future_imports": {
+                    "step": "reserved for a future FreeCAD-backed geometry import worker",
+                    "freecad": "reserved for a future FreeCAD document import worker",
+                }
+            },
+        )
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:
@@ -293,6 +326,47 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if sample is None:
             raise HTTPException(status_code=404, detail="sample project not found")
         return sample
+
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/export-file",
+        response_model=ProjectFile,
+        tags=["project-files"],
+    )
+    def export_project_file(project_id: str) -> ProjectFile:
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
+        return build_project_file(get_project_or_404(project_id))
+
+    @app.post(
+        f"{settings.api_prefix}/projects/import-file",
+        response_model=ProjectFileImportResponse,
+        tags=["project-files"],
+    )
+    def import_project_file(
+        project_file: ProjectFile,
+        project_id: str | None = Query(
+            default=None,
+            description="Optional URL-safe project id to assign while opening this file.",
+        ),
+    ) -> ProjectFileImportResponse:
+        resolved_project_id = project_id or project_file.project.id
+        try:
+            validate_project_id(resolved_project_id)
+            stored_project = project_store.upsert_project(resolved_project_id, project_file.project)
+        except AnalysisJobAlreadyExistsError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="analysis job id already exists in another local project; import without a project_id override or remove the conflicting project",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        panel_data = build_project_panel_data(stored_project)
+        return ProjectFileImportResponse(
+            project_id=stored_project.id,
+            message=f"Imported MechaFlow project file for {stored_project.id}.",
+            project=stored_project,
+            panel_data=panel_data,
+        )
 
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def project(project_id: str) -> Project:

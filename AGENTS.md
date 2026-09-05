@@ -2,7 +2,7 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
-- Backend setup, configurable local ports, integration stubs, and test commands are documented in `docs/backend.md`.
+- Backend setup, configurable local ports, project file import/export, integration stubs, and test commands are documented in `docs/backend.md` and `docs/project-files.md`.
 - Run backend validation with `pytest` after installing `.[dev]` dependencies in a virtual environment.
 - Frontend setup, configurable ports, local mock backend, desktop demo launch, and smoke test commands are documented in `docs/frontend.md` and `docs/desktop.md`.
 - Seed catalog, integration contracts, and handoff projections are documented in `docs/reference-design-catalog.md`, `docs/integrations/README.md`, `docs/dependency-license-verification.md`, `data/integration-adapters.seed.json`, and `data/backend-frontend-handoff.seed.json`.

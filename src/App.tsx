@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { loadCockpitDesign, runLocalPreSolverAnalysis } from './lib/api';
+import { useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from 'react';
+import { exportProjectFile, importProjectFile, loadCockpitDesign, runLocalPreSolverAnalysis } from './lib/api';
 import type { AdvisoryReport, Assembly, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import './App.css';
 
@@ -82,15 +82,21 @@ function App() {
   const [orbitPitchDeg, setOrbitPitchDeg] = useState(10);
   const [analysisRunMessage, setAnalysisRunMessage] = useState<string | null>(null);
   const [analysisRunPending, setAnalysisRunPending] = useState(false);
+  const [projectFileMessage, setProjectFileMessage] = useState<string | null>(null);
+  const [projectFilePending, setProjectFilePending] = useState(false);
+
+  const applyLoadedDesign = (loadedDesign: ReferenceDesign) => {
+    setDesign(loadedDesign);
+    setSelectedAssemblyId(loadedDesign.assembly.id);
+    setSelectedPartId(loadedDesign.assembly.parts[0]?.id ?? '');
+    setSelectedOptionId(loadedDesign.materialOptions[0]?.id ?? '');
+  };
 
   useEffect(() => {
     let cancelled = false;
     loadCockpitDesign().then((loadedDesign) => {
       if (!cancelled) {
-        setDesign(loadedDesign);
-        setSelectedAssemblyId(loadedDesign.assembly.id);
-        setSelectedPartId(loadedDesign.assembly.parts[0]?.id ?? '');
-        setSelectedOptionId(loadedDesign.materialOptions[0]?.id ?? '');
+        applyLoadedDesign(loadedDesign);
       }
     });
     return () => {
@@ -158,6 +164,60 @@ function App() {
       setAnalysisRunMessage('Local pre-solver job failed. Check the backend status and review-required details.');
     } finally {
       setAnalysisRunPending(false);
+    }
+  };
+
+  const exportCurrentProjectFile = async () => {
+    if (!design?.backend.apiBaseUrl) {
+      setProjectFileMessage('Start the desktop demo with a local backend or mock API to export a portable project file.');
+      return;
+    }
+    setProjectFilePending(true);
+    setProjectFileMessage('Preparing portable MechaFlow project file...');
+    try {
+      const projectFile = await exportProjectFile(design.backend.apiBaseUrl, design.backend.projectId);
+      const blob = new Blob([JSON.stringify(projectFile, null, 2)], { type: 'application/json' });
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${projectFile.project.id}.mfcad.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+      setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}.`);
+    } catch (error) {
+      console.warn('Project export failed.', error);
+      setProjectFileMessage('Project export failed. Check that the backend supports MechaFlow project files.');
+    } finally {
+      setProjectFilePending(false);
+    }
+  };
+
+  const importCurrentProjectFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!design?.backend.apiBaseUrl) {
+      setProjectFileMessage('Start the desktop demo with a local backend or mock API to import a project file.');
+      return;
+    }
+    setProjectFilePending(true);
+    setProjectFileMessage(`Opening ${file.name}...`);
+    try {
+      const text = await file.text();
+      const projectFile = JSON.parse(text) as unknown;
+      const importedDesign = await importProjectFile(design.backend.apiBaseUrl, projectFile);
+      applyLoadedDesign(importedDesign);
+      setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
+    } catch (error) {
+      console.warn('Project import failed.', error);
+      const message = error instanceof SyntaxError
+        ? 'Project import failed: file is not valid JSON.'
+        : 'Project import failed: malformed or unsupported MechaFlow project file.';
+      setProjectFileMessage(message);
+    } finally {
+      setProjectFilePending(false);
     }
   };
 
@@ -241,6 +301,14 @@ function App() {
             <small>Project {design.backend.projectId}</small>
             <small>{design.backend.concepts.slice(0, 5).join(', ')}</small>
           </div>
+          <ProjectFilePanel
+            canUseProjectFiles={Boolean(design.backend.apiBaseUrl)}
+            message={projectFileMessage}
+            onExport={exportCurrentProjectFile}
+            onImport={importCurrentProjectFile}
+            pending={projectFilePending}
+            projectId={design.backend.projectId}
+          />
           {selectableAssemblies.length > 1 ? (
             <AssemblySelector
               assemblies={selectableAssemblies}
@@ -435,6 +503,52 @@ function AssemblySelector({
         ))}
       </select>
     </label>
+  );
+}
+
+function ProjectFilePanel({
+  canUseProjectFiles,
+  message,
+  onExport,
+  onImport,
+  pending,
+  projectId,
+}: {
+  canUseProjectFiles: boolean;
+  message: string | null;
+  onExport: () => void;
+  onImport: (event: ChangeEvent<HTMLInputElement>) => void;
+  pending: boolean;
+  projectId: string;
+}) {
+  return (
+    <section className="project-file-panel" aria-label="Project file import and export">
+      <div>
+        <strong>Portable project file</strong>
+        <small>JSON v1 preserves project {projectId}, assemblies, wiring, materials, analysis readiness, and artifacts.</small>
+      </div>
+      <div className="project-file-actions">
+        <button disabled={!canUseProjectFiles || pending} onClick={onExport} type="button">
+          Export project
+        </button>
+        <label className={`file-import-button ${!canUseProjectFiles || pending ? 'disabled' : ''}`}>
+          <span>Import project</span>
+          <input
+            accept=".mfcad.json,application/json"
+            aria-label="Import MechaFlow project file"
+            disabled={!canUseProjectFiles || pending}
+            onChange={onImport}
+            type="file"
+          />
+        </label>
+      </div>
+      <small className="project-file-help">
+        {canUseProjectFiles
+          ? 'Use this to save, share, and reopen the local desktop demo project.'
+          : 'Bundled offline mock data is read-only. Start the backend or desktop mock API for import and export.'}
+      </small>
+      {message ? <p className="project-file-message" aria-live="polite">{message}</p> : null}
+    </section>
   );
 }
 

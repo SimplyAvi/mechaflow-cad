@@ -1,6 +1,14 @@
 import { mockBackendMetadata, mockProjectPanelData, mockReferenceDesign } from '../data/mockDesign';
 import { mapBackendAnalysisJob, mapProjectPanelDataToReferenceDesign } from './backendMapper';
-import type { AnalysisJob, BackendAnalysisJob, BackendApiMetadata, BackendProjectPanelData, ReferenceDesign } from '../types';
+import type {
+  AnalysisJob,
+  BackendAnalysisJob,
+  BackendApiMetadata,
+  BackendProjectFile,
+  BackendProjectFileImportResponse,
+  BackendProjectPanelData,
+  ReferenceDesign,
+} from '../types';
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
@@ -14,7 +22,15 @@ export const getApiBaseUrl = (): string | undefined => {
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = init === undefined ? await fetch(url) : await fetch(url, init);
   if (!response.ok) {
-    throw new Error(`${url} returned ${response.status}`);
+    let detail = '';
+    try {
+      const payload = await response.json() as { detail?: unknown; error?: unknown };
+      const rawDetail = payload.detail ?? payload.error;
+      detail = typeof rawDetail === 'string' ? `: ${rawDetail}` : rawDetail ? `: ${JSON.stringify(rawDetail)}` : '';
+    } catch {
+      detail = '';
+    }
+    throw new Error(`${url} returned ${response.status}${detail}`);
   }
   return (await response.json()) as T;
 }
@@ -33,6 +49,26 @@ async function loadProjectPanelData(apiBaseUrl: string, projectId: string): Prom
   const endpoint = projectId === 'sample' ? '/api/projects/sample/panel-data' : `/api/projects/${projectId}/panel-data`;
   const panelData = await fetchJson<BackendProjectPanelData>(`${apiBaseUrl}${endpoint}`);
   return mapProjectPanelDataToReferenceDesign(panelData, metadata, apiBaseUrl);
+}
+
+export async function exportProjectFile(apiBaseUrl: string, projectId: string): Promise<BackendProjectFile> {
+  return fetchJson<BackendProjectFile>(
+    `${trimTrailingSlash(apiBaseUrl)}/api/projects/${projectId}/export-file`,
+  );
+}
+
+export async function importProjectFile(apiBaseUrl: string, projectFile: unknown): Promise<ReferenceDesign> {
+  const trimmedApiBaseUrl = trimTrailingSlash(apiBaseUrl);
+  const metadata = await loadMetadata(trimmedApiBaseUrl);
+  const imported = await fetchJson<BackendProjectFileImportResponse>(
+    `${trimmedApiBaseUrl}/api/projects/import-file`,
+    {
+      body: JSON.stringify(projectFile),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    },
+  );
+  return mapProjectPanelDataToReferenceDesign(imported.panel_data, metadata, trimmedApiBaseUrl);
 }
 
 export async function runLocalPreSolverAnalysis(

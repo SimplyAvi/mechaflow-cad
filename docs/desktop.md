@@ -45,9 +45,25 @@ The desktop demo centers on a robot arm visual MVP with a wrist gripper. The leg
 5. Read plain-English design criteria for the selected part, including intended load or lift role, material, stiffness and elasticity, heat or temperature limitation, manufacturing process, known versus estimated versus review-required values, and source confidence.
 6. Open the selected-part and selected-assembly pre-solver readiness panels and confirm they show explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes. Assembly readiness should cover all included parts and omit unsupported aggregate estimates.
 7. Confirm that seeded or heuristic values are labeled as demo estimates or seeded material guidance, and that missing or unsupported engineering values are marked review-required.
-8. When connected to the FastAPI backend, click `Run pre-solver screening for ...` in the analysis panel. Confirm the new job appears with a review-required artifact titled `Local pre-solver screening package, not FEA`.
+8. Use the `Portable project file` card in the reference panel to export the current project as a `.mfcad.json` file.
+9. Use `Import project` to reopen that file. Confirm the project name, assembly, selected parts, wiring panel, analysis readiness panels, and analysis job artifacts still appear.
+10. When connected to the FastAPI backend, click `Run pre-solver screening for ...` in the analysis panel. Confirm the new job appears with a review-required artifact titled `Local pre-solver screening package, not FEA`. Export and import again to confirm that result artifact reference is preserved.
 
 No real FEA solver is running in this slice. The FEA row is a blocked adapter handoff, the readiness panel is pre-solver input only, the local runner artifact is a pre-solver package, and the visible strength criteria are advisory demo seed data only. Later FEA integration should replace the load-capacity cards with solver artifacts such as stress, deflection, boundary conditions, mesh provenance, and solver logs.
+
+## Save, share, and reopen a demo project
+
+The desktop shell supports file import and export through the browser-native download and file input controls. With `npm run desktop:dev`, the Electron window uses the Node mock API, which supports the same MVP project file envelope for visual testing.
+
+For the FastAPI backend path, start the backend and frontend as shown below. Then:
+
+1. Inspect the robot arm assembly.
+2. Run pre-solver screening for a selected part.
+3. Click `Export project` and save `project-open-gripper-demo.mfcad.json`.
+4. Click `Import project` and pick the saved file.
+5. Verify the imported cockpit still shows the robot assembly, materials, wiring awareness, readiness details, and pre-solver artifact.
+
+If a platform-specific file dialog blocks the demo, use the documented API commands in [Project files](project-files.md) to export and import the same JSON file.
 
 ## FastAPI pre-solver runner demo
 
