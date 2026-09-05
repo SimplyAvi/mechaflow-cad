@@ -1027,6 +1027,135 @@ small,
   margin: 12px 0;
 }
 
+.wiring-workflow-panel {
+  grid-column: span 2;
+}
+
+.wiring-diagram {
+  background:
+    radial-gradient(circle at 18% 46%, rgba(56, 189, 248, 0.22), transparent 18%),
+    linear-gradient(135deg, rgba(2, 6, 23, 0.68), rgba(15, 23, 42, 0.28));
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 18px;
+  height: 170px;
+  margin: 14px 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.diagram-node {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  border-radius: 14px;
+  color: #e0f2fe;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 9px 12px;
+  position: absolute;
+  z-index: 2;
+}
+
+.diagram-node.controller {
+  left: 8%;
+  top: 38%;
+}
+
+.diagram-node.joint {
+  left: 44%;
+  top: 18%;
+}
+
+.diagram-node.tool {
+  right: 8%;
+  top: 58%;
+}
+
+.diagram-route {
+  border: 3px solid rgba(56, 189, 248, 0.72);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  position: absolute;
+}
+
+.diagram-route.status-warning {
+  border-color: rgba(245, 158, 11, 0.85);
+}
+
+.diagram-route.status-review_required {
+  border-color: rgba(248, 113, 113, 0.82);
+  border-style: dashed;
+}
+
+.diagram-route.route-0 {
+  height: 96px;
+  left: 14%;
+  top: 38%;
+  transform: rotate(8deg);
+  width: 72%;
+}
+
+.diagram-route.route-1 {
+  height: 72px;
+  left: 17%;
+  top: 20%;
+  transform: rotate(-8deg);
+  width: 36%;
+}
+
+.diagram-route.route-2 {
+  height: 54px;
+  left: 23%;
+  top: 42%;
+  transform: rotate(-18deg);
+  width: 27%;
+}
+
+.diagram-route.route-3 {
+  height: 82px;
+  left: 47%;
+  top: 36%;
+  transform: rotate(15deg);
+  width: 37%;
+}
+
+.featured-route {
+  border-color: rgba(56, 189, 248, 0.36);
+  margin-bottom: 12px;
+}
+
+.connector-list,
+.wiring-context-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.connector-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.connector-list div,
+.wiring-context-grid section {
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.wiring-context-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wiring-context-grid p,
+.review-assumptions {
+  color: #cbd5e1;
+  font-size: 0.86rem;
+}
+
+.review-assumptions {
+  margin-top: 12px;
+}
+
 .foundation-note {
   margin: 0 auto;
   max-width: 1500px;
@@ -1041,6 +1170,10 @@ small,
   .cockpit-grid,
   .insight-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .wiring-workflow-panel {
+    grid-column: 1 / -1;
   }
 
   .viewer-card {
@@ -1075,7 +1208,9 @@ small,
   }
 
   .meta-grid,
-  .readiness-summary {
+  .readiness-summary,
+  .connector-list,
+  .wiring-context-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -7,6 +7,7 @@ import type {
   BackendAnalysisReport,
   BackendAssembly,
   BackendBOMItem,
+  BackendElectronicsComponent,
   BackendManufacturingOption,
   BackendMaterial,
   BackendMoneyRange,
@@ -14,17 +15,23 @@ import type {
   BackendPartManufacturingOptions,
   BackendProjectPanelData,
   BackendTaskRequirement,
+  BackendWireSegment,
+  BackendWiringReviewReport,
   BackendWiringRoute,
+  BackendWiringRuleSet,
   BOMItem,
   DesignCriterion,
   JobStatus,
   ManufacturingOption,
   MaterialOption,
+  ElectronicsComponent,
+  WireSegment,
   Part,
   PartVisual,
   ReferenceDesign,
   RiskLevel,
   UsdRange,
+  WiringReviewEvidence,
   WiringRoute,
 } from '../types';
 
@@ -674,7 +681,9 @@ const mapBOM = (items: BackendBOMItem[], parts: Part[]): BOMItem[] => {
     const price = usdCostRange(item.price);
     const part = item.part_id ? parts.find((candidate) => candidate.id === item.part_id) : undefined;
     const source = bomSourceFromPart(part)
-      ?? (item.supplier || item.supplier_part_number ? 'off the shelf' : item.part_id ? 'open design' : 'off the shelf');
+      ?? (item.id.includes('wire') || item.id.includes('harness') || item.license_or_terms?.toLowerCase().includes('harness')
+        ? 'wire harness'
+        : item.supplier || item.supplier_part_number ? 'off the shelf' : item.part_id ? 'open design' : 'off the shelf');
     return {
       id: item.id,
       item: item.name,
@@ -703,16 +712,193 @@ const mapManufacturing = (partOptions: BackendPartManufacturingOptions[]): Manuf
     })),
   );
 
-const mapWiring = (routes: BackendWiringRoute[]): WiringRoute[] =>
-  routes.map((route) => ({
-    id: route.id,
-    name: route.name,
-    connectedParts: [route.from_connector.part_id, route.to_connector.part_id].filter((value): value is string => Boolean(value)),
-    clearanceStatus: 'watch',
-    bendRadiusMm: route.bend_radius_min_mm ?? null,
-    serviceLoop: null,
-    note: route.risk_notes[0] ?? `Connects ${route.from_connector.name} to ${route.to_connector.name}.`,
+const routeLengthMm = (route: BackendWiringRoute): number | null => {
+  if (route.path_points_mm.length < 2) return null;
+  const length = route.path_points_mm.slice(1).reduce((sum, point, index) => {
+    const start = route.path_points_mm[index]!;
+    const dx = point.x - start.x;
+    const dy = point.y - start.y;
+    const dz = point.z - start.z;
+    return sum + Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }, 0);
+  return round(length, 1);
+};
+
+const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>, rules: BackendWiringRuleSet[]): WiringRoute['reviewStatus'] => {
+  const componentIds = new Set(components.map((component) => component.id));
+  const segmentIds = new Set(segments.map((segment) => segment.id));
+  const rule = rules.find((candidate) => candidate.id === route.rule_set_id) ?? rules[0];
+  const geometryComplete = route.path_points_mm.length >= 2
+    && route.path_points_mm.slice(1).every((point, index) => {
+      const previous = route.path_points_mm[index]!;
+      return point.x !== previous.x || point.y !== previous.y || point.z !== previous.z;
+    });
+  const connectorIds = new Set([route.from_connector.id, route.to_connector.id]);
+  const completeEvidence = geometryComplete
+    && route.endpoints?.length === 2
+    && route.endpoints.every((endpoint) => connectorIds.has(endpoint.connector_id))
+    && route.wire_segment_ids.length > 0
+    && route.wire_segment_ids.every((id) => segmentIds.has(id))
+    && route.electronics_component_ids.length > 0
+    && route.electronics_component_ids.every((id) => componentIds.has(id))
+    && [route.from_connector, route.to_connector].every((connector) => {
+      const component = components.find((candidate) => candidate.id === connector.component_id);
+      return component?.connector_ids.includes(connector.id)
+        && component.mounted_part_id === connector.part_id
+        && (connector.component_id == null || route.electronics_component_ids.includes(connector.component_id));
+    })
+    && route.harness_bom.length > 0
+    && route.harness_bom.every((id) => bomIds.has(id))
+    && route.endpoints.every((endpoint) => {
+      const connector = [route.from_connector, route.to_connector].find((candidate) => candidate.id === endpoint.connector_id);
+      return connector?.part_id === endpoint.part_id;
+    })
+    && route.wire_segment_ids.every((id, index) => {
+      const segment = segments.find((candidate) => candidate.id === id);
+      const previous = index > 0 ? segments.find((candidate) => candidate.id === route.wire_segment_ids[index - 1]) : null;
+      const next = index + 1 < route.wire_segment_ids.length ? segments.find((candidate) => candidate.id === route.wire_segment_ids[index + 1]) : null;
+      return segment != null
+        && (previous == null || (previous.to_endpoint?.connector_id === segment.from_endpoint?.connector_id && previous.to_endpoint.part_id === segment.from_endpoint.part_id))
+        && (index > 0 || (segment.from_endpoint?.connector_id === route.from_connector.id && segment.from_endpoint.part_id === route.from_connector.part_id))
+        && (next != null || (segment.to_endpoint?.connector_id === route.to_connector.id && segment.to_endpoint.part_id === route.to_connector.part_id))
+        && (segment.bom_item_id == null || route.harness_bom.includes(segment.bom_item_id));
+    })
+    && route.clearance_min_mm != null
+    && route.bend_radius_min_mm != null
+    && route.service_loop_mm != null
+    && rule?.required_clearance_min_mm != null
+    && rule.required_bend_radius_min_mm != null
+    && rule.required_service_loop_min_mm != null;
+  if (!completeEvidence) return 'review_required';
+  if (
+    route.clearance_min_mm < rule.required_clearance_min_mm
+    || route.bend_radius_min_mm < rule.required_bend_radius_min_mm
+    || route.service_loop_mm < rule.required_service_loop_min_mm
+  ) return 'warning';
+  return 'pass';
+};
+
+const ratingFromWiringStatus = (status: WiringRoute['reviewStatus']): WiringRoute['clearanceStatus'] => {
+  if (status === 'pass') return 'passes';
+  if (status === 'warning') return 'watch';
+  return 'watch';
+};
+
+const mapWiringEvidence = (review?: BackendWiringReviewReport | null): Map<string, {
+  status: WiringRoute['reviewStatus'];
+  summary: string;
+  evidence: WiringReviewEvidence[];
+}> => new Map((review?.route_reviews ?? []).map((routeReview) => [routeReview.route_id, {
+  status: routeReview.status,
+  summary: routeReview.summary,
+  evidence: routeReview.evidence.map((item) => ({
+    check: item.check,
+    status: item.status,
+    basis: item.basis,
+    message: item.message,
+    measuredValue: item.measured_value ?? null,
+    thresholdValue: item.threshold_value ?? null,
+    units: item.units ?? null,
+    relatedIds: item.related_ids,
+  })),
+}]));
+
+const mapElectronicsComponents = (components: BackendElectronicsComponent[] = []): ElectronicsComponent[] =>
+  components.map((component) => ({
+    id: component.id,
+    name: component.name,
+    componentType: toTitle(component.component_type),
+    mountedPartId: component.mounted_part_id ?? null,
+    connectorIds: component.connector_ids,
+    bomItemIds: component.bom_item_ids,
+    notes: component.notes,
+    confidence: component.confidence,
   }));
+
+const mapWireSegments = (segments: BackendWireSegment[] = []): WireSegment[] =>
+  segments.map((segment) => ({
+    id: segment.id,
+    name: segment.name,
+    conductorCount: segment.conductor_count ?? null,
+    wireGaugeAwg: segment.wire_gauge_awg ?? null,
+    lengthMm: segment.length_mm ?? null,
+    signalOrPower: segment.signal_or_power,
+    color: segment.color ?? null,
+    bomItemId: segment.bom_item_id ?? null,
+    notes: segment.notes,
+    confidence: segment.confidence,
+  }));
+
+const mapWiringReview = (review?: BackendWiringReviewReport | null) => review == null ? null : ({
+  projectId: review.project_id,
+  status: review.status,
+  summary: review.summary,
+  assumptions: review.assumptions,
+  generatedAt: review.generated_at,
+  routeReviews: review.route_reviews.map((routeReview) => ({
+    routeId: routeReview.route_id,
+    routeName: routeReview.route_name,
+    status: routeReview.status,
+    summary: routeReview.summary,
+    evidence: routeReview.evidence.map((item) => ({
+      check: item.check,
+      status: item.status,
+      basis: item.basis,
+      message: item.message,
+      measuredValue: item.measured_value ?? null,
+      thresholdValue: item.threshold_value ?? null,
+      units: item.units ?? null,
+      relatedIds: item.related_ids,
+    })),
+    bomItemIds: routeReview.bom_item_ids,
+    endpointPartIds: routeReview.endpoint_part_ids,
+    reviewRequired: routeReview.review_required,
+  })),
+});
+
+const mapWiring = (routes: BackendWiringRoute[], review: BackendWiringReviewReport | null | undefined, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>, rules: BackendWiringRuleSet[]): WiringRoute[] => {
+  const routeReviews = mapWiringEvidence(review);
+  return routes.map((route) => {
+    const routeReview = routeReviews.get(route.id);
+    const reviewStatus = routeReview?.status ?? fallbackWiringStatus(route, components, segments, bomIds, rules);
+    return {
+      id: route.id,
+      name: route.name,
+      connectedParts: [route.from_connector.part_id, route.to_connector.part_id]
+        .filter((value): value is string => Boolean(value)),
+      connectors: [route.from_connector, route.to_connector].map((connector) => ({
+        id: connector.id,
+        name: connector.name,
+        pinCount: connector.pin_count ?? null,
+        partId: connector.part_id ?? null,
+        componentId: connector.component_id ?? null,
+        gender: connector.gender ?? 'unknown',
+        pinLabels: connector.pin_labels ?? [],
+        voltageRatingV: connector.voltage_rating_v ?? null,
+        currentRatingA: connector.current_rating_a ?? null,
+      })),
+      endpoints: (route.endpoints ?? []).map((endpoint) => ({
+        connectorId: endpoint.connector_id,
+        partId: endpoint.part_id ?? null,
+        pinLabel: endpoint.pin_label ?? null,
+        role: endpoint.role,
+      })),
+      clearanceStatus: ratingFromWiringStatus(reviewStatus),
+      reviewStatus,
+      reviewSummary: routeReview?.summary ?? 'No backend review result yet; route is shown from seed metadata only.',
+      evidence: routeReview?.evidence ?? [],
+      bendRadiusMm: route.bend_radius_min_mm ?? null,
+      clearanceMm: route.clearance_min_mm ?? null,
+      serviceLoopMm: route.service_loop_mm ?? null,
+      pathLengthMm: routeLengthMm(route),
+      wireSegmentIds: route.wire_segment_ids ?? [],
+      electronicsComponentIds: route.electronics_component_ids ?? [],
+      harnessBom: route.harness_bom,
+      diagramRef: route.diagram_ref ?? null,
+      note: route.risk_notes[0] ?? `Connects ${route.from_connector.name} to ${route.to_connector.name}.`,
+    };
+  });
+};
 
 const mapReport = (report: BackendAnalysisReport): AdvisoryReport => ({
   id: report.id,
@@ -790,12 +976,20 @@ export function mapProjectPanelDataToReferenceDesign(
     ),
     bom: mapBOM(panelData.bom_items, allParts),
     manufacturingOptions: mapManufacturing(panelData.manufacturing_options),
+    electronicsComponents: mapElectronicsComponents(panelData.electronics_components ?? project.electronics_components ?? []),
+    wireSegments: mapWireSegments(panelData.wire_segments ?? project.wire_segments ?? []),
     analysisJobs: project.analysis_jobs.map(mapBackendAnalysisJob),
     wiringRoutes: mapWiring(
       panelData.wiring_routes.length > 0
         ? panelData.wiring_routes
         : backendAssemblies.flatMap((candidate) => candidate.wiring_routes),
+      panelData.wiring_review,
+      panelData.electronics_components ?? project.electronics_components ?? [],
+      panelData.wire_segments ?? project.wire_segments ?? [],
+      new Set((panelData.bom_items ?? []).map((item) => item.id)),
+      panelData.wiring_rules ?? [],
     ),
+    wiringReview: mapWiringReview(panelData.wiring_review),
     reports,
     backend: {
       source: apiBaseUrl ? 'backend-panel-data' : 'bundled-mock',

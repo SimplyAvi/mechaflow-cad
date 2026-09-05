@@ -23,6 +23,7 @@ from .models import (
     AnalysisResultTrust,
     AnalysisThermalGuidance,
     BOMItem,
+    ElectronicsComponent,
     ExpectedAnalysisResultArtifact,
     ManufacturingProcess,
     Material,
@@ -43,6 +44,12 @@ from .models import (
     SolverPipelineStep,
     SolverPipelineStepStatus,
     TaskRequirement,
+    WireSegment,
+    WiringReviewEvidence,
+    WiringReviewReport,
+    WiringReviewStatus,
+    WiringRouteReview,
+    WiringRuleSet,
     Vector3,
     WiringRoute,
 )
@@ -755,17 +762,328 @@ def build_analysis_readiness_preview(
     )
 
 
+def _route_path_length_mm(route: WiringRoute) -> float | None:
+    if len(route.path_points_mm) < 2:
+        return None
+    total = 0.0
+    for start, end in zip(route.path_points_mm, route.path_points_mm[1:]):
+        segment_length = math.dist((start.x, start.y, start.z), (end.x, end.y, end.z))
+        if segment_length <= 0:
+            return None
+        total += segment_length
+    return total
+
+
+def _route_min_turn_radius_mm(route: WiringRoute) -> float | None:
+    if len(route.path_points_mm) < 3:
+        return None
+    radii: list[float] = []
+    for a, b, c in zip(route.path_points_mm, route.path_points_mm[1:], route.path_points_mm[2:]):
+        side_ab = math.dist((a.x, a.y, a.z), (b.x, b.y, b.z))
+        side_bc = math.dist((b.x, b.y, b.z), (c.x, c.y, c.z))
+        side_ca = math.dist((c.x, c.y, c.z), (a.x, a.y, a.z))
+        semi = (side_ab + side_bc + side_ca) / 2
+        area_squared = semi * (semi - side_ab) * (semi - side_bc) * (semi - side_ca)
+        if side_ab <= 0 or side_bc <= 0 or side_ca <= 0 or area_squared <= 0:
+            continue
+        radii.append(side_ab * side_bc * side_ca / (4 * math.sqrt(area_squared)))
+    return min(radii) if radii else None
+
+
+def _review_status_from_evidence(evidence: list[WiringReviewEvidence]) -> WiringReviewStatus:
+    if any(item.status == WiringReviewStatus.review_required for item in evidence):
+        return WiringReviewStatus.review_required
+    if any(item.status == WiringReviewStatus.warning for item in evidence):
+        return WiringReviewStatus.warning
+    return WiringReviewStatus.passed
+
+
+def _default_wiring_rule(project: Project, route: WiringRoute) -> WiringRuleSet:
+    if route.rule_set_id:
+        found = next((rule for rule in project.wiring_rules if rule.id == route.rule_set_id), None)
+        if found is not None:
+            return found
+    if project.wiring_rules:
+        return project.wiring_rules[0]
+    return WiringRuleSet(
+        id="mvp-default-wire-review",
+        name="MVP heuristic wiring review defaults",
+        required_clearance_min_mm=2,
+        required_bend_radius_min_mm=15,
+        required_service_loop_min_mm=25,
+        evidence_basis="heuristic",
+        notes=["Default local heuristic used only when a project has not supplied wiring rules."],
+    )
+
+
+def build_wiring_review(project: Project) -> WiringReviewReport:
+    """Run a deterministic MVP wiring review with explicit evidence.
+
+    The review intentionally avoids claiming exact electrical or CAD validation.
+    It screens recorded route metadata for completeness, heuristic clearance,
+    bend-radius, service-loop, and BOM linkage signals.
+    """
+
+    part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
+    component_connector_ids = {
+        connector_id
+        for component in project.electronics_components
+        for connector_id in component.connector_ids
+    }
+    wire_segments_by_id = {segment.id: segment for segment in project.wire_segments}
+    route_reviews: list[WiringRouteReview] = []
+
+    for route in collect_project_wiring_routes(project):
+        rule = _default_wiring_rule(project, route)
+        evidence: list[WiringReviewEvidence] = []
+        endpoint_part_ids = [
+            part_id for part_id in [route.from_connector.part_id, route.to_connector.part_id] if part_id is not None
+        ]
+        unknown_endpoint_parts = sorted(set(endpoint_part_ids) - part_ids)
+        if unknown_endpoint_parts:
+            evidence.append(WiringReviewEvidence(
+                check="endpoint linkage",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message=f"Route references unknown endpoint parts: {', '.join(unknown_endpoint_parts)}.",
+                related_ids=unknown_endpoint_parts,
+            ))
+        elif len(endpoint_part_ids) >= 2:
+            evidence.append(WiringReviewEvidence(
+                check="endpoint linkage",
+                status=WiringReviewStatus.passed,
+                basis="explicit_data",
+                message="Both route endpoint connectors are linked to known project parts.",
+                related_ids=endpoint_part_ids,
+            ))
+        else:
+            evidence.append(WiringReviewEvidence(
+                check="endpoint linkage",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="One or more route endpoint connectors is missing a part link.",
+            ))
+
+        route_connector_ids = {route.from_connector.id, route.to_connector.id}
+        missing_component_connectors = sorted(route_connector_ids - component_connector_ids)
+        if missing_component_connectors:
+            evidence.append(WiringReviewEvidence(
+                check="connector details",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="Connector ids are present on the route but not yet attached to electronics components.",
+                related_ids=missing_component_connectors,
+            ))
+        else:
+            evidence.append(WiringReviewEvidence(
+                check="connector details",
+                status=WiringReviewStatus.passed,
+                basis="explicit_data",
+                message="Route connectors are tied to electronics component records.",
+                related_ids=sorted(route_connector_ids),
+            ))
+
+        path_length = _route_path_length_mm(route)
+        if path_length is None:
+            evidence.append(WiringReviewEvidence(
+                check="route geometry",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="Route needs at least two finite path points before length can be estimated.",
+            ))
+        else:
+            evidence.append(WiringReviewEvidence(
+                check="route geometry",
+                status=WiringReviewStatus.passed,
+                basis="heuristic_estimate",
+                message="Polyline path length is estimated from recorded route points. This is not routed CAD geometry.",
+                measured_value=round(path_length, 2),
+                units="mm",
+                related_ids=[route.id],
+            ))
+
+        clearance_threshold = rule.required_clearance_min_mm
+        if clearance_threshold is None or route.clearance_min_mm is None:
+            evidence.append(WiringReviewEvidence(
+                check="clearance",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="Minimum clearance is missing or lacks a rule threshold, so CAD clearance review is required.",
+                measured_value=route.clearance_min_mm,
+                threshold_value=clearance_threshold,
+                units="mm",
+            ))
+        elif route.clearance_min_mm < clearance_threshold:
+            evidence.append(WiringReviewEvidence(
+                check="clearance",
+                status=WiringReviewStatus.warning,
+                basis="heuristic_estimate",
+                message="Recorded minimum clearance is below the MVP heuristic threshold. Treat this as a warning until CAD sweep validates it.",
+                measured_value=route.clearance_min_mm,
+                threshold_value=clearance_threshold,
+                units="mm",
+            ))
+        else:
+            evidence.append(WiringReviewEvidence(
+                check="clearance",
+                status=WiringReviewStatus.passed,
+                basis="heuristic_estimate",
+                message="Recorded minimum clearance meets the MVP heuristic threshold. This is not exact CAD validation.",
+                measured_value=route.clearance_min_mm,
+                threshold_value=clearance_threshold,
+                units="mm",
+            ))
+
+        bend_threshold = rule.required_bend_radius_min_mm
+        observed_turn_radius = _route_min_turn_radius_mm(route)
+        bend_radius = route.bend_radius_min_mm if route.bend_radius_min_mm is not None else observed_turn_radius
+        if bend_threshold is None or bend_radius is None:
+            evidence.append(WiringReviewEvidence(
+                check="bend radius",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="Bend radius is missing or lacks a rule threshold, so harness bend review is required.",
+                measured_value=bend_radius,
+                threshold_value=bend_threshold,
+                units="mm",
+            ))
+        elif bend_radius < bend_threshold:
+            evidence.append(WiringReviewEvidence(
+                check="bend radius",
+                status=WiringReviewStatus.warning,
+                basis="heuristic_estimate",
+                message="Recorded bend radius is below the MVP heuristic threshold. Manufacturer cable data is still required.",
+                measured_value=round(bend_radius, 2),
+                threshold_value=bend_threshold,
+                units="mm",
+            ))
+        else:
+            evidence.append(WiringReviewEvidence(
+                check="bend radius",
+                status=WiringReviewStatus.passed,
+                basis="heuristic_estimate",
+                message="Recorded bend radius meets the MVP heuristic threshold. Manufacturer cable data is still required.",
+                measured_value=round(bend_radius, 2),
+                threshold_value=bend_threshold,
+                units="mm",
+            ))
+
+        service_threshold = rule.required_service_loop_min_mm
+        if service_threshold is None:
+            evidence.append(WiringReviewEvidence(
+                check="service loop",
+                status=WiringReviewStatus.review_required,
+                basis="review_required",
+                message="No service-loop threshold is supplied for this route.",
+            ))
+        elif route.service_loop_mm is None:
+            evidence.append(WiringReviewEvidence(
+                check="service loop",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="Service-loop slack is not recorded for this route.",
+                threshold_value=service_threshold,
+                units="mm",
+            ))
+        elif route.service_loop_mm < service_threshold:
+            evidence.append(WiringReviewEvidence(
+                check="service loop",
+                status=WiringReviewStatus.warning,
+                basis="heuristic_estimate",
+                message="Recorded service-loop slack is below the MVP heuristic threshold.",
+                measured_value=route.service_loop_mm,
+                threshold_value=service_threshold,
+                units="mm",
+            ))
+        else:
+            evidence.append(WiringReviewEvidence(
+                check="service loop",
+                status=WiringReviewStatus.passed,
+                basis="heuristic_estimate",
+                message="Recorded service-loop slack meets the MVP heuristic threshold.",
+                measured_value=route.service_loop_mm,
+                threshold_value=service_threshold,
+                units="mm",
+            ))
+
+        missing_segments = sorted(set(route.wire_segment_ids) - set(wire_segments_by_id))
+        linked_bom_item_ids = [
+            wire_segments_by_id[segment_id].bom_item_id
+            for segment_id in route.wire_segment_ids
+            if segment_id in wire_segments_by_id and wire_segments_by_id[segment_id].bom_item_id is not None
+        ]
+        if missing_segments:
+            evidence.append(WiringReviewEvidence(
+                check="BOM linkage",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="Route references wire segment ids that are not present in the project.",
+                related_ids=missing_segments,
+            ))
+        elif route.wire_segment_ids and linked_bom_item_ids:
+            evidence.append(WiringReviewEvidence(
+                check="BOM linkage",
+                status=WiringReviewStatus.passed,
+                basis="explicit_data",
+                message="Route wire segments link to harness BOM additions.",
+                related_ids=linked_bom_item_ids,
+            ))
+        else:
+            evidence.append(WiringReviewEvidence(
+                check="BOM linkage",
+                status=WiringReviewStatus.review_required,
+                basis="missing_input",
+                message="Wire segments or harness BOM item ids are incomplete for this route.",
+            ))
+
+        status = _review_status_from_evidence(evidence)
+        review_required = [item.message for item in evidence if item.status == WiringReviewStatus.review_required]
+        route_reviews.append(WiringRouteReview(
+            route_id=route.id,
+            route_name=route.name,
+            status=status,
+            summary=(
+                "MVP wiring review passes all recorded heuristic checks; review is still needed before release."
+                if status == WiringReviewStatus.passed
+                else "MVP wiring review found warnings but no missing inputs. Treat as engineering review required."
+                if status == WiringReviewStatus.warning
+                else "MVP wiring review needs more route, connector, clearance, bend, or BOM evidence."
+            ),
+            evidence=evidence,
+            bom_item_ids=linked_bom_item_ids,
+            endpoint_part_ids=endpoint_part_ids,
+            review_required=review_required,
+        ))
+
+    project_status = _review_status_from_evidence([
+        evidence for route_review in route_reviews for evidence in route_review.evidence
+    ]) if route_reviews else WiringReviewStatus.review_required
+    return WiringReviewReport(
+        project_id=project.id,
+        status=project_status,
+        summary=(
+            f"Reviewed {len(route_reviews)} wiring route{'s' if len(route_reviews) != 1 else ''} with deterministic MVP heuristics. "
+            "Clearance and bend checks are screening signals, not exact electrical or CAD validation."
+        ),
+        route_reviews=route_reviews,
+        assumptions=[
+            "Polyline route lengths are estimated from project points and are not autorouted CAD paths.",
+            "Clearance, bend radius, and service-loop checks use explicit project thresholds or MVP heuristic defaults.",
+            "Electrical current, voltage drop, EMI, flex life, and standards compliance remain review-required unless explicit data is added later.",
+        ],
+    )
+
+
 def collect_project_task_requirements(project: Project) -> list[TaskRequirement]:
     return [project.active_task] if project.active_task else []
 
 
 def collect_project_bom_items(project: Project) -> list[BOMItem]:
-    items: list[BOMItem] = []
+    items_by_id: dict[str, BOMItem] = {}
     for assembly in project.assemblies:
         for part in assembly.parts:
             manufacturing_option = _active_manufacturing_option(part)
-            items.append(
-                BOMItem(
+            items_by_id[f"bom-{part.id}"] = BOMItem(
                     id=f"bom-{part.id}",
                     part_id=part.id,
                     name=part.name,
@@ -780,8 +1098,33 @@ def collect_project_bom_items(project: Project) -> list[BOMItem]:
                         else "Derived from local project assembly metadata; price review required."
                     ),
                 )
+    for component in project.electronics_components:
+        for bom_item_id in component.bom_item_ids:
+            items_by_id[bom_item_id] = BOMItem(
+                    id=bom_item_id,
+                    part_id=component.mounted_part_id,
+                    name=component.name,
+                    quantity=1,
+                    unit="each",
+                    price=MoneyRange(min=5, max=35, confidence=RecommendationConfidence.heuristic),
+                    lead_time_days_min=3,
+                    lead_time_days_max=10,
+                    license_or_terms="Electronics BOM seed is heuristic and review-required; not a supplier quote.",
+                )
+    for segment in project.wire_segments:
+        if segment.bom_item_id is None:
+            continue
+        items_by_id[segment.bom_item_id] = BOMItem(
+                id=segment.bom_item_id,
+                name=segment.name,
+                quantity=round((segment.length_mm or 1000) / 1000, 3),
+                unit="m",
+                price=MoneyRange(min=2, max=9, confidence=RecommendationConfidence.heuristic),
+                lead_time_days_min=2,
+                lead_time_days_max=7,
+                license_or_terms="Harness BOM seed is estimated from recorded route length; not a supplier quote.",
             )
-    return items
+    return list(items_by_id.values())
 
 
 def collect_project_manufacturing_options(project: Project) -> list[PartManufacturingOptions]:
@@ -797,6 +1140,18 @@ def collect_project_manufacturing_options(project: Project) -> list[PartManufact
                 )
             )
     return options
+
+
+def collect_project_electronics_components(project: Project) -> list[ElectronicsComponent]:
+    return project.electronics_components
+
+
+def collect_project_wire_segments(project: Project) -> list[WireSegment]:
+    return project.wire_segments
+
+
+def collect_project_wiring_rules(project: Project) -> list[WiringRuleSet]:
+    return project.wiring_rules
 
 
 def collect_project_wiring_routes(project: Project) -> list[WiringRoute]:
@@ -825,7 +1180,11 @@ def build_project_panel_data(project: Project) -> ProjectPanelData:
         task_requirements=collect_project_task_requirements(project),
         bom_items=collect_project_bom_items(project),
         manufacturing_options=collect_project_manufacturing_options(project),
+        electronics_components=collect_project_electronics_components(project),
+        wire_segments=collect_project_wire_segments(project),
+        wiring_rules=collect_project_wiring_rules(project),
         wiring_routes=collect_project_wiring_routes(project),
+        wiring_review=build_wiring_review(project),
         reports=project.reports,
         analysis_readiness_previews=previews,
     )

@@ -251,6 +251,61 @@ def test_material_substitution_options_preview_and_apply_update_bom_without_fake
     assert finger_readiness["material_properties"]["material_id"] == "mat-carbon-fiber-nylon"
 
 
+def test_wiring_electronics_endpoints_return_reviewable_harness_data() -> None:
+    local_client = TestClient(main_module.create_app())
+
+    wiring = local_client.get("/api/projects/sample/wiring-electronics")
+    review = local_client.post("/api/projects/sample/wiring-review")
+
+    assert wiring.status_code == 200
+    wiring_payload = wiring.json()
+    assert wiring_payload["electronics_components"][0]["id"] == "ec-controller-pcb"
+    assert wiring_payload["wire_segments"][0]["bom_item_id"] == "bom-wire-finger-sensor-lead"
+    assert wiring_payload["wiring_rules"][0]["evidence_basis"] == "heuristic"
+    assert wiring_payload["wiring_review"]["summary"].endswith(
+        "not exact electrical or CAD validation."
+    )
+    assert review.status_code == 200
+    review_payload = review.json()
+    route_statuses = {item["route_id"]: item["status"] for item in review_payload["route_reviews"]}
+    assert route_statuses["route-main-harness"] == "pass"
+    assert route_statuses["route-finger-sensor"] == "warning"
+    assert any(
+        evidence["check"] == "BOM linkage" and evidence["status"] == "pass"
+        for route in review_payload["route_reviews"]
+        for evidence in route["evidence"]
+    )
+    assert "Electrical current, voltage drop" in review_payload["assumptions"][2]
+
+
+
+def test_project_file_import_rejects_inconsistent_non_empty_wiring_lists() -> None:
+    local_client = TestClient(main_module.create_app())
+    project_file = local_client.get("/api/projects/project-open-gripper-demo/export-file").json()
+    project_file["project"]["wire_segments"] = []
+
+    imported = local_client.post("/api/projects/import-file", json=project_file)
+
+    assert imported.status_code == 422
+    assert "unknown wire segments" in imported.json()["detail"]
+
+    project_file = local_client.get("/api/projects/project-open-gripper-demo/export-file").json()
+    project_file["project"]["assemblies"][0]["wiring_routes"][0]["from_connector"]["part_id"] = "part-finger-link"
+    imported = local_client.post("/api/projects/import-file", json=project_file)
+
+    assert imported.status_code == 422
+    assert "inconsistent component ownership" in imported.json()["detail"]
+
+    project_file = local_client.get("/api/projects/project-open-gripper-demo/export-file").json()
+    project_file["project"]["assemblies"][0]["wiring_routes"][0]["wire_segment_ids"] = ["wire-main-palm-harness"]
+    project_file["project"]["assemblies"][0]["wiring_routes"][0]["harness_bom"].append("bom-wire-main-palm-harness")
+    imported = local_client.post("/api/projects/import-file", json=project_file)
+
+    assert imported.status_code == 422
+    assert "mismatched terminals" in imported.json()["detail"]
+
+
+
 def test_project_file_export_import_round_trip_preserves_mvp_data() -> None:
     local_client = TestClient(main_module.create_app())
     pre_solver = local_client.post(

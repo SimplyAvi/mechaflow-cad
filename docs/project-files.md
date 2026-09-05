@@ -35,7 +35,7 @@ Fields:
 - `analysis_readiness_previews`: portable preview records for desktop display and review. The backend can regenerate these from `project` after import.
 - `extensions`: reserved object for future importer hints. MVP import validates the envelope and stores the project, but it does not invoke real CAD tools.
 
-The project payload preserves the meaningful MVP data: assemblies, parts, materials, wiring routes, active task, modifications, analysis jobs, reports, and analysis job artifacts. BOM, manufacturing option groupings, wiring panels, and analysis readiness panels are rebuilt from the imported project through `ProjectPanelData`.
+The project payload preserves the meaningful MVP data: assemblies, parts, materials, electronics components, wire segments, wiring rule sets, wiring routes, active task, modifications, analysis jobs, reports, and analysis job artifacts. BOM, manufacturing option groupings, wiring/electronics panels, route review evidence, and analysis readiness panels are rebuilt from the imported project through `ProjectPanelData`.
 
 ## API
 
@@ -70,7 +70,7 @@ Malformed JSON returns `422` with a JSON parse detail from FastAPI.
 
 Unsupported envelopes return `422`, for example when `format` is not `mechaflow-cad.project` or `schema_version` is not `1.0`.
 
-Schema errors inside `project` also return `422` and do not overwrite the current in-memory project. Examples include unknown fields, duplicate part ids, unknown material references, invalid wiring endpoints, non-finite numbers, and unsupported analysis artifacts.
+Schema errors inside `project` also return `422` and do not overwrite the current in-memory project. Examples include unknown fields, duplicate part ids, unknown material references, invalid wiring endpoints, routes that reference missing wire segments or electronics components, non-finite numbers, and unsupported analysis artifacts.
 
 ## Future import hooks
 

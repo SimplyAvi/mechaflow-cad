@@ -1214,7 +1214,224 @@
       }
     ],
     "created_at": "2026-01-01T00:00:00Z",
-    "updated_at": "2026-01-01T00:00:00Z"
+    "updated_at": "2026-01-01T00:00:00Z",
+    "electronics_components": [
+      {
+        "id": "ec-controller-pcb",
+        "name": "Controller PCB and IO headers",
+        "component_type": "pcb",
+        "mounted_part_id": "part-controller-pcb",
+        "connector_ids": [
+          "conn-controller-tool",
+          "conn-controller-main",
+          "conn-controller-encoder"
+        ],
+        "bom_item_ids": [
+          "bom-part-controller-pcb"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "KiCad placement is a seed placeholder and needs ECAD review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-finger-force-sensor",
+        "name": "Finger force sensor",
+        "component_type": "sensor",
+        "mounted_part_id": "part-finger-link",
+        "connector_ids": [
+          "conn-finger"
+        ],
+        "bom_item_ids": [
+          "bom-finger-force-sensor"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Sensor electrical load and attachment are review-required."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-elbow-service-disconnect",
+        "name": "Elbow service loop disconnect",
+        "component_type": "connector",
+        "mounted_part_id": "part-elbow-joint",
+        "connector_ids": [
+          "conn-elbow-service"
+        ],
+        "bom_item_ids": [
+          "bom-elbow-service-disconnect"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Service disconnect placement is heuristic until CAD sweep review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-shoulder-encoder",
+        "name": "Shoulder encoder",
+        "component_type": "sensor",
+        "mounted_part_id": "part-shoulder-yoke",
+        "connector_ids": [
+          "conn-shoulder-encoder"
+        ],
+        "bom_item_ids": [
+          "bom-shoulder-encoder"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Encoder pinout and shielding need ECAD review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-wrist-tool-connector",
+        "name": "Wrist tool connector",
+        "component_type": "connector",
+        "mounted_part_id": "part-wrist-plate",
+        "connector_ids": [
+          "conn-wrist-tool"
+        ],
+        "bom_item_ids": [
+          "bom-wrist-tool-connector"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Wrist connector needs rotation sweep clearance."
+        ],
+        "confidence": "estimated_from_heuristic"
+      }
+    ],
+    "wire_segments": [
+      {
+        "id": "wire-finger-sensor-lead",
+        "name": "4-conductor silicone finger sensor lead",
+        "conductor_count": 4,
+        "wire_gauge_awg": 26,
+        "length_mm": 720,
+        "signal_or_power": "finger force sensor signal",
+        "color": "blue",
+        "from_endpoint": {
+          "connector_id": "conn-controller-tool",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-finger",
+          "part_id": "part-finger-link",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-finger-sensor-lead",
+        "notes": [
+          "Length is estimated from route points and service slack."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "wire-main-arm-harness",
+        "name": "16-conductor robot flex main arm harness",
+        "conductor_count": 16,
+        "wire_gauge_awg": 24,
+        "length_mm": 520,
+        "signal_or_power": "low-voltage power and IO",
+        "color": "black",
+        "from_endpoint": {
+          "connector_id": "conn-controller-main",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-elbow-service",
+          "part_id": "part-elbow-joint",
+          "pin_label": null,
+          "role": "service_disconnect",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-main-arm-harness",
+        "notes": [
+          "Current rating and voltage drop are not validated."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "wire-shoulder-encoder",
+        "name": "Shielded shoulder encoder pigtail",
+        "conductor_count": 6,
+        "wire_gauge_awg": 28,
+        "length_mm": 190,
+        "signal_or_power": "encoder signal",
+        "color": "green",
+        "from_endpoint": {
+          "connector_id": "conn-controller-encoder",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-shoulder-encoder",
+          "part_id": "part-shoulder-yoke",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-shoulder-encoder",
+        "notes": [
+          "Shield termination and EMI are review-required."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "wire-wrist-tool",
+        "name": "8-conductor wrist tool IO cable",
+        "conductor_count": 8,
+        "wire_gauge_awg": 24,
+        "length_mm": 260,
+        "signal_or_power": "tool IO",
+        "color": "orange",
+        "from_endpoint": {
+          "connector_id": "conn-elbow-service",
+          "part_id": "part-elbow-joint",
+          "pin_label": null,
+          "role": "service_disconnect",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-wrist-tool",
+          "part_id": "part-wrist-plate",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-wrist-tool",
+        "notes": [
+          "Flex life is not validated by this MVP review."
+        ],
+        "confidence": "estimated_from_heuristic"
+      }
+    ],
+    "wiring_rules": [
+      {
+        "id": "rule-mvp-arm-harness",
+        "name": "MVP robot arm harness heuristic",
+        "required_clearance_min_mm": 2,
+        "required_bend_radius_min_mm": 15,
+        "bend_radius_multiplier": null,
+        "required_service_loop_min_mm": 25,
+        "evidence_basis": "heuristic",
+        "notes": [
+          "Screening threshold only. Replace with cable manufacturer data and CAD sweep before release."
+        ]
+      }
+    ]
   },
   "task_requirements": [
     {
@@ -1418,6 +1635,158 @@
       "license_or_terms": null,
       "lead_time_days_min": 5,
       "lead_time_days_max": 12
+    },
+    {
+      "id": "bom-wire-finger-sensor-lead",
+      "part_id": null,
+      "name": "4-conductor silicone finger sensor lead",
+      "quantity": 0.72,
+      "unit": "m",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 8,
+        "max": 26,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 2,
+      "lead_time_days_max": 7
+    },
+    {
+      "id": "bom-wire-main-arm-harness",
+      "part_id": null,
+      "name": "16-conductor robot flex main arm harness",
+      "quantity": 0.52,
+      "unit": "m",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 18,
+        "max": 52,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 9
+    },
+    {
+      "id": "bom-wire-shoulder-encoder",
+      "part_id": null,
+      "name": "Shielded shoulder encoder pigtail",
+      "quantity": 0.19,
+      "unit": "m",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 6,
+        "max": 18,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 2,
+      "lead_time_days_max": 7
+    },
+    {
+      "id": "bom-wire-wrist-tool",
+      "part_id": null,
+      "name": "8-conductor wrist tool IO cable",
+      "quantity": 0.26,
+      "unit": "m",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 9,
+        "max": 28,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 2,
+      "lead_time_days_max": 7
+    },
+    {
+      "id": "bom-finger-force-sensor",
+      "part_id": null,
+      "name": "Finger force sensor",
+      "quantity": 1,
+      "unit": "each",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 12,
+        "max": 45,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 5,
+      "lead_time_days_max": 14
+    },
+    {
+      "id": "bom-elbow-service-disconnect",
+      "part_id": null,
+      "name": "Elbow service disconnect",
+      "quantity": 1,
+      "unit": "each",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 4,
+        "max": 14,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
+    },
+    {
+      "id": "bom-shoulder-encoder",
+      "part_id": null,
+      "name": "Shoulder encoder",
+      "quantity": 1,
+      "unit": "each",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 18,
+        "max": 60,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 5,
+      "lead_time_days_max": 14
+    },
+    {
+      "id": "bom-wrist-tool-connector",
+      "part_id": null,
+      "name": "Wrist tool connector",
+      "quantity": 1,
+      "unit": "each",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 5,
+        "max": 18,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 10
     }
   ],
   "manufacturing_options": [
@@ -1756,13 +2125,43 @@
         "id": "conn-controller-tool",
         "name": "Controller tool IO connector",
         "pin_count": 8,
-        "part_id": "part-controller-pcb"
+        "part_id": "part-controller-pcb",
+        "component_id": "ec-controller-pcb",
+        "kind": "connector",
+        "gender": "board",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 2,
+        "mating_connector_id": null,
+        "notes": []
       },
       "to_connector": {
         "id": "conn-finger",
         "name": "Finger sensor connector",
         "pin_count": 4,
-        "part_id": "part-finger-link"
+        "part_id": "part-finger-link",
+        "component_id": "ec-finger-force-sensor",
+        "kind": "connector",
+        "gender": "inline",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 1,
+        "mating_connector_id": null,
+        "notes": []
       },
       "path_points_mm": [
         {
@@ -1782,7 +2181,7 @@
         }
       ],
       "bend_radius_min_mm": 18,
-      "clearance_min_mm": null,
+      "clearance_min_mm": 1.5,
       "harness_bom": [
         "4-conductor silicone lead",
         "micro JST connector"
@@ -1790,7 +2189,33 @@
       "risk_notes": [
         "Runs through wrist rotation and needs slack validation once CAD geometry exists."
       ],
-      "confidence": "estimated_from_heuristic"
+      "confidence": "estimated_from_heuristic",
+      "wire_segment_ids": [
+        "wire-finger-sensor-lead"
+      ],
+      "electronics_component_ids": [
+        "ec-controller-pcb",
+        "ec-finger-force-sensor"
+      ],
+      "service_loop_mm": 20,
+      "diagram_ref": "wireviz://robot-arm/finger-sensor",
+      "rule_set_id": "rule-mvp-arm-harness",
+      "endpoints": [
+        {
+          "connector_id": "conn-controller-tool",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        {
+          "connector_id": "conn-finger",
+          "part_id": "part-finger-link",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        }
+      ]
     },
     {
       "id": "route-main-harness",
@@ -1799,13 +2224,59 @@
         "id": "conn-controller-main",
         "name": "Controller main harness connector",
         "pin_count": 16,
-        "part_id": "part-controller-pcb"
+        "part_id": "part-controller-pcb",
+        "component_id": "ec-controller-pcb",
+        "kind": "connector",
+        "gender": "board",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12",
+          "P13",
+          "P14",
+          "P15",
+          "P16"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 2,
+        "mating_connector_id": null,
+        "notes": []
       },
       "to_connector": {
         "id": "conn-elbow-service",
         "name": "Elbow service loop connector",
         "pin_count": 12,
-        "part_id": "part-elbow-joint"
+        "part_id": "part-elbow-joint",
+        "component_id": "ec-elbow-service-disconnect",
+        "kind": "connector",
+        "gender": "inline",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 2,
+        "mating_connector_id": null,
+        "notes": []
       },
       "path_points_mm": [
         {
@@ -1825,7 +2296,7 @@
         }
       ],
       "bend_radius_min_mm": 25,
-      "clearance_min_mm": null,
+      "clearance_min_mm": 3,
       "harness_bom": [
         "robot flex cable bundle",
         "strain-relief clip"
@@ -1833,7 +2304,33 @@
       "risk_notes": [
         "Service loop review required at shoulder and elbow before motion is trusted."
       ],
-      "confidence": "estimated_from_heuristic"
+      "confidence": "estimated_from_heuristic",
+      "wire_segment_ids": [
+        "wire-main-arm-harness"
+      ],
+      "electronics_component_ids": [
+        "ec-controller-pcb",
+        "ec-elbow-service-disconnect"
+      ],
+      "service_loop_mm": 45,
+      "diagram_ref": "wireviz://robot-arm/main-harness",
+      "rule_set_id": "rule-mvp-arm-harness",
+      "endpoints": [
+        {
+          "connector_id": "conn-controller-main",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        {
+          "connector_id": "conn-elbow-service",
+          "part_id": "part-elbow-joint",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        }
+      ]
     },
     {
       "id": "route-shoulder-encoder",
@@ -1842,13 +2339,43 @@
         "id": "conn-controller-encoder",
         "name": "Controller encoder connector",
         "pin_count": 6,
-        "part_id": "part-controller-pcb"
+        "part_id": "part-controller-pcb",
+        "component_id": "ec-controller-pcb",
+        "kind": "connector",
+        "gender": "board",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 1,
+        "mating_connector_id": null,
+        "notes": []
       },
       "to_connector": {
         "id": "conn-shoulder-encoder",
         "name": "Shoulder encoder connector",
         "pin_count": 6,
-        "part_id": "part-shoulder-yoke"
+        "part_id": "part-shoulder-yoke",
+        "component_id": "ec-shoulder-encoder",
+        "kind": "connector",
+        "gender": "inline",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 1,
+        "mating_connector_id": null,
+        "notes": []
       },
       "path_points_mm": [
         {
@@ -1863,14 +2390,40 @@
         }
       ],
       "bend_radius_min_mm": 12,
-      "clearance_min_mm": null,
+      "clearance_min_mm": 2,
       "harness_bom": [
         "shielded encoder lead"
       ],
       "risk_notes": [
         "Encoder pigtail is visible so electrical review is not hidden by the mechanical model."
       ],
-      "confidence": "estimated_from_heuristic"
+      "confidence": "estimated_from_heuristic",
+      "wire_segment_ids": [
+        "wire-shoulder-encoder"
+      ],
+      "electronics_component_ids": [
+        "ec-controller-pcb",
+        "ec-shoulder-encoder"
+      ],
+      "service_loop_mm": null,
+      "diagram_ref": "wireviz://robot-arm/shoulder-encoder",
+      "rule_set_id": "rule-mvp-arm-harness",
+      "endpoints": [
+        {
+          "connector_id": "conn-controller-encoder",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        {
+          "connector_id": "conn-shoulder-encoder",
+          "part_id": "part-shoulder-yoke",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        }
+      ]
     },
     {
       "id": "route-wrist-tool",
@@ -1879,13 +2432,51 @@
         "id": "conn-elbow-service",
         "name": "Elbow service loop connector",
         "pin_count": 12,
-        "part_id": "part-elbow-joint"
+        "part_id": "part-elbow-joint",
+        "component_id": "ec-elbow-service-disconnect",
+        "kind": "connector",
+        "gender": "inline",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8",
+          "P9",
+          "P10",
+          "P11",
+          "P12"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 2,
+        "mating_connector_id": null,
+        "notes": []
       },
       "to_connector": {
         "id": "conn-wrist-tool",
         "name": "Wrist tool connector",
         "pin_count": 8,
-        "part_id": "part-wrist-plate"
+        "part_id": "part-wrist-plate",
+        "component_id": "ec-wrist-tool-connector",
+        "kind": "connector",
+        "gender": "inline",
+        "pin_labels": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6",
+          "P7",
+          "P8"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 2,
+        "mating_connector_id": null,
+        "notes": []
       },
       "path_points_mm": [
         {
@@ -1913,7 +2504,33 @@
       "risk_notes": [
         "Wrist route needs rotation sweep clearance after real geometry import."
       ],
-      "confidence": "estimated_from_heuristic"
+      "confidence": "estimated_from_heuristic",
+      "wire_segment_ids": [
+        "wire-wrist-tool"
+      ],
+      "electronics_component_ids": [
+        "ec-elbow-service-disconnect",
+        "ec-wrist-tool-connector"
+      ],
+      "service_loop_mm": 30,
+      "diagram_ref": "wireviz://robot-arm/wrist-tool",
+      "rule_set_id": "rule-mvp-arm-harness",
+      "endpoints": [
+        {
+          "connector_id": "conn-elbow-service",
+          "part_id": "part-elbow-joint",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        {
+          "connector_id": "conn-wrist-tool",
+          "part_id": "part-wrist-plate",
+          "pin_label": null,
+          "role": "sink",
+          "notes": []
+        }
+      ]
     }
   ],
   "reports": [
@@ -1948,5 +2565,623 @@
       ],
       "generated_at": "2026-01-01T00:00:00Z"
     }
-  ]
+  ],
+  "electronics_components": [
+    {
+      "id": "ec-controller-pcb",
+      "name": "Controller PCB and IO headers",
+      "component_type": "pcb",
+      "mounted_part_id": "part-controller-pcb",
+      "connector_ids": [
+        "conn-controller-tool",
+        "conn-controller-main",
+        "conn-controller-encoder"
+      ],
+      "bom_item_ids": [
+        "bom-part-controller-pcb"
+      ],
+      "datasheet_url": null,
+      "notes": [
+        "KiCad placement is a seed placeholder and needs ECAD review."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "ec-finger-force-sensor",
+      "name": "Finger force sensor",
+      "component_type": "sensor",
+      "mounted_part_id": "part-finger-link",
+      "connector_ids": [
+        "conn-finger"
+      ],
+      "bom_item_ids": [
+        "bom-finger-force-sensor"
+      ],
+      "datasheet_url": null,
+      "notes": [
+        "Sensor electrical load and attachment are review-required."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "ec-elbow-service-disconnect",
+      "name": "Elbow service loop disconnect",
+      "component_type": "connector",
+      "mounted_part_id": "part-elbow-joint",
+      "connector_ids": [
+        "conn-elbow-service"
+      ],
+      "bom_item_ids": [
+        "bom-elbow-service-disconnect"
+      ],
+      "datasheet_url": null,
+      "notes": [
+        "Service disconnect placement is heuristic until CAD sweep review."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "ec-shoulder-encoder",
+      "name": "Shoulder encoder",
+      "component_type": "sensor",
+      "mounted_part_id": "part-shoulder-yoke",
+      "connector_ids": [
+        "conn-shoulder-encoder"
+      ],
+      "bom_item_ids": [
+        "bom-shoulder-encoder"
+      ],
+      "datasheet_url": null,
+      "notes": [
+        "Encoder pinout and shielding need ECAD review."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "ec-wrist-tool-connector",
+      "name": "Wrist tool connector",
+      "component_type": "connector",
+      "mounted_part_id": "part-wrist-plate",
+      "connector_ids": [
+        "conn-wrist-tool"
+      ],
+      "bom_item_ids": [
+        "bom-wrist-tool-connector"
+      ],
+      "datasheet_url": null,
+      "notes": [
+        "Wrist connector needs rotation sweep clearance."
+      ],
+      "confidence": "estimated_from_heuristic"
+    }
+  ],
+  "wire_segments": [
+    {
+      "id": "wire-finger-sensor-lead",
+      "name": "4-conductor silicone finger sensor lead",
+      "conductor_count": 4,
+      "wire_gauge_awg": 26,
+      "length_mm": 720,
+      "signal_or_power": "finger force sensor signal",
+      "color": "blue",
+      "from_endpoint": {
+        "connector_id": "conn-controller-tool",
+        "part_id": "part-controller-pcb",
+        "pin_label": null,
+        "role": "source",
+        "notes": []
+      },
+      "to_endpoint": {
+        "connector_id": "conn-finger",
+        "part_id": "part-finger-link",
+        "pin_label": null,
+        "role": "sink",
+        "notes": []
+      },
+      "bom_item_id": "bom-wire-finger-sensor-lead",
+      "notes": [
+        "Length is estimated from route points and service slack."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "wire-main-arm-harness",
+      "name": "16-conductor robot flex main arm harness",
+      "conductor_count": 16,
+      "wire_gauge_awg": 24,
+      "length_mm": 520,
+      "signal_or_power": "low-voltage power and IO",
+      "color": "black",
+      "from_endpoint": {
+        "connector_id": "conn-controller-main",
+        "part_id": "part-controller-pcb",
+        "pin_label": null,
+        "role": "source",
+        "notes": []
+      },
+      "to_endpoint": {
+        "connector_id": "conn-elbow-service",
+        "part_id": "part-elbow-joint",
+        "pin_label": null,
+        "role": "service_disconnect",
+        "notes": []
+      },
+      "bom_item_id": "bom-wire-main-arm-harness",
+      "notes": [
+        "Current rating and voltage drop are not validated."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "wire-shoulder-encoder",
+      "name": "Shielded shoulder encoder pigtail",
+      "conductor_count": 6,
+      "wire_gauge_awg": 28,
+      "length_mm": 190,
+      "signal_or_power": "encoder signal",
+      "color": "green",
+      "from_endpoint": {
+        "connector_id": "conn-controller-encoder",
+        "part_id": "part-controller-pcb",
+        "pin_label": null,
+        "role": "source",
+        "notes": []
+      },
+      "to_endpoint": {
+        "connector_id": "conn-shoulder-encoder",
+        "part_id": "part-shoulder-yoke",
+        "pin_label": null,
+        "role": "sink",
+        "notes": []
+      },
+      "bom_item_id": "bom-wire-shoulder-encoder",
+      "notes": [
+        "Shield termination and EMI are review-required."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "wire-wrist-tool",
+      "name": "8-conductor wrist tool IO cable",
+      "conductor_count": 8,
+      "wire_gauge_awg": 24,
+      "length_mm": 260,
+      "signal_or_power": "tool IO",
+      "color": "orange",
+      "from_endpoint": {
+        "connector_id": "conn-elbow-service",
+        "part_id": "part-elbow-joint",
+        "pin_label": null,
+        "role": "service_disconnect",
+        "notes": []
+      },
+      "to_endpoint": {
+        "connector_id": "conn-wrist-tool",
+        "part_id": "part-wrist-plate",
+        "pin_label": null,
+        "role": "sink",
+        "notes": []
+      },
+      "bom_item_id": "bom-wire-wrist-tool",
+      "notes": [
+        "Flex life is not validated by this MVP review."
+      ],
+      "confidence": "estimated_from_heuristic"
+    }
+  ],
+  "wiring_rules": [
+    {
+      "id": "rule-mvp-arm-harness",
+      "name": "MVP robot arm harness heuristic",
+      "required_clearance_min_mm": 2,
+      "required_bend_radius_min_mm": 15,
+      "bend_radius_multiplier": null,
+      "required_service_loop_min_mm": 25,
+      "evidence_basis": "heuristic",
+      "notes": [
+        "Screening threshold only. Replace with cable manufacturer data and CAD sweep before release."
+      ]
+    }
+  ],
+  "wiring_review": {
+    "project_id": "project-open-gripper-demo",
+    "status": "review_required",
+    "summary": "Reviewed 4 wiring routes with deterministic MVP heuristics. Clearance and bend checks are screening signals, not exact electrical or CAD validation.",
+    "route_reviews": [
+      {
+        "route_id": "route-finger-sensor",
+        "route_name": "Finger force sensor lead",
+        "status": "warning",
+        "summary": "MVP wiring review found warnings but no missing inputs. Treat as engineering review required.",
+        "evidence": [
+          {
+            "check": "endpoint linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Both route endpoint connectors are linked to known project parts.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "part-controller-pcb",
+              "part-finger-link"
+            ]
+          },
+          {
+            "check": "connector details",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route connectors are tied to electronics component records.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "conn-controller-tool",
+              "conn-finger"
+            ]
+          },
+          {
+            "check": "route geometry",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Polyline path length is estimated from recorded route points. This is not routed CAD geometry.",
+            "measured_value": 694.22,
+            "threshold_value": null,
+            "units": "mm",
+            "related_ids": [
+              "route-finger-sensor"
+            ]
+          },
+          {
+            "check": "clearance",
+            "status": "warning",
+            "basis": "heuristic_estimate",
+            "message": "Recorded minimum clearance is below the MVP heuristic threshold. Treat this as a warning until CAD sweep validates it.",
+            "measured_value": 1.5,
+            "threshold_value": 2,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "bend radius",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded bend radius meets the MVP heuristic threshold. Manufacturer cable data is still required.",
+            "measured_value": 18,
+            "threshold_value": 15,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "service loop",
+            "status": "warning",
+            "basis": "heuristic_estimate",
+            "message": "Recorded service-loop slack is below the MVP heuristic threshold.",
+            "measured_value": 20,
+            "threshold_value": 25,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "BOM linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route wire segments link to harness BOM additions.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "bom-wire-finger-sensor-lead"
+            ]
+          }
+        ],
+        "bom_item_ids": [
+          "bom-wire-finger-sensor-lead"
+        ],
+        "endpoint_part_ids": [
+          "part-controller-pcb",
+          "part-finger-link"
+        ],
+        "review_required": []
+      },
+      {
+        "route_id": "route-main-harness",
+        "route_name": "Main arm harness",
+        "status": "pass",
+        "summary": "MVP wiring review passes all recorded heuristic checks; review is still needed before release.",
+        "evidence": [
+          {
+            "check": "endpoint linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Both route endpoint connectors are linked to known project parts.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "part-controller-pcb",
+              "part-elbow-joint"
+            ]
+          },
+          {
+            "check": "connector details",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route connectors are tied to electronics component records.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "conn-controller-main",
+              "conn-elbow-service"
+            ]
+          },
+          {
+            "check": "route geometry",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Polyline path length is estimated from recorded route points. This is not routed CAD geometry.",
+            "measured_value": 462.48,
+            "threshold_value": null,
+            "units": "mm",
+            "related_ids": [
+              "route-main-harness"
+            ]
+          },
+          {
+            "check": "clearance",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded minimum clearance meets the MVP heuristic threshold. This is not exact CAD validation.",
+            "measured_value": 3,
+            "threshold_value": 2,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "bend radius",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded bend radius meets the MVP heuristic threshold. Manufacturer cable data is still required.",
+            "measured_value": 25,
+            "threshold_value": 15,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "service loop",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded service-loop slack meets the MVP heuristic threshold.",
+            "measured_value": 45,
+            "threshold_value": 25,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "BOM linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route wire segments link to harness BOM additions.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "bom-wire-main-arm-harness"
+            ]
+          }
+        ],
+        "bom_item_ids": [
+          "bom-wire-main-arm-harness"
+        ],
+        "endpoint_part_ids": [
+          "part-controller-pcb",
+          "part-elbow-joint"
+        ],
+        "review_required": []
+      },
+      {
+        "route_id": "route-shoulder-encoder",
+        "route_name": "Shoulder encoder pigtail",
+        "status": "review_required",
+        "summary": "MVP wiring review needs more route, connector, clearance, bend, or BOM evidence.",
+        "evidence": [
+          {
+            "check": "endpoint linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Both route endpoint connectors are linked to known project parts.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "part-controller-pcb",
+              "part-shoulder-yoke"
+            ]
+          },
+          {
+            "check": "connector details",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route connectors are tied to electronics component records.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "conn-controller-encoder",
+              "conn-shoulder-encoder"
+            ]
+          },
+          {
+            "check": "route geometry",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Polyline path length is estimated from recorded route points. This is not routed CAD geometry.",
+            "measured_value": 164.92,
+            "threshold_value": null,
+            "units": "mm",
+            "related_ids": [
+              "route-shoulder-encoder"
+            ]
+          },
+          {
+            "check": "clearance",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded minimum clearance meets the MVP heuristic threshold. This is not exact CAD validation.",
+            "measured_value": 2,
+            "threshold_value": 2,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "bend radius",
+            "status": "warning",
+            "basis": "heuristic_estimate",
+            "message": "Recorded bend radius is below the MVP heuristic threshold. Manufacturer cable data is still required.",
+            "measured_value": 12,
+            "threshold_value": 15,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "service loop",
+            "status": "review_required",
+            "basis": "missing_input",
+            "message": "Service-loop slack is not recorded for this route.",
+            "measured_value": null,
+            "threshold_value": 25,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "BOM linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route wire segments link to harness BOM additions.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "bom-wire-shoulder-encoder"
+            ]
+          }
+        ],
+        "bom_item_ids": [
+          "bom-wire-shoulder-encoder"
+        ],
+        "endpoint_part_ids": [
+          "part-controller-pcb",
+          "part-shoulder-yoke"
+        ],
+        "review_required": [
+          "Service-loop slack is not recorded for this route."
+        ]
+      },
+      {
+        "route_id": "route-wrist-tool",
+        "route_name": "Wrist tool harness",
+        "status": "review_required",
+        "summary": "MVP wiring review needs more route, connector, clearance, bend, or BOM evidence.",
+        "evidence": [
+          {
+            "check": "endpoint linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Both route endpoint connectors are linked to known project parts.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "part-elbow-joint",
+              "part-wrist-plate"
+            ]
+          },
+          {
+            "check": "connector details",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route connectors are tied to electronics component records.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "conn-elbow-service",
+              "conn-wrist-tool"
+            ]
+          },
+          {
+            "check": "route geometry",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Polyline path length is estimated from recorded route points. This is not routed CAD geometry.",
+            "measured_value": 225.77,
+            "threshold_value": null,
+            "units": "mm",
+            "related_ids": [
+              "route-wrist-tool"
+            ]
+          },
+          {
+            "check": "clearance",
+            "status": "review_required",
+            "basis": "missing_input",
+            "message": "Minimum clearance is missing or lacks a rule threshold, so CAD clearance review is required.",
+            "measured_value": null,
+            "threshold_value": 2,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "bend radius",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded bend radius meets the MVP heuristic threshold. Manufacturer cable data is still required.",
+            "measured_value": 20,
+            "threshold_value": 15,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "service loop",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded service-loop slack meets the MVP heuristic threshold.",
+            "measured_value": 30,
+            "threshold_value": 25,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "BOM linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route wire segments link to harness BOM additions.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "bom-wire-wrist-tool"
+            ]
+          }
+        ],
+        "bom_item_ids": [
+          "bom-wire-wrist-tool"
+        ],
+        "endpoint_part_ids": [
+          "part-elbow-joint",
+          "part-wrist-plate"
+        ],
+        "review_required": [
+          "Minimum clearance is missing or lacks a rule threshold, so CAD clearance review is required."
+        ]
+      }
+    ],
+    "generated_at": "2026-09-05T00:00:00Z",
+    "assumptions": [
+      "Polyline route lengths are estimated from project points and are not autorouted CAD paths.",
+      "Clearance, bend radius, and service-loop checks use explicit project thresholds or MVP heuristic defaults.",
+      "Electrical current, voltage drop, EMI, flex life, and standards compliance remain review-required unless explicit data is added later."
+    ]
+  }
 }

@@ -34,7 +34,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Gmsh finite-element mesh/i);
     expect(screen.getByText(/Background analysis status/i)).toBeInTheDocument();
     expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
-    expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
+    expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
     expect(screen.getByText(/Backend handoff mirrored/i)).toBeInTheDocument();
     expect(screen.getByText(/^MIT$/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open catalog entry/i })).toHaveAttribute(
@@ -93,7 +93,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/72 lb demo limit/i);
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Demo estimate only/i);
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/CalculiX static structural input deck/i);
-    expect(screen.getByText(/Main arm harness/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Main arm harness/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Finger force sensor lead/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/service loop review required/i).length).toBeGreaterThan(0);
   });
@@ -255,20 +255,20 @@ describe('MechaFlow cockpit', () => {
       'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
     );
 
-    expect(screen.getByRole('heading', { name: '$383-$1,152 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$440.60-$1,345.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: /Preview backend impact/i }));
 
     expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
     expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '$361-$1,084 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: /Apply validated substitution/i }));
 
     expect(await screen.findByText(/Applied substitution to the backend project/i)).toBeInTheDocument();
     expect(screen.queryByText(/BOM and cost preview/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '$361-$1,084 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
   });
 
   it('imports a portable project file from the desktop picker and keeps cockpit data interactive', async () => {
@@ -322,7 +322,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByRole('heading', { name: /^Imported robot arm project$/i })).toBeInTheDocument();
     expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
-    expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
+    expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
   });
 
   it('shows an understandable project-file error for invalid local JSON', async () => {
@@ -506,8 +506,8 @@ describe('MechaFlow cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: '$0.80-$1.60 open estimate' })).toBeInTheDocument();
-    expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(8);
+    expect(await screen.findByRole('heading', { name: '$1.37-$2.74 open estimate' })).toBeInTheDocument();
+    expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(16);
   });
 
   it('keeps unsupported safety estimates review-required for a selected part', async () => {

@@ -14,7 +14,16 @@ from threading import RLock
 from typing import Protocol
 
 from .adapters import artifact_kind_for_job, get_adapter_for_job
-from .catalog import DEFAULT_ASSEMBLY, DEFAULT_FINGER_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
+from .catalog import (
+    DEFAULT_ASSEMBLY,
+    DEFAULT_ELECTRONICS_COMPONENTS,
+    DEFAULT_FINGER_ASSEMBLY,
+    DEFAULT_MATERIALS,
+    DEFAULT_REFERENCE_DESIGNS,
+    DEFAULT_WIRE_SEGMENTS,
+    DEFAULT_WIRING_RULES,
+    GRIPPER_TASK,
+)
 from .models import (
     AnalysisArtifact,
     AnalysisArtifactKind,
@@ -124,6 +133,73 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
     _ensure_json_finite(project.model_dump(mode="python"), "project")
     part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
     material_ids = {material.id for material in project.materials}
+    electronics_component_ids = {component.id for component in project.electronics_components}
+    electronics_connector_ids = {
+        connector_id
+        for component in project.electronics_components
+        for connector_id in component.connector_ids
+    }
+    connector_owners: dict[str, tuple[str | None, str | None]] = {}
+    bom_ids = {f"bom-{part.id}" for assembly in project.assemblies for part in assembly.parts}
+    for component in project.electronics_components:
+        bom_ids.update(component.bom_item_ids)
+        for connector_id in component.connector_ids:
+            owner = (component.mounted_part_id, component.id)
+            if connector_id in connector_owners and connector_owners[connector_id] != owner:
+                raise InvalidWiringEndpointError(
+                    f"connector {connector_id!r} is claimed by multiple electronics components"
+                )
+            connector_owners[connector_id] = owner
+    for segment in project.wire_segments:
+        if segment.bom_item_id is not None:
+            bom_ids.add(segment.bom_item_id)
+    wire_segment_ids = {segment.id for segment in project.wire_segments}
+    wiring_rule_ids = {rule.id for rule in project.wiring_rules}
+    route_connector_ids = {
+        connector.id
+        for assembly in project.assemblies
+        for route in assembly.wiring_routes
+        for connector in (route.from_connector, route.to_connector)
+    }
+    route_connector_ids.update(
+        endpoint.connector_id
+        for segment in project.wire_segments
+        for endpoint in (segment.from_endpoint, segment.to_endpoint)
+        if endpoint is not None
+    )
+    for component in project.electronics_components:
+        if component.mounted_part_id is not None and component.mounted_part_id not in part_ids:
+            raise InvalidWiringEndpointError(
+                f"electronics component {component.id!r} references unknown mounted part {component.mounted_part_id!r}"
+            )
+        unknown_connectors = sorted(set(component.connector_ids) - route_connector_ids)
+        if unknown_connectors:
+            raise InvalidWiringEndpointError(
+                f"electronics component {component.id!r} references connectors not present on routes: {unknown_connectors}"
+            )
+    for segment in project.wire_segments:
+        if segment.from_endpoint is None or segment.to_endpoint is None:
+            raise InvalidWiringEndpointError(
+                f"wire segment {segment.id!r} requires both route endpoints"
+            )
+        for endpoint in (segment.from_endpoint, segment.to_endpoint):
+            if endpoint is not None and endpoint.part_id is not None and endpoint.part_id not in part_ids:
+                raise InvalidWiringEndpointError(
+                    f"wire segment {segment.id!r} references unknown endpoint part {endpoint.part_id!r}"
+                )
+            if endpoint is not None and endpoint.connector_id not in electronics_connector_ids:
+                raise InvalidWiringEndpointError(
+                    f"wire segment {segment.id!r} references unknown connector {endpoint.connector_id!r}"
+                )
+            owner = connector_owners.get(endpoint.connector_id)
+            if owner is None or endpoint.part_id != owner[0]:
+                raise InvalidWiringEndpointError(
+                    f"wire segment {segment.id!r} endpoint {endpoint.connector_id!r} has inconsistent part ownership"
+                )
+        if segment.bom_item_id is not None and segment.bom_item_id not in bom_ids:
+            raise InvalidWiringEndpointError(
+                f"wire segment {segment.id!r} references unknown BOM item {segment.bom_item_id!r}"
+            )
     route_ids_by_part: dict[str, list[str]] = {}
     for assembly in project.assemblies:
         for part in assembly.parts:
@@ -132,6 +208,11 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                     f"part {part.id!r} references unknown project material {part.material_id!r}"
                 )
         for route in assembly.wiring_routes:
+            route_connector_ids = {route.from_connector.id, route.to_connector.id}
+            if len(route_connector_ids) != 2 or len(route.endpoints) != 2:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} requires endpoints matching both route connectors"
+                )
             for connector in (route.from_connector, route.to_connector):
                 if connector.part_id is not None:
                     if connector.part_id not in part_ids:
@@ -141,6 +222,89 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                     route_ids = route_ids_by_part.setdefault(connector.part_id, [])
                     if route.id not in route_ids:
                         route_ids.append(route.id)
+                if connector.component_id is not None and connector.component_id not in electronics_component_ids:
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} references unknown electronics component {connector.component_id!r}"
+                    )
+                owner = connector_owners.get(connector.id)
+                if owner != (connector.part_id, connector.component_id):
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} connector {connector.id!r} has inconsistent component ownership"
+                    )
+            for endpoint, connector in zip(route.endpoints, (route.from_connector, route.to_connector)):
+                if (endpoint.connector_id, endpoint.part_id) != (connector.id, connector.part_id):
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} endpoints do not match route connectors"
+                    )
+            unknown_route_components = sorted(set(route.electronics_component_ids) - electronics_component_ids)
+            if unknown_route_components:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} references unknown electronics components: {unknown_route_components}"
+                )
+            connector_component_ids = {
+                connector.component_id
+                for connector in (route.from_connector, route.to_connector)
+                if connector.component_id is not None
+            }
+            if not connector_component_ids.issubset(set(route.electronics_component_ids)):
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} is missing connector component links"
+                )
+            unknown_wire_segments = sorted(set(route.wire_segment_ids) - wire_segment_ids)
+            if unknown_wire_segments:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} references unknown wire segments: {unknown_wire_segments}"
+                )
+            if len(route.wire_segment_ids) != len(set(route.wire_segment_ids)):
+                raise InvalidWiringEndpointError(f"wiring route {route.id!r} contains duplicate wire segments")
+            route_segments = []
+            for segment_id in route.wire_segment_ids:
+                segment = next(segment for segment in project.wire_segments if segment.id == segment_id)
+                route_segments.append(segment)
+                if segment.bom_item_id is not None and segment.bom_item_id not in route.harness_bom:
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} is missing BOM link for wire segment {segment_id!r}"
+                    )
+            if route_segments:
+                actual_segment_endpoints = [
+                    (route_segments[0].from_endpoint.connector_id, route_segments[0].from_endpoint.part_id),
+                    *[
+                        (segment.to_endpoint.connector_id, segment.to_endpoint.part_id)
+                        for segment in route_segments
+                    ],
+                ]
+                expected_segment_endpoints = [
+                    (route.from_connector.id, route.from_connector.part_id),
+                    (route.to_connector.id, route.to_connector.part_id),
+                ]
+                if actual_segment_endpoints[0] != expected_segment_endpoints[0] or actual_segment_endpoints[-1] != expected_segment_endpoints[-1]:
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} references wire segments with mismatched terminals"
+                    )
+                for previous, current in zip(route_segments, route_segments[1:]):
+                    if (previous.to_endpoint.connector_id, previous.to_endpoint.part_id) != (current.from_endpoint.connector_id, current.from_endpoint.part_id):
+                        raise InvalidWiringEndpointError(
+                            f"wiring route {route.id!r} references disconnected wire segments"
+                        )
+                segment_component_ids = {
+                    connector_owners[endpoint.connector_id][1]
+                    for segment in route_segments
+                    for endpoint in (segment.from_endpoint, segment.to_endpoint)
+                    if endpoint is not None
+                }
+                if not segment_component_ids.issubset(set(route.electronics_component_ids)):
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} is missing wire segment component links"
+                    )
+            if route.rule_set_id is not None and route.rule_set_id not in wiring_rule_ids:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} references unknown wiring rule set {route.rule_set_id!r}"
+                )
+            unknown_bom = sorted(set(route.harness_bom) - bom_ids)
+            if unknown_bom:
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} references unknown BOM items: {unknown_bom}"
+                )
     assemblies = [
         assembly.model_copy(
             update={
@@ -407,6 +571,9 @@ def build_sample_project() -> Project:
         active_task=GRIPPER_TASK,
         assemblies=[DEFAULT_ASSEMBLY, DEFAULT_FINGER_ASSEMBLY],
         materials=DEFAULT_MATERIALS,
+        electronics_components=DEFAULT_ELECTRONICS_COMPONENTS,
+        wire_segments=DEFAULT_WIRE_SEGMENTS,
+        wiring_rules=DEFAULT_WIRING_RULES,
         analysis_jobs=build_sample_analysis_jobs(),
         reports=build_sample_reports(),
         created_at=SEED_TIMESTAMP,

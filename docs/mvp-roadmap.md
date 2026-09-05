@@ -99,7 +99,7 @@ Deliverables:
 - Add rough cost ranges.
 - Export quote packet.
 
-## Milestone 9: wiring and electronics pass
+## Milestone 9: wiring and electronics pass (complete)
 
 Deliverables:
 
@@ -120,6 +120,4 @@ Deliverables:
 
 ## Recommended immediate next task
 
-Create a static visual prototype of the open reference design explorer.
-
-It should show the core user experience before the project invests in heavy CAD automation.
+Start milestone 10: add cloud-assisted job queueing, local-versus-cloud guidance, job status, cached reports, and cost and wait-time estimates before paid compute.

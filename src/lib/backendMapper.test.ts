@@ -9,16 +9,32 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.assembly.parts.find((part) => part.id === 'part-palm-plate')?.stressRisk).toBe('high');
   });
 
-  it('keeps service-loop state unknown without explicit backend evidence', () => {
+  it('maps explicit service-loop and route review evidence without claiming exact validation', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
 
-    expect(design.wiringRoutes.every((route) => route.serviceLoop === null)).toBe(true);
+    expect(design.wiringRoutes.some((route) => route.serviceLoopMm !== null)).toBe(true);
+    expect(design.wiringRoutes.find((route) => route.id === 'route-main-harness')?.reviewStatus).toBe('pass');
+    expect(design.wiringRoutes.find((route) => route.id === 'route-wrist-tool')?.reviewStatus).toBe('review_required');
+    expect(design.wiringRoutes.every((route) => route.evidence.length > 0)).toBe(true);
+    expect(design.wiringReview?.summary).toMatch(/screening signals, not exact electrical or CAD validation/i);
   });
 
-  it('keeps clearance under review without an explicit backend result or threshold', () => {
+  it('requires complete route evidence when a backend review is absent', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.wiring_review = null;
+    panelData.wiring_routes[0].service_loop_mm = null;
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata);
+
+    expect(design.wiringRoutes[0]?.reviewStatus).toBe('review_required');
+  });
+
+  it('links electronics, wire segments, and harness BOM items into the frontend model', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
 
-    expect(design.wiringRoutes.every((route) => route.clearanceStatus === 'watch')).toBe(true);
+    expect(design.electronicsComponents.map((component) => component.id)).toContain('ec-controller-pcb');
+    expect(design.wireSegments.map((segment) => segment.bomItemId)).toContain('bom-wire-main-arm-harness');
+    expect(design.bom.find((item) => item.id === 'bom-wire-main-arm-harness')?.source).toBe('wire harness');
   });
 
   it('maps only explicit task, hierarchy, and analysis values', () => {

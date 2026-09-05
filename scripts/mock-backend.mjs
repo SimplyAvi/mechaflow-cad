@@ -282,31 +282,134 @@ const currentReadinessPreviews = () => {
     : fallbackReadinessPreviews();
 };
 
+function buildMockWiringReview(sourceProject) {
+  const components = sourceProject.electronics_components ?? [];
+  const segments = sourceProject.wire_segments ?? [];
+  const routes = sourceProject.assemblies.flatMap((assembly) => assembly.wiring_routes ?? []);
+  const componentConnectorIds = new Set(components.flatMap((component) => component.connector_ids ?? []));
+  const segmentIds = new Set(segments.map((segment) => segment.id));
+  const bomIds = new Set([
+    ...sourceProject.assemblies.flatMap((assembly) => assembly.parts.map((part) => `bom-${part.id}`)),
+    ...components.flatMap((component) => component.bom_item_ids ?? []),
+    ...segments.map((segment) => segment.bom_item_id).filter(Boolean),
+  ]);
+  const reviews = routes.map((route) => {
+    const evidence = [];
+    const rule = sourceProject.wiring_rules?.find((candidate) => candidate.id === route.rule_set_id)
+      ?? sourceProject.wiring_rules?.[0]
+      ?? { required_clearance_min_mm: 2, required_bend_radius_min_mm: 15, required_service_loop_min_mm: 25 };
+    const endpointComplete = (route.endpoints ?? []).length === 2
+      && route.endpoints.every((endpoint) => [route.from_connector.id, route.to_connector.id].includes(endpoint.connector_id));
+    evidence.push({
+      check: 'endpoint linkage',
+      status: endpointComplete ? 'pass' : 'review_required',
+      basis: endpointComplete ? 'explicit_data' : 'missing_input',
+      message: endpointComplete ? 'Both route endpoint connectors are recorded.' : 'Route endpoint records are incomplete or inconsistent.',
+      related_ids: route.endpoints?.map((endpoint) => endpoint.connector_id) ?? [],
+    });
+    const connectorsComplete = [route.from_connector.id, route.to_connector.id].every((id) => componentConnectorIds.has(id));
+    const componentLinksComplete = [route.from_connector, route.to_connector].every((connector) => {
+      const component = components.find((candidate) => candidate.id === connector.component_id);
+      return component?.connector_ids?.includes(connector.id) && component.mounted_part_id === connector.part_id && route.electronics_component_ids?.includes(connector.component_id);
+    });
+    evidence.push({
+      check: 'connector details',
+      status: connectorsComplete && componentLinksComplete ? 'pass' : 'review_required',
+      basis: connectorsComplete && componentLinksComplete ? 'explicit_data' : 'missing_input',
+      message: connectorsComplete && componentLinksComplete ? 'Route connectors are tied to electronics component records.' : 'Route connector ownership links are incomplete.',
+      related_ids: [route.from_connector.id, route.to_connector.id],
+    });
+    const geometryComplete = (route.path_points_mm ?? []).length >= 2
+      && route.path_points_mm.slice(1).every((point, index) => {
+        const previous = route.path_points_mm[index];
+        return point.x !== previous.x || point.y !== previous.y || point.z !== previous.z;
+      });
+    evidence.push({
+      check: 'route geometry',
+      status: geometryComplete ? 'pass' : 'review_required',
+      basis: geometryComplete ? 'heuristic_estimate' : 'missing_input',
+      message: geometryComplete ? 'Polyline path contains enough points for a screening estimate.' : 'Route needs at least two path points.',
+    });
+    const clearanceStatus = route.clearance_min_mm == null || rule.required_clearance_min_mm == null ? 'review_required' : route.clearance_min_mm < rule.required_clearance_min_mm ? 'warning' : 'pass';
+    evidence.push({ check: 'clearance', status: clearanceStatus, basis: route.clearance_min_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Clearance is a heuristic screening signal.' });
+    const bendStatus = route.bend_radius_min_mm == null || rule.required_bend_radius_min_mm == null ? 'review_required' : route.bend_radius_min_mm < rule.required_bend_radius_min_mm ? 'warning' : 'pass';
+    evidence.push({ check: 'bend radius', status: bendStatus, basis: route.bend_radius_min_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Bend radius is a heuristic screening signal.' });
+    const serviceStatus = route.service_loop_mm == null || rule.required_service_loop_min_mm == null ? 'review_required' : route.service_loop_mm < rule.required_service_loop_min_mm ? 'warning' : 'pass';
+    evidence.push({ check: 'service loop', status: serviceStatus, basis: route.service_loop_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Service loop is a heuristic screening signal.' });
+    const bomStatus = route.wire_segment_ids?.length > 0 && route.wire_segment_ids.every((id) => {
+      const segment = segments.find((candidate) => candidate.id === id);
+      return segmentIds.has(id) && (!segment.bom_item_id || route.harness_bom?.includes(segment.bom_item_id));
+    }) && route.harness_bom?.length > 0 && route.harness_bom.every((id) => bomIds.has(id)) ? 'pass' : 'review_required';
+    evidence.push({ check: 'BOM linkage', status: bomStatus, basis: bomStatus === 'pass' ? 'explicit_data' : 'missing_input', message: 'Wire segments and harness BOM links are required.' });
+    const status = evidence.some((item) => item.status === 'review_required')
+      ? 'review_required'
+      : evidence.some((item) => item.status === 'warning') ? 'warning' : 'pass';
+    return {
+      route_id: route.id,
+      route_name: route.name,
+      status,
+      summary: status === 'pass' ? 'MVP wiring review passes recorded checks.' : status === 'warning' ? 'MVP wiring review found heuristic warnings.' : 'MVP wiring review needs more evidence.',
+      evidence,
+      bom_item_ids: route.harness_bom ?? [],
+      endpoint_part_ids: [route.from_connector.part_id, route.to_connector.part_id].filter(Boolean),
+      review_required: evidence.filter((item) => item.status === 'review_required').map((item) => item.message),
+    };
+  });
+  const status = reviews.some((review) => review.status === 'review_required')
+    ? 'review_required'
+    : reviews.some((review) => review.status === 'warning') ? 'warning' : 'pass';
+  return {
+    project_id: sourceProject.id,
+    status,
+    summary: `Reviewed ${reviews.length} wiring route${reviews.length === 1 ? '' : 's'} with deterministic MVP heuristics. Clearance and bend checks are screening signals, not exact electrical or CAD validation.`,
+    route_reviews: reviews,
+    generated_at: new Date().toISOString(),
+    assumptions: ['Mock backend mirrors deterministic heuristic route checks; exact electrical or CAD validation remains review-required.'],
+  };
+}
+
 const projectPanelData = (sourceProject = project, readinessPreviews = null) => ({
   ...mockBackendPanelData,
   project: sourceProject,
   task_requirements: sourceProject.active_task ? [sourceProject.active_task] : [],
-  bom_items: sourceProject.assemblies.flatMap((assembly) => assembly.parts.map((part) => {
-    const option = activeManufacturingOption(part);
-    return {
-      id: `bom-${part.id}`,
-      part_id: part.id,
-      name: part.name,
-      quantity: 1,
-      unit: 'part',
-      price: option?.cost ?? null,
-      lead_time_days_min: option?.lead_time_days_min ?? null,
-      lead_time_days_max: option?.lead_time_days_max ?? null,
-      license_or_terms: option
-        ? 'Estimated from active part manufacturing option; not a supplier quote.'
-        : 'Derived from local project assembly metadata; price review required.',
-    };
-  })),
+  bom_items: Array.from(new Map([
+    ...sourceProject.assemblies.flatMap((assembly) => assembly.parts.map((part) => {
+      const option = activeManufacturingOption(part);
+      return {
+        id: `bom-${part.id}`,
+        part_id: part.id,
+        name: part.name,
+        quantity: 1,
+        unit: 'part',
+        price: option?.cost ?? null,
+        lead_time_days_min: option?.lead_time_days_min ?? null,
+        lead_time_days_max: option?.lead_time_days_max ?? null,
+        license_or_terms: option
+          ? 'Estimated from active part manufacturing option; not a supplier quote.'
+          : 'Derived from local project assembly metadata; price review required.',
+      };
+    })),
+    ...mockBackendPanelData.bom_items.filter((item) => item.id.includes('wire') || item.id.includes('harness')),
+    ...sourceProject.electronics_components.flatMap((component) => (component.bom_item_ids ?? []).map((id) => ({
+      id, part_id: component.mounted_part_id ?? null, name: component.name, quantity: 1, unit: 'each',
+      price: null, lead_time_days_min: null, lead_time_days_max: null,
+      license_or_terms: 'Imported electronics BOM addition; review required.',
+    }))),
+    ...sourceProject.wire_segments.filter((segment) => segment.bom_item_id).map((segment) => ({
+      id: segment.bom_item_id, part_id: null, name: segment.name, quantity: 1, unit: 'm',
+      price: null, lead_time_days_min: null, lead_time_days_max: null,
+      license_or_terms: 'Imported harness BOM addition; review required.',
+    })),
+  ].map((item) => [item.id, item])).values()),
   analysis_readiness_previews: readinessPreviews ?? (sourceProject === project ? currentReadinessPreviews() : []),
   manufacturing_options: projectManufacturingOptions(sourceProject),
+  electronics_components: sourceProject.electronics_components ?? [],
+  wire_segments: sourceProject.wire_segments ?? [],
+  wiring_rules: sourceProject.wiring_rules ?? [],
   wiring_routes: sourceProject.assemblies.flatMap((assembly) => assembly.wiring_routes).filter((route, index, routes) => (
     routes.findIndex((candidate) => candidate.id === route.id) === index
   )),
+  wiring_review: buildMockWiringReview(sourceProject),
   reports: sourceProject.reports,
 });
 
@@ -533,11 +636,28 @@ const normalizeProjectFileDefaults = (file) => {
         })),
         wiring_routes: mapObjects(assembly.wiring_routes, (route) => ({
           ...route,
+          endpoints: withDefault(route.endpoints, []),
           path_points_mm: withDefault(route.path_points_mm, []),
+          wire_segment_ids: withDefault(route.wire_segment_ids, []),
+          electronics_component_ids: withDefault(route.electronics_component_ids, []),
           harness_bom: withDefault(route.harness_bom, []),
           risk_notes: withDefault(route.risk_notes, []),
           confidence: withDefault(route.confidence, 'unknown_or_needs_review'),
         })),
+      })),
+      electronics_components: mapObjects(file.project.electronics_components, (component) => ({
+        ...component,
+        connector_ids: withDefault(component.connector_ids, []),
+        bom_item_ids: withDefault(component.bom_item_ids, []),
+        notes: withDefault(component.notes, []),
+      })),
+      wire_segments: mapObjects(file.project.wire_segments, (segment) => ({
+        ...segment,
+        notes: withDefault(segment.notes, []),
+      })),
+      wiring_rules: mapObjects(file.project.wiring_rules, (rule) => ({
+        ...rule,
+        notes: withDefault(rule.notes, []),
       })),
       materials: mapObjects(file.project.materials, (material) => ({
         ...material,
@@ -665,7 +785,7 @@ const projectFileValidationError = (file) => {
   const validateProject = (candidate) => {
     let error = requiredFields(candidate, ['id', 'name', 'assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports'], 'project');
     if (error) return error;
-    error = rejectUnknownFields(candidate, ['id', 'name', 'description', 'reference_design_id', 'active_task', 'assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports', 'created_at', 'updated_at'], 'project');
+    error = rejectUnknownFields(candidate, ['id', 'name', 'description', 'reference_design_id', 'active_task', 'assemblies', 'materials', 'electronics_components', 'wire_segments', 'wiring_rules', 'modifications', 'analysis_jobs', 'reports', 'created_at', 'updated_at'], 'project');
     if (error) return error;
     error = requireString(candidate.id, 'project.id') || requireString(candidate.name, 'project.name');
     if (error) return error;
@@ -712,7 +832,7 @@ const projectFileValidationError = (file) => {
         if (error) return error;
       }
     }
-    for (const field of ['assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports']) {
+    for (const field of ['assemblies', 'materials', 'electronics_components', 'wire_segments', 'wiring_rules', 'modifications', 'analysis_jobs', 'reports']) {
       error = requireArray(candidate[field], `project.${field}`);
       if (error) return error;
     }
@@ -720,12 +840,28 @@ const projectFileValidationError = (file) => {
     if (error) return error;
     error = uniqueIds(candidate.materials, 'project.materials');
     if (error) return error;
+    error = uniqueIds(candidate.electronics_components, 'project.electronics_components');
+    if (error) return error;
+    error = uniqueIds(candidate.wire_segments, 'project.wire_segments');
+    if (error) return error;
+    error = uniqueIds(candidate.wiring_rules, 'project.wiring_rules');
+    if (error) return error;
+    const electronicsComponentIds = new Set(candidate.electronics_components.map((component) => component?.id));
+    const wireSegmentIds = new Set(candidate.wire_segments.map((segment) => segment?.id));
+    const wiringRuleIds = new Set(candidate.wiring_rules.map((rule) => rule?.id));
+    const componentConnectorIds = new Set(candidate.electronics_components.flatMap((component) => Array.isArray(component?.connector_ids) ? component.connector_ids : []));
+    const bomIds = new Set([
+      ...candidate.assemblies.flatMap((assembly) => assembly.parts.map((part) => `bom-${part.id}`)),
+      ...candidate.electronics_components.flatMap((component) => component.bom_item_ids ?? []),
+      ...candidate.wire_segments.map((segment) => segment.bom_item_id).filter(Boolean),
+    ]);
     const assemblyIds = new Set(candidate.assemblies.map((assembly) => assembly?.id));
     const partIds = new Set(
       candidate.assemblies.flatMap((assembly) => (Array.isArray(assembly?.parts) ? assembly.parts.map((part) => part?.id) : [])),
     );
     if (partIds.size !== candidate.assemblies.flatMap((assembly) => (Array.isArray(assembly?.parts) ? assembly.parts.map((part) => part?.id) : [])).length) return 'part ids must be unique across project assemblies';
     const routeIds = new Set();
+    const routeConnectors = new Map();
     for (const [assemblyIndex, assembly] of candidate.assemblies.entries()) {
       const assemblyPath = `project.assemblies[${assemblyIndex}]`;
       error = requiredFields(assembly, ['id', 'name', 'root_node_id', 'nodes', 'parts', 'wiring_routes'], assemblyPath);
@@ -832,7 +968,7 @@ const projectFileValidationError = (file) => {
       for (const route of assembly.wiring_routes) {
         if (routeIds.has(route?.id)) return `wiring route ids must be unique: ${route?.id}`;
         routeIds.add(route?.id);
-        error = rejectUnknownFields(route, ['id', 'name', 'from_connector', 'to_connector', 'path_points_mm', 'bend_radius_min_mm', 'clearance_min_mm', 'harness_bom', 'risk_notes', 'confidence'], `${assemblyPath}.wiring_routes`);
+        error = rejectUnknownFields(route, ['id', 'name', 'from_connector', 'to_connector', 'endpoints', 'path_points_mm', 'wire_segment_ids', 'electronics_component_ids', 'bend_radius_min_mm', 'clearance_min_mm', 'service_loop_mm', 'rule_set_id', 'harness_bom', 'diagram_ref', 'risk_notes', 'confidence'], `${assemblyPath}.wiring_routes`);
         if (error) return error;
         error = requiredFields(route, ['id', 'name', 'from_connector', 'to_connector', 'path_points_mm', 'harness_bom', 'risk_notes'], `${assemblyPath}.wiring_routes`);
         if (error) return error;
@@ -840,6 +976,19 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         error = requireArray(route.path_points_mm, `${assemblyPath}.wiring_routes.path_points_mm`);
         if (error) return error;
+        for (const field of ['endpoints', 'wire_segment_ids', 'electronics_component_ids']) {
+          if (route[field] != null) {
+            error = requireArray(route[field], `${assemblyPath}.wiring_routes.${field}`);
+            if (error) return error;
+          }
+        }
+        if (route.wire_segment_ids) {
+          for (const segmentId of route.wire_segment_ids) if (!wireSegmentIds.has(segmentId)) return `wiring route ${route.id} references unknown wire segment ${segmentId}`;
+        }
+        if (route.electronics_component_ids) {
+          for (const componentId of route.electronics_component_ids) if (!electronicsComponentIds.has(componentId)) return `wiring route ${route.id} references unknown electronics component ${componentId}`;
+        }
+        if (route.rule_set_id != null && !wiringRuleIds.has(route.rule_set_id)) return `wiring route ${route.id} references unknown wiring rule set ${route.rule_set_id}`;
         error = requireArray(route.harness_bom, `${assemblyPath}.wiring_routes.harness_bom`) || requireArray(route.risk_notes, `${assemblyPath}.wiring_routes.risk_notes`);
         if (error) return error;
         error = requireString(route.confidence, `${assemblyPath}.wiring_routes.confidence`);
@@ -856,14 +1005,14 @@ const projectFileValidationError = (file) => {
             }
           }
         }
-        for (const field of ['bend_radius_min_mm', 'clearance_min_mm']) {
+        for (const field of ['bend_radius_min_mm', 'clearance_min_mm', 'service_loop_mm']) {
           if (route[field] != null) {
             error = requireFiniteNumber(route[field], `${assemblyPath}.wiring_routes.${field}`);
             if (error) return error;
           }
         }
         for (const connectorField of ['from_connector', 'to_connector']) {
-          error = rejectUnknownFields(route[connectorField], ['id', 'name', 'pin_count', 'part_id'], `${assemblyPath}.wiring_routes.${connectorField}`);
+          error = rejectUnknownFields(route[connectorField], ['id', 'name', 'pin_count', 'part_id', 'component_id', 'kind', 'gender', 'pin_labels', 'voltage_rating_v', 'current_rating_a', 'mating_connector_id', 'notes'], `${assemblyPath}.wiring_routes.${connectorField}`);
           if (error) return error;
           error = requiredFields(route[connectorField], ['id', 'name'], `${assemblyPath}.wiring_routes.${connectorField}`);
           if (error) return error;
@@ -881,8 +1030,60 @@ const projectFileValidationError = (file) => {
           if (route[connectorField].part_id != null && !partIds.has(route[connectorField].part_id)) {
             return `wiring route ${route.id} references unknown part ${route[connectorField].part_id}`;
           }
+          if (route[connectorField].component_id != null && !electronicsComponentIds.has(route[connectorField].component_id)) {
+            return `wiring route ${route.id} references unknown electronics component ${route[connectorField].component_id}`;
+          }
+          const connector = route[connectorField];
+          const ownership = `${connector.part_id ?? ''}:${connector.component_id ?? ''}`;
+          if (routeConnectors.has(connector.id) && routeConnectors.get(connector.id) !== ownership) return `connector ${connector.id} has inconsistent ownership`;
+          routeConnectors.set(connector.id, ownership);
+          if (route[connectorField].pin_labels != null) {
+            error = requireStringArray(route[connectorField].pin_labels, `${assemblyPath}.wiring_routes.${connectorField}.pin_labels`);
+            if (error) return error;
+          }
+          for (const field of ['voltage_rating_v', 'current_rating_a']) {
+            if (route[connectorField][field] != null) {
+              error = requireFiniteNumber(route[connectorField][field], `${assemblyPath}.wiring_routes.${connectorField}.${field}`);
+              if (error) return error;
+            }
+          }
+        }
+        if ((route.endpoints ?? []).length !== 2) return `wiring route ${route.id} requires two endpoints`;
+        for (const [endpointIndex, endpoint] of route.endpoints.entries()) {
+          const connector = route[endpointIndex === 0 ? 'from_connector' : 'to_connector'];
+          if (endpoint.connector_id !== connector.id || endpoint.part_id !== connector.part_id) return `wiring route ${route.id} endpoints do not match route connectors`;
+        }
+        const connectorComponentIds = [route.from_connector.component_id, route.to_connector.component_id].filter(Boolean);
+        if (!connectorComponentIds.every((id) => (route.electronics_component_ids ?? []).includes(id))) return `wiring route ${route.id} is missing connector component links`;
+        for (const bomId of route.harness_bom ?? []) if (!bomIds.has(bomId)) return `wiring route ${route.id} references unknown BOM item ${bomId}`;
+        const routeSegments = (route.wire_segment_ids ?? []).map((segmentId) => candidate.wire_segments.find((item) => item.id === segmentId));
+        if (routeSegments.some((segment) => !segment)) return `wiring route ${route.id} references an unknown wire segment`;
+        if (routeSegments.length !== new Set(route.wire_segment_ids ?? []).size) return `wiring route ${route.id} contains duplicate wire segments`;
+        if (routeSegments.length > 0) {
+          const first = routeSegments[0];
+          const last = routeSegments.at(-1);
+          if (first.from_endpoint.connector_id !== route.from_connector.id || first.from_endpoint.part_id !== route.from_connector.part_id || last.to_endpoint.connector_id !== route.to_connector.id || last.to_endpoint.part_id !== route.to_connector.part_id) return `wiring route ${route.id} references wire segments with mismatched terminals`;
+          for (const [index, segment] of routeSegments.entries()) {
+            if (segment.bom_item_id && !route.harness_bom.includes(segment.bom_item_id)) return `wiring route ${route.id} is missing BOM link for wire segment ${route.wire_segment_ids[index]}`;
+            const next = routeSegments[index + 1];
+            if (next && (segment.to_endpoint.connector_id !== next.from_endpoint.connector_id || segment.to_endpoint.part_id !== next.from_endpoint.part_id)) return `wiring route ${route.id} references disconnected wire segments`;
+          }
         }
       }
+    }
+    for (const component of candidate.electronics_components) {
+      for (const connectorId of component.connector_ids ?? []) {
+        const expected = `${component.mounted_part_id ?? ''}:${component.id}`;
+        if (routeConnectors.get(connectorId) !== expected) return `electronics component ${component.id} has inconsistent connector ownership`;
+      }
+    }
+    for (const segment of candidate.wire_segments) {
+      if (!segment.from_endpoint || !segment.to_endpoint) return `wire segment ${segment.id} requires both route endpoints`;
+      for (const endpoint of [segment.from_endpoint, segment.to_endpoint]) {
+        const ownership = routeConnectors.get(endpoint.connector_id);
+        if (!ownership || ownership.split(':')[0] !== (endpoint.part_id ?? '')) return `wire segment ${segment.id} endpoint has inconsistent connector ownership`;
+      }
+      if (segment.bom_item_id != null && !bomIds.has(segment.bom_item_id)) return `wire segment ${segment.id} references unknown BOM item ${segment.bom_item_id}`;
     }
     const materialIds = new Set(candidate.materials.map((material) => material?.id));
     for (const material of candidate.materials) {
@@ -1559,6 +1760,31 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && isProjectPath(url.pathname, '/manufacturing-options')) {
       send(200, projectManufacturingOptions());
+      return;
+    }
+
+    if (request.method === 'GET' && isProjectPath(url.pathname, '/electronics-components')) {
+      send(200, projectPanelData().electronics_components);
+      return;
+    }
+
+    if (request.method === 'GET' && isProjectPath(url.pathname, '/wire-segments')) {
+      send(200, projectPanelData().wire_segments);
+      return;
+    }
+
+    if (request.method === 'GET' && isProjectPath(url.pathname, '/wiring-rules')) {
+      send(200, projectPanelData().wiring_rules);
+      return;
+    }
+
+    if (request.method === 'GET' && isProjectPath(url.pathname, '/wiring-electronics')) {
+      send(200, projectPanelData());
+      return;
+    }
+
+    if (request.method === 'POST' && isProjectPath(url.pathname, '/wiring-review')) {
+      send(200, projectPanelData().wiring_review);
       return;
     }
 
