@@ -238,7 +238,11 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise ValueError("imported project assembly and part ids must be unique")
         targets = {target[0]: (target[1], target[2]) for target in target_records}
         part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
+        preview_target_ids: set[str] = set()
         for preview in previews:
+            if preview.target_id in preview_target_ids:
+                raise ValueError(f"duplicate analysis readiness preview target {preview.target_id!r}")
+            preview_target_ids.add(preview.target_id)
             target = targets.get(preview.target_id)
             if target is None:
                 raise ValueError(f"analysis readiness target {preview.target_id!r} is not in the imported project")
@@ -401,11 +405,15 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             preview.model_copy(update={"project_id": stored_project.id}, deep=True)
             for preview in project_file.analysis_readiness_previews
         ]
-        readiness_previews_by_project[stored_project.id] = imported_previews
-        panel_data = build_project_panel_data(stored_project).model_copy(
-            update={"analysis_readiness_previews": imported_previews},
-            deep=True,
-        )
+        panel_data = build_project_panel_data(stored_project)
+        if imported_previews:
+            readiness_previews_by_project[stored_project.id] = imported_previews
+            panel_data = panel_data.model_copy(
+                update={"analysis_readiness_previews": imported_previews},
+                deep=True,
+            )
+        else:
+            readiness_previews_by_project[stored_project.id] = panel_data.analysis_readiness_previews
         return ProjectFileImportResponse(
             project_id=stored_project.id,
             message=f"Imported MechaFlow project file for {stored_project.id}.",

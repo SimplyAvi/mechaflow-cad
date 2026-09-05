@@ -49,6 +49,10 @@ const manufacturingProcesses = new Set([
   'unknown',
 ]);
 const projectIdPattern = /^[A-Za-z0-9._~-]+$/;
+const readinessStates = new Set(['pre_solver_ready', 'review_required', 'blocked_missing_inputs', 'solver_result_available']);
+const readinessTrustLabels = new Set(['demo_estimate', 'pre_solver_input', 'solver_result']);
+const readinessLoadTypes = new Set(['force', 'moment', 'pressure', 'gravity', 'thermal']);
+const readinessConstraintTypes = new Set(['fixed', 'pinned', 'bearing', 'contact', 'symmetry', 'review_required']);
 const analysisAdaptersByJobType = {
   import_design: new Set(['freecad-worker']),
   generate_exploded_view: new Set(['freecad-worker']),
@@ -507,6 +511,7 @@ const projectFileValidationError = (file) => {
     const targetIds = file.project.assemblies.flatMap((assembly) => [assembly.id, ...assembly.parts.map((part) => part.id)]);
     if (targetIds.length !== new Set(targetIds).size) return 'readiness target ids must be unique across assemblies and parts';
     const partIds = new Set(file.project.assemblies.flatMap((assembly) => assembly.parts.map((part) => part.id)));
+    const previewTargetIds = new Set();
     for (const [index, preview] of file.analysis_readiness_previews.entries()) {
       const previewPath = `analysis_readiness_previews[${index}]`;
       const previewError = requiredFields(preview, ['project_id', 'target_id', 'target_name', 'target_kind', 'state', 'trust_label', 'summary', 'criteria', 'load_cases', 'constraints', 'solver_inputs', 'expected_result_artifacts', 'solver_pipeline', 'demo_estimates', 'review_required', 'generated_at'], previewPath);
@@ -515,6 +520,9 @@ const projectFileValidationError = (file) => {
         const scalarError = requireString(preview[field], `${previewPath}.${field}`);
         if (scalarError) return scalarError;
       }
+      if (!readinessStates.has(preview.state)) return `${previewPath}.state is invalid`;
+      if (!readinessTrustLabels.has(preview.trust_label)) return `${previewPath}.trust_label is invalid`;
+      if (!['part', 'assembly'].includes(preview.target_kind)) return `${previewPath}.target_kind is invalid`;
       for (const field of ['criteria', 'load_cases', 'constraints', 'expected_result_artifacts', 'solver_pipeline', 'demo_estimates', 'review_required']) {
         const arrayError = requireArray(preview[field], `${previewPath}.${field}`);
         if (arrayError) return arrayError;
@@ -522,6 +530,8 @@ const projectFileValidationError = (file) => {
       const solverInputsError = requireObject(preview.solver_inputs, `${previewPath}.solver_inputs`);
       if (solverInputsError) return solverInputsError;
       if (preview.project_id !== file.project.id) return `${previewPath}.project_id must match project.id`;
+      if (previewTargetIds.has(preview.target_id)) return `${previewPath}.target_id must be unique across readiness previews`;
+      previewTargetIds.add(preview.target_id);
       const target = targets.get(preview.target_id);
       if (!target) return `${previewPath}.target_id references an unknown project target`;
       if (preview.target_kind !== target.kind || preview.target_name !== target.name) return `${previewPath} target metadata does not match the project target`;
@@ -546,6 +556,9 @@ const projectFileValidationError = (file) => {
             if (scalarError) return scalarError;
           }
           if (typeof nested.review_required !== 'boolean') return `${nestedPath}.review_required must be a boolean`;
+          const nestedEnum = field === 'load_cases' ? nested.load_type : nested.constraint_type;
+          const enumValues = field === 'load_cases' ? readinessLoadTypes : readinessConstraintTypes;
+          if (!(enumValues.has(nestedEnum))) return `${nestedPath}.${field === 'load_cases' ? 'load_type' : 'constraint_type'} is invalid`;
           for (const partId of nested.target_part_ids) if (!partIds.has(partId)) return `${nestedPath}.target_part_ids references an unknown part ${partId}`;
         }
       }
