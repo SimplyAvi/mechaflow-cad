@@ -247,8 +247,8 @@ const estimate = (label, min, max, unit, basis, notice) => ({
   notice,
 });
 
-const mockJobRecommendation = (job) => {
-  const target = findTarget(job.target_id);
+const mockJobRecommendation = (job, sourceProject = project) => {
+  const target = findTarget(job.target_id, sourceProject);
   if (!target) {
     return {
       recommended_target: 'unavailable',
@@ -320,10 +320,10 @@ const mockJobRecommendation = (job) => {
   };
 };
 
-const cachedArtifactRefsFor = (job) => (job.artifacts ?? []).map((artifact) => ({
+const cachedArtifactRefsFor = (job, sourceProject = project) => (job.artifacts ?? []).map((artifact) => ({
   artifact_id: artifact.id,
   job_id: job.id,
-  project_id: projectId,
+  project_id: sourceProject.id,
   kind: artifact.kind,
   title: artifact.title,
   status: Array.isArray(artifact.payload?.file_manifest) ? 'stale_missing_files' : 'metadata_only',
@@ -337,10 +337,16 @@ const cachedArtifactRefsFor = (job) => (job.artifacts ?? []).map((artifact) => (
 const analysisJobQueue = (sourceProject = project) => {
   const jobs = sourceProject.analysis_jobs.map((job) => ({
     ...job,
-    recommendation: job.recommendation ?? mockJobRecommendation(job),
-    cached_artifact_refs: job.cached_artifact_refs ?? cachedArtifactRefsFor(job),
+    recommendation: mockJobRecommendation(job, sourceProject),
+    cached_artifact_refs: job.cached_artifact_refs ?? cachedArtifactRefsFor(job, sourceProject),
     cached_report_refs: job.cached_report_refs ?? [],
   }));
+  for (const job of jobs) {
+    if (job.status === 'queued') {
+      if (job.recommendation.status === 'review_required') job.status = 'review_required';
+      if (job.recommendation.status === 'unavailable') job.status = 'review_required';
+    }
+  }
   const statusCounts = Object.fromEntries([...new Set(jobs.map((job) => job.status))].map((status) => [
     status,
     jobs.filter((job) => job.status === status).length,
@@ -1576,8 +1582,8 @@ const projectFileValidationError = (file) => {
   return null;
 };
 
-const findTarget = (targetId) => {
-  for (const assembly of project.assemblies) {
+const findTarget = (targetId, sourceProject = project) => {
+  for (const assembly of sourceProject.assemblies) {
     const part = assembly.parts.find((candidate) => candidate.id === targetId);
     if (part) return { target: part, kind: 'part', partIds: [part.id] };
     if (assembly.id === targetId) return { target: assembly, kind: 'assembly', partIds: assembly.parts.map((part) => part.id) };

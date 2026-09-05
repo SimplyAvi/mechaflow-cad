@@ -339,7 +339,7 @@ def build_execution_target_recommendation(
             cloud_notice=UNCONFIGURED_CLOUD_NOTICE,
         )
 
-    if review_required and request.job_type == AnalysisJobType.run_fea:
+    if review_required and request.job_type in STRUCTURAL_JOB_TYPES:
         return AnalysisExecutionTargetRecommendation(
             recommended_target=AnalysisExecutionTarget.unavailable,
             status=AnalysisExecutionRecommendationStatus.review_required,
