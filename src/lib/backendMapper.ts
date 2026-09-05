@@ -710,7 +710,20 @@ export function mapProjectPanelDataToReferenceDesign(
       mapPart(part, index, assembly, materialsById, task, project.id, readinessByTargetId.get(part.id))),
   }));
   const defaultAssemblyIndex = Math.max(0, backendAssemblies.findIndex((assembly) => assembly.parts.length > 0));
-  const assembly = assemblies[defaultAssemblyIndex] ?? assemblies[0];
+  const assembly = assemblies[defaultAssemblyIndex] ?? {
+    id: 'empty-assembly',
+    name: 'Empty assembly',
+    explodedProgress: null,
+    analysisReadiness: buildFallbackAssemblyReadiness({
+      id: 'empty-assembly',
+      name: 'Empty assembly',
+      root_node_id: 'root',
+      nodes: [],
+      parts: [],
+      wiring_routes: [],
+    }, materialsById, task, project.id),
+    parts: [],
+  };
   const allBackendParts = backendAssemblies.flatMap((candidate) => candidate.parts);
   const allParts = assemblies.flatMap((candidate) => candidate.parts);
   const reports = (panelData.reports.length > 0 ? panelData.reports : project.reports).map(mapReport);

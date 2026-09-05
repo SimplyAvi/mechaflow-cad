@@ -273,6 +273,35 @@ const projectFile = () => ({
   },
 });
 
+const normalizeProjectFileDefaults = (file) => {
+  const withDefault = (value, fallback) => value === undefined ? fallback : value;
+  return {
+  ...file,
+  metadata: withDefault(file.metadata, {}),
+  extensions: withDefault(file.extensions, {}),
+  project: {
+    ...file.project,
+    assemblies: withDefault(file.project.assemblies, []).map((assembly) => ({
+      ...assembly,
+      nodes: withDefault(assembly.nodes, []),
+      parts: withDefault(assembly.parts, []).map((part) => ({
+        ...part,
+        dimensions: withDefault(part.dimensions, {}),
+        manufacturing_options: withDefault(part.manufacturing_options, []),
+        related_fasteners: withDefault(part.related_fasteners, []),
+        wiring_route_ids: withDefault(part.wiring_route_ids, []),
+        metadata: withDefault(part.metadata, {}),
+      })),
+      wiring_routes: withDefault(assembly.wiring_routes, []),
+    })),
+    materials: withDefault(file.project.materials, []),
+    modifications: withDefault(file.project.modifications, []),
+    analysis_jobs: withDefault(file.project.analysis_jobs, []),
+    reports: withDefault(file.project.reports, []),
+  },
+  };
+};
+
 const projectFileValidationError = (file) => {
   let error;
   const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -657,16 +686,21 @@ const projectFileValidationError = (file) => {
   if (!file || typeof file !== 'object' || Array.isArray(file)) return 'project file must be a JSON object';
   const envelopeError = rejectUnknownFields(file, ['format', 'schema_version', 'metadata', 'project', 'analysis_readiness_previews', 'extensions'], 'project file');
   if (envelopeError) return envelopeError;
-  const metadataError = requiredFields(file.metadata, ['source_api_version', 'exported_by', 'notes'], 'project file.metadata');
+  const metadataError = rejectUnknownFields(file.metadata, ['exported_at', 'source_api_version', 'exported_by', 'notes'], 'project file.metadata');
   if (metadataError) return metadataError;
-  let metadataFieldError = requireString(file.metadata.source_api_version, 'project file.metadata.source_api_version') || requireString(file.metadata.exported_by, 'project file.metadata.exported_by') || requireStringArray(file.metadata.notes, 'project file.metadata.notes');
+  let metadataFieldError;
+  for (const field of ['source_api_version', 'exported_by']) if (file.metadata[field] != null) {
+    metadataFieldError = requireString(file.metadata[field], `project file.metadata.${field}`);
+    if (metadataFieldError) return metadataFieldError;
+  }
+  if (file.metadata.notes != null) metadataFieldError = requireStringArray(file.metadata.notes, 'project file.metadata.notes');
   if (metadataFieldError) return metadataFieldError;
   if (file.metadata.exported_at != null) metadataFieldError = requireDateString(file.metadata.exported_at, 'project file.metadata.exported_at');
   if (metadataFieldError) return metadataFieldError;
-  const extensionsError = requiredFields(file.extensions, [], 'project file.extensions');
+  const extensionsError = requireObject(file.extensions, 'project file.extensions');
   if (extensionsError) return extensionsError;
-  if (file.format !== 'mechaflow-cad.project') return 'unsupported project file format';
-  if (file.schema_version !== '1.0') return 'unsupported MechaFlow project file schema_version';
+  if (file.format != null && file.format !== 'mechaflow-cad.project') return 'unsupported project file format';
+  if (file.schema_version != null && file.schema_version !== '1.0') return 'unsupported MechaFlow project file schema_version';
   if (!file.project || typeof file.project !== 'object' || Array.isArray(file.project)) return 'project is required';
   const projectError = validateProject(file.project);
   if (projectError) return projectError;
@@ -1070,18 +1104,22 @@ const server = http.createServer(async (request, response) => {
         send(422, { error: 'request body must contain valid JSON' });
         return;
       }
-      const validationError = projectFileValidationError(body);
+      const normalizedBody = body && typeof body === 'object' && !Array.isArray(body)
+        && body.project && typeof body.project === 'object' && !Array.isArray(body.project)
+        ? normalizeProjectFileDefaults(body)
+        : body;
+      const validationError = projectFileValidationError(normalizedBody);
       if (validationError) {
         send(422, { error: validationError });
         return;
       }
       project = {
-        ...structuredClone(body.project),
+        ...structuredClone(normalizedBody.project),
         updated_at: new Date().toISOString(),
       };
       projectId = project.id;
-      analysisReadinessPreviews = Array.isArray(body.analysis_readiness_previews)
-        ? structuredClone(body.analysis_readiness_previews)
+      analysisReadinessPreviews = Array.isArray(normalizedBody.analysis_readiness_previews)
+        ? structuredClone(normalizedBody.analysis_readiness_previews)
         : [];
       send(200, {
         status: 'imported',
