@@ -64,7 +64,11 @@ For a local double-click path on macOS, install a small `.command` launcher on y
 npm run desktop:macos:shortcut
 ```
 
-Then double-click `MechaFlow CAD.command` in Finder. The launcher changes into this checkout, runs `npm ci` if `node_modules` is missing, and then runs `npm start`. Set `MECHAFLOW_DESKTOP_LAUNCHER=/path/to/MechaFlow CAD.command` before the install command if you want to place it somewhere other than `~/Desktop`.
+Then double-click `MechaFlow CAD.command` in Finder. The launcher changes into this checkout, runs `npm ci` if `node_modules` is missing, and then runs `npm start`. Set `MECHAFLOW_DESKTOP_LAUNCHER` before the install command if you want to place it somewhere other than `~/Desktop`, quoting paths that contain spaces:
+
+```sh
+MECHAFLOW_DESKTOP_LAUNCHER="/path/to/MechaFlow CAD.command" npm run desktop:macos:shortcut
+```
 
 This is intentionally the smallest reliable desktop-openable path for the MVP. It is not a signed `.app` bundle yet, so Gatekeeper, signing, auto-update, and native installer polish should be handled in a later packaging slice.
 
