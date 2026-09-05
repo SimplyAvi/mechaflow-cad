@@ -220,7 +220,10 @@ def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, jo
     try:
         with ARTIFACT_STORE_LOCK:
             _prepare_artifact_root(artifact_root, reserved_bundles=1)
-            destination = artifact_root / job_id
+            artifact_root = artifact_root.resolve()
+            destination = (artifact_root / job_id).resolve()
+            if not destination.is_relative_to(artifact_root):
+                raise ValueError("analysis job id must remain within the artifact store")
             destination.mkdir()
             for path in fixture.workdir.iterdir():
                 if path.is_file():
