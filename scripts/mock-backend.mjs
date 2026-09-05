@@ -1104,6 +1104,16 @@ const server = http.createServer(async (request, response) => {
         send(422, { error: 'request body must contain valid JSON' });
         return;
       }
+      const requestedProjectId = url.searchParams.get('project_id');
+      if (requestedProjectId !== null && (
+        requestedProjectId === 'sample'
+        || requestedProjectId === '.'
+        || requestedProjectId === '..'
+        || !projectIdPattern.test(requestedProjectId)
+      )) {
+        send(422, { error: 'project_id must be a URL-safe path segment' });
+        return;
+      }
       const normalizedBody = body && typeof body === 'object' && !Array.isArray(body)
         && body.project && typeof body.project === 'object' && !Array.isArray(body.project)
         ? normalizeProjectFileDefaults(body)
@@ -1113,13 +1123,29 @@ const server = http.createServer(async (request, response) => {
         send(422, { error: validationError });
         return;
       }
+      const importedProject = structuredClone(normalizedBody.project);
+      const resolvedProjectId = requestedProjectId ?? importedProject.id;
+      const sourceProjectId = importedProject.id;
+      importedProject.id = resolvedProjectId;
+      for (const job of importedProject.analysis_jobs) {
+        if (job.project_id === sourceProjectId) job.project_id = resolvedProjectId;
+      }
+      for (const report of importedProject.reports) {
+        if (report.project_id === sourceProjectId) report.project_id = resolvedProjectId;
+      }
       project = {
-        ...structuredClone(normalizedBody.project),
+        ...importedProject,
         updated_at: new Date().toISOString(),
       };
-      projectId = project.id;
+      projectId = resolvedProjectId;
       analysisReadinessPreviews = Array.isArray(normalizedBody.analysis_readiness_previews)
-        ? structuredClone(normalizedBody.analysis_readiness_previews)
+        ? structuredClone(normalizedBody.analysis_readiness_previews).map((preview) => ({
+          ...preview,
+          project_id: resolvedProjectId,
+          recommended_job_request: preview.recommended_job_request
+            ? { ...preview.recommended_job_request, project_id: resolvedProjectId }
+            : preview.recommended_job_request,
+        }))
         : [];
       send(200, {
         status: 'imported',
