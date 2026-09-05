@@ -334,8 +334,8 @@ const cachedArtifactRefsFor = (job) => (job.artifacts ?? []).map((artifact) => (
   stale_reason: Array.isArray(artifact.payload?.file_manifest) ? 'Mock backend does not serve persisted artifact files.' : 'Artifact metadata only.',
 }));
 
-const analysisJobQueue = () => {
-  const jobs = project.analysis_jobs.map((job) => ({
+const analysisJobQueue = (sourceProject = project) => {
+  const jobs = sourceProject.analysis_jobs.map((job) => ({
     ...job,
     recommendation: job.recommendation ?? mockJobRecommendation(job),
     cached_artifact_refs: job.cached_artifact_refs ?? cachedArtifactRefsFor(job),
@@ -349,7 +349,7 @@ const analysisJobQueue = () => {
   const cloudPlanning = jobs.filter((job) => job.recommendation.recommended_target === 'cloud_recommended_when_configured').length;
   const reviewRequired = jobs.filter((job) => job.recommendation.status === 'review_required').length;
   return {
-    project_id: projectId,
+    project_id: sourceProject.id,
     jobs,
     status_counts: statusCounts,
     local_ready_count: localReady,
@@ -534,6 +534,7 @@ const projectPanelData = (sourceProject = project, readinessPreviews = null) => 
   )),
   wiring_review: buildMockWiringReview(sourceProject),
   reports: sourceProject.reports,
+  analysis_job_queue: analysisJobQueue(sourceProject),
 });
 
 const findPart = (partId, sourceProject = project) => {
