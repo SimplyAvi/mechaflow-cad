@@ -628,10 +628,14 @@ const projectFileValidationError = (file) => {
   if (!file || typeof file !== 'object' || Array.isArray(file)) return 'project file must be a JSON object';
   const envelopeError = rejectUnknownFields(file, ['format', 'schema_version', 'metadata', 'project', 'analysis_readiness_previews', 'extensions'], 'project file');
   if (envelopeError) return envelopeError;
-  if (file.metadata != null) {
-    const metadataError = rejectUnknownFields(file.metadata, ['exported_at', 'source_api_version', 'exported_by', 'notes'], 'project file.metadata');
-    if (metadataError) return metadataError;
-  }
+  const metadataError = requiredFields(file.metadata, ['source_api_version', 'exported_by', 'notes'], 'project file.metadata');
+  if (metadataError) return metadataError;
+  let metadataFieldError = requireString(file.metadata.source_api_version, 'project file.metadata.source_api_version') || requireString(file.metadata.exported_by, 'project file.metadata.exported_by') || requireStringArray(file.metadata.notes, 'project file.metadata.notes');
+  if (metadataFieldError) return metadataFieldError;
+  if (file.metadata.exported_at != null) metadataFieldError = requireDateString(file.metadata.exported_at, 'project file.metadata.exported_at');
+  if (metadataFieldError) return metadataFieldError;
+  const extensionsError = requiredFields(file.extensions, [], 'project file.extensions');
+  if (extensionsError) return extensionsError;
   if (file.format !== 'mechaflow-cad.project') return 'unsupported project file format';
   if (file.schema_version !== '1.0') return 'unsupported MechaFlow project file schema_version';
   if (!file.project || typeof file.project !== 'object' || Array.isArray(file.project)) return 'project is required';
@@ -669,6 +673,72 @@ const projectFileValidationError = (file) => {
       if (solverInputsError) return solverInputsError;
       error = rejectUnknownFields(preview.solver_inputs, ['geometry_source', 'units', 'mesh_size_mm', 'freecad_document', 'gmsh_model', 'calculix_input_deck', 'notes'], `${previewPath}.solver_inputs`);
       if (error) return error;
+      if (preview.material_properties != null) {
+        error = requireObject(preview.material_properties, `${previewPath}.material_properties`) || rejectUnknownFields(preview.material_properties, ['material_id', 'material_name', 'properties', 'provenance', 'source', 'review_notes'], `${previewPath}.material_properties`);
+        if (error) return error;
+        if (preview.material_properties.material_name != null) {
+          error = requireString(preview.material_properties.material_name, `${previewPath}.material_properties.material_name`);
+          if (error) return error;
+        }
+        if (preview.material_properties.properties != null) {
+          error = requireObject(preview.material_properties.properties, `${previewPath}.material_properties.properties`);
+          if (error) return error;
+        }
+        if (preview.material_properties.provenance != null) {
+          error = requireString(preview.material_properties.provenance, `${previewPath}.material_properties.provenance`);
+          if (error) return error;
+        }
+        if (preview.material_properties.review_notes != null) {
+          error = requireStringArray(preview.material_properties.review_notes, `${previewPath}.material_properties.review_notes`);
+          if (error) return error;
+        }
+        if (preview.material_properties.material_id != null) {
+          error = requireString(preview.material_properties.material_id, `${previewPath}.material_properties.material_id`);
+          if (error) return error;
+        }
+        if (preview.material_properties.provenance != null && !readinessConfidenceValues.has(preview.material_properties.provenance)) return `${previewPath}.material_properties.provenance is invalid`;
+        error = rejectUnknownFields(preview.material_properties.properties, ['density_kg_m3', 'elastic_modulus_gpa', 'yield_strength_mpa', 'ultimate_strength_mpa', 'poisson_ratio', 'thermal_conductivity_w_mk', 'heat_deflection_temp_c', 'max_service_temp_c'], `${previewPath}.material_properties.properties`);
+        if (error) return error;
+        for (const field of ['density_kg_m3', 'elastic_modulus_gpa', 'yield_strength_mpa', 'ultimate_strength_mpa', 'thermal_conductivity_w_mk', 'heat_deflection_temp_c', 'max_service_temp_c']) {
+          if (preview.material_properties.properties[field] != null) {
+            error = requireFiniteNumber(preview.material_properties.properties[field], `${previewPath}.material_properties.properties.${field}`, Number.MIN_VALUE);
+            if (error) return error;
+          }
+        }
+        if (preview.material_properties.properties.poisson_ratio != null && (typeof preview.material_properties.properties.poisson_ratio !== 'number' || !Number.isFinite(preview.material_properties.properties.poisson_ratio) || preview.material_properties.properties.poisson_ratio < 0 || preview.material_properties.properties.poisson_ratio >= 0.5)) return `${previewPath}.material_properties.properties.poisson_ratio is invalid`;
+      }
+      if (preview.thermal_guidance != null) {
+        error = requireObject(preview.thermal_guidance, `${previewPath}.thermal_guidance`) || rejectUnknownFields(preview.thermal_guidance, ['max_service_temp_c', 'heat_deflection_temp_c', 'guidance', 'confidence', 'review_required'], `${previewPath}.thermal_guidance`);
+        if (error) return error;
+        error = requireString(preview.thermal_guidance.guidance, `${previewPath}.thermal_guidance.guidance`);
+        if (error) return error;
+        if (preview.thermal_guidance.confidence != null) {
+          error = requireString(preview.thermal_guidance.confidence, `${previewPath}.thermal_guidance.confidence`);
+          if (error) return error;
+          if (!readinessConfidenceValues.has(preview.thermal_guidance.confidence)) return `${previewPath}.thermal_guidance.confidence is invalid`;
+        }
+        if (preview.thermal_guidance.review_required != null && typeof preview.thermal_guidance.review_required !== 'boolean') return `${previewPath}.thermal_guidance.review_required must be a boolean`;
+        for (const field of ['max_service_temp_c', 'heat_deflection_temp_c']) if (preview.thermal_guidance[field] != null) {
+          error = requireFiniteNumber(preview.thermal_guidance[field], `${previewPath}.thermal_guidance.${field}`, Number.MIN_VALUE);
+          if (error) return error;
+        }
+      }
+      if (preview.recommended_job_request != null) {
+        const requestPath = `${previewPath}.recommended_job_request`;
+        error = requiredFields(preview.recommended_job_request, ['job_type', 'target_id', 'project_id'], requestPath) || rejectUnknownFields(preview.recommended_job_request, ['job_type', 'target_id', 'project_id', 'local_compute_preferred', 'input_summary'], requestPath);
+        if (error) return error;
+        for (const field of ['job_type', 'target_id', 'project_id']) {
+          error = requireString(preview.recommended_job_request[field], `${requestPath}.${field}`);
+          if (error) return error;
+        }
+        if (!analysisJobTypes.has(preview.recommended_job_request.job_type)) return `${requestPath}.job_type is invalid`;
+        if (preview.recommended_job_request.project_id !== file.project.id) return `${requestPath}.project_id must match project.id`;
+        if (preview.recommended_job_request.local_compute_preferred != null && typeof preview.recommended_job_request.local_compute_preferred !== 'boolean') return `${requestPath}.local_compute_preferred must be a boolean`;
+        if (preview.recommended_job_request.input_summary != null) {
+          error = requireObject(preview.recommended_job_request.input_summary, `${requestPath}.input_summary`);
+          if (error) return error;
+        }
+      }
       for (const field of ['geometry_source', 'units', 'freecad_document', 'gmsh_model', 'calculix_input_deck']) {
         if (preview.solver_inputs[field] != null) {
           const scalarError = requireString(preview.solver_inputs[field], `${previewPath}.solver_inputs.${field}`);

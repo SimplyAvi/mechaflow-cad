@@ -406,7 +406,17 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         ) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         imported_previews = [
-            preview.model_copy(update={"project_id": stored_project.id}, deep=True)
+            preview.model_copy(
+                update={
+                    "project_id": stored_project.id,
+                    "recommended_job_request": (
+                        preview.recommended_job_request.model_copy(update={"project_id": stored_project.id})
+                        if preview.recommended_job_request is not None
+                        else None
+                    ),
+                },
+                deep=True,
+            )
             for preview in project_file.analysis_readiness_previews
         ]
         panel_data = build_project_panel_data(stored_project)
