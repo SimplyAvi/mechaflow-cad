@@ -386,7 +386,14 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 status_code=409,
                 detail="analysis job id already exists in another local project; import without a project_id override or remove the conflicting project",
             ) from exc
-        except ValueError as exc:
+        except (
+            InvalidAnalysisJobAdapterError,
+            InvalidAnalysisJobArtifactError,
+            InvalidPartMaterialError,
+            InvalidWiringEndpointError,
+            NonFiniteStorageValueError,
+            ValueError,
+        ) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         imported_previews = [
             preview.model_copy(update={"project_id": stored_project.id}, deep=True)
@@ -592,7 +599,6 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             )
             try:
                 stored_job = project_store.add_analysis_job(job)
-                invalidate_readiness(stored_job.project_id)
                 return stored_job
             except AnalysisJobAlreadyExistsError:
                 continue
@@ -632,8 +638,6 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             )
 
         running_job = project_store.update_analysis_job(job_id, mark_running)
-        if running_job is not None:
-            invalidate_readiness(running_job.project_id)
         if running_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         project = get_project_or_404(running_job.project_id)
@@ -651,12 +655,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 )
 
             failed_job = project_store.update_analysis_job(job_id, mark_failed)
-            if failed_job is not None:
-                invalidate_readiness(failed_job.project_id)
             raise HTTPException(status_code=404, detail="analysis target not found") from exc
         stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
-        if stored_job is not None:
-            invalidate_readiness(stored_job.project_id)
         if stored_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return stored_job
@@ -728,8 +728,6 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             )
 
         job = project_store.update_analysis_job(job_id, run_stub)
-        if job is not None:
-            invalidate_readiness(job.project_id)
         if job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return job

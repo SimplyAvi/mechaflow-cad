@@ -292,6 +292,18 @@ const projectFileValidationError = (file) => {
     error = requireString(candidate.id, 'project.id') || requireString(candidate.name, 'project.name');
     if (error) return error;
     if (candidate.id === 'sample' || candidate.id === '.' || candidate.id === '..' || !projectIdPattern.test(candidate.id)) return 'project.id must be a URL-safe path segment';
+    if (candidate.active_task != null) {
+      error = requiredFields(candidate.active_task, ['id', 'kind', 'description'], 'project.active_task');
+      if (error) return error;
+      for (const field of ['id', 'kind', 'description']) {
+        error = requireString(candidate.active_task[field], `project.active_task.${field}`);
+        if (error) return error;
+      }
+      if (candidate.active_task.assumptions != null) {
+        error = requireArray(candidate.active_task.assumptions, 'project.active_task.assumptions');
+        if (error) return error;
+      }
+    }
     for (const field of ['assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports']) {
       error = requireArray(candidate[field], `project.${field}`);
       if (error) return error;
