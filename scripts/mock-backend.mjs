@@ -68,6 +68,10 @@ const analysisAdaptersByJobType = {
   generate_bom: new Set(['wireviz-harness-worker', 'supplier-options-worker']),
   generate_manufacturing_report: new Set(['supplier-options-worker']),
 };
+const analysisJobTypes = new Set(Object.keys(analysisAdaptersByJobType));
+const analysisJobStatuses = new Set(['queued', 'running', 'blocked_missing_adapter', 'completed', 'failed']);
+const analysisArtifactKinds = new Set(['cad_metadata', 'exploded_view', 'part_list', 'mass_properties', 'load_heuristic', 'fea_summary', 'payload_rerating', 'wiring_check', 'bom', 'manufacturing_report']);
+const reportStatuses = new Set(['draft', 'advisory', 'requires_review', 'superseded']);
 const analysisArtifactKindByJobType = {
   import_design: 'cad_metadata',
   generate_exploded_view: 'exploded_view',
@@ -574,15 +578,28 @@ const projectFileValidationError = (file) => {
         error = requireString(job[field], `analysis job ${job.id}.${field}`);
         if (error) return error;
       }
+      if (!analysisJobTypes.has(job.job_type)) return `analysis job ${job.id}.job_type is invalid`;
+      if (!analysisJobStatuses.has(job.status)) return `analysis job ${job.id}.status is invalid`;
+      if (typeof job.local_compute_preferred !== 'boolean') return `analysis job ${job.id}.local_compute_preferred must be a boolean`;
+      error = requireObject(job.input_summary, `analysis job ${job.id}.input_summary`) || requireObject(job.result_summary, `analysis job ${job.id}.result_summary`);
+      if (error) return error;
       if (!analysisAdaptersByJobType[job.job_type]?.has(job.adapter_name)) return `adapter ${job.adapter_name} does not support analysis job type ${job.job_type}`;
       error = requireArray(job.artifacts, `analysis job ${job.id}.artifacts`);
       if (error) return error;
       for (const artifact of job.artifacts) {
+        error = rejectUnknownFields(artifact, ['id', 'job_id', 'kind', 'title', 'summary', 'payload', 'confidence', 'generated_by', 'created_at'], `analysis job ${job.id}.artifacts`);
+        if (error) return error;
         error = requiredFields(artifact, ['id', 'job_id', 'kind', 'title', 'summary', 'payload', 'generated_by', 'created_at'], `analysis job ${job.id}.artifacts`);
         if (error) return error;
         if (artifact.job_id != null && artifact.job_id !== job.id) return `analysis artifact ${artifact.id} belongs to another job`;
-        error = requireString(artifact.summary, `analysis artifact ${artifact.id}.summary`) || requireString(artifact.generated_by, `analysis artifact ${artifact.id}.generated_by`);
+        error = requireString(artifact.id, `analysis artifact ${artifact.id}.id`) || requireString(artifact.title, `analysis artifact ${artifact.id}.title`) || requireString(artifact.summary, `analysis artifact ${artifact.id}.summary`) || requireString(artifact.generated_by, `analysis artifact ${artifact.id}.generated_by`) || requireObject(artifact.payload, `analysis artifact ${artifact.id}.payload`);
         if (error) return error;
+        if (!analysisArtifactKinds.has(artifact.kind) && !Object.values(legacyMockArtifactKindsByJobType).some((kinds) => kinds.has(artifact.kind))) return `analysis artifact ${artifact.id}.kind is invalid`;
+        if (artifact.confidence != null && !readinessConfidenceValues.has(artifact.confidence)) return `analysis artifact ${artifact.id}.confidence is invalid`;
+        if (artifact.created_at != null) {
+          error = requireDateString(artifact.created_at, `analysis artifact ${artifact.id}.created_at`);
+          if (error) return error;
+        }
         if (artifact.kind !== analysisArtifactKindByJobType[job.job_type] && !legacyMockArtifactKindsByJobType[job.job_type]?.has(artifact.kind)) return `analysis job type ${job.job_type} requires a compatible artifact kind`;
       }
     }
@@ -594,6 +611,11 @@ const projectFileValidationError = (file) => {
       error = requiredFields(report, ['id', 'project_id', 'title', 'summary', 'task_results', 'manufacturing_impacts', 'wiring_impacts', 'risks', 'unknowns', 'recommendations', 'assumptions', 'generated_at'], 'project.reports');
       if (error) return error;
       if (report.project_id !== candidate.id) return `report ${report.id} belongs to another project`;
+      if (report.status != null && !reportStatuses.has(report.status)) return `report ${report.id}.status is invalid`;
+      for (const field of ['task_results', 'manufacturing_impacts', 'wiring_impacts', 'risks', 'unknowns', 'recommendations', 'assumptions']) {
+        error = requireArray(report[field], `report ${report.id}.${field}`);
+        if (error) return error;
+      }
     }
     return null;
   };
@@ -622,6 +644,8 @@ const projectFileValidationError = (file) => {
     const previewTargetIds = new Set();
     for (const [index, preview] of file.analysis_readiness_previews.entries()) {
       const previewPath = `analysis_readiness_previews[${index}]`;
+      const previewUnknownError = rejectUnknownFields(preview, ['project_id', 'target_id', 'target_name', 'target_kind', 'state', 'trust_label', 'summary', 'criteria', 'load_cases', 'constraints', 'material_properties', 'thermal_guidance', 'solver_inputs', 'expected_result_artifacts', 'solver_pipeline', 'demo_estimates', 'review_required', 'recommended_job_request', 'generated_at'], previewPath);
+      if (previewUnknownError) return previewUnknownError;
       const previewError = requiredFields(preview, ['project_id', 'target_id', 'target_name', 'target_kind', 'state', 'trust_label', 'summary', 'criteria', 'load_cases', 'constraints', 'solver_inputs', 'expected_result_artifacts', 'solver_pipeline', 'demo_estimates', 'review_required', 'generated_at'], previewPath);
       if (previewError) return previewError;
       for (const field of ['project_id', 'target_id', 'target_name', 'target_kind', 'state', 'trust_label', 'summary', 'generated_at']) {
@@ -688,6 +712,10 @@ const projectFileValidationError = (file) => {
       for (const field of ['load_cases', 'constraints']) {
         for (const [nestedIndex, nested] of preview[field].entries()) {
           const nestedPath = `${previewPath}.${field}[${nestedIndex}]`;
+          const nestedUnknownError = rejectUnknownFields(nested, field === 'load_cases'
+            ? ['id', 'name', 'description', 'load_type', 'target_part_ids', 'magnitude', 'unit', 'direction', 'application_region', 'confidence', 'review_required']
+            : ['id', 'name', 'constraint_type', 'target_part_ids', 'region', 'degrees_of_freedom', 'confidence', 'review_required'], nestedPath);
+          if (nestedUnknownError) return nestedUnknownError;
           const requiredNestedFields = field === 'load_cases'
             ? ['id', 'name', 'description', 'load_type', 'target_part_ids', 'direction', 'application_region', 'confidence', 'review_required']
             : ['id', 'name', 'constraint_type', 'target_part_ids', 'region', 'degrees_of_freedom', 'confidence', 'review_required'];
@@ -700,6 +728,8 @@ const projectFileValidationError = (file) => {
             : requireArray(nested.degrees_of_freedom, `${nestedPath}.degrees_of_freedom`);
           if (directionOrDofError) return directionOrDofError;
           if (field === 'load_cases') {
+            const directionUnknownError = rejectUnknownFields(nested.direction, ['x', 'y', 'z'], `${nestedPath}.direction`);
+            if (directionUnknownError) return directionUnknownError;
             for (const axis of ['x', 'y', 'z']) {
               const vectorError = requireFiniteScalar(nested.direction[axis], `${nestedPath}.direction.${axis}`);
               if (vectorError) return vectorError;
