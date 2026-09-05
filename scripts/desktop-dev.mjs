@@ -46,6 +46,16 @@ const requireLocalBin = (name) => {
   return executable;
 };
 
+const spawnSpec = (command, args) => {
+  if (process.platform !== 'win32' || !command.endsWith('.cmd')) return { command, args };
+  const quoteCommandArg = (value) => `"${String(value).replaceAll('"', '\\"')}"`;
+  const commandLine = `call ${quoteCommandArg(command)} ${args.map(quoteCommandArg).join(' ')}`;
+  return {
+    command: process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', commandLine],
+  };
+};
+
 const waitForUrl = async (url, label) => {
   const deadline = Date.now() + 30_000;
   let lastError;
@@ -72,10 +82,10 @@ const shutdown = (code = 0) => {
 };
 
 const start = (name, command, args, env = {}, options = {}) => {
-  const child = spawn(command, args, {
+  const launch = spawnSpec(command, args);
+  const child = spawn(launch.command, launch.args, {
     cwd: repoRoot,
     env: { ...process.env, ...env },
-    shell: process.platform === 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
     ...options,
   });
