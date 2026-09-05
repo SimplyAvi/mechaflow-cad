@@ -374,7 +374,7 @@ const buildFallbackAnalysisReadiness = (
       review_required: true,
     },
     solver_inputs: {
-      geometry_source: part.source_file ?? null,
+      geometry_source: hasGeometry ? part.source_file!.trim() : null,
       units: 'mm, N, MPa',
       mesh_size_mm: dimensionsReady ? 4 : null,
       freecad_document: 'future FreeCAD document or STEP import path',

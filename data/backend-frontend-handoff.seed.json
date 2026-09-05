@@ -18,6 +18,7 @@
     "materials",
     "task_requirements",
     "analysis_jobs",
+    "analysis_readiness",
     "manufacturing_options",
     "wiring_routes",
     "reports"
