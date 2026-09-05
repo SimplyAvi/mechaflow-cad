@@ -95,6 +95,7 @@ const projectManufacturingOptions = () =>
 const projectPanelData = () => ({
   ...mockBackendPanelData,
   project,
+  analysis_readiness_previews: [],
   manufacturing_options: projectManufacturingOptions(),
   reports: project.reports,
 });

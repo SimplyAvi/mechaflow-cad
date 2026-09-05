@@ -447,6 +447,7 @@ const buildFallbackAssemblyReadiness = (
   const constraints = base.constraints.map((constraint) => ({
     ...constraint,
     id: `constraint-${assembly.id}-fixtures`,
+    constraint_type: 'review_required',
     target_part_ids: partIds,
     region: 'assembly fixtures and contact sets need CAD naming',
   }));
