@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MechaFlow CAD Local Dev</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Local integrated MVP shell</p>
+        <h1>MechaFlow CAD reference designs</h1>
+        <p>
+          This frontend shell proves that the backend API and catalog API expose the product concepts a
+          future design system and CAD viewer can consume. License uncertainty is visible by design, and no
+          upstream CAD assets are copied here.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Backend connection</h2>
+        <p id="connection-status">Checking API...</p>
+      </section>
+      <section class="grid">
+        <article class="card">
+          <h2>Product concepts</h2>
+          <ul id="concepts"></ul>
+        </article>
+        <article class="card">
+          <h2>Backend reference designs</h2>
+          <ul id="reference-designs"></ul>
+        </article>
+      </section>
+      <section class="card">
+        <h2>Catalog API</h2>
+        <p id="catalog-status">Loading catalog from <code>/api/catalog/reference-designs</code>...</p>
+        <ul id="catalog-reference-designs"></ul>
+      </section>
+    </main>
+    <script src="/runtime-config.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

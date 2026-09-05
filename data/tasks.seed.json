@@ -1,0 +1,47 @@
+[
+  {
+    "id": "lift-static-payload",
+    "name": "Lift static payload",
+    "category": "mechanical-load",
+    "inputs": ["payload_mass_kg", "gravity_m_s2", "load_application_point", "safety_factor_target"],
+    "outputs": ["pass_fail_advisory", "limiting_part", "factor_of_safety", "displacement_mm"],
+    "capability_rating_ids": ["payload-static", "deflection-limit"],
+    "notes": "Initial checks can use heuristics, then FEA for selected links or brackets."
+  },
+  {
+    "id": "grasp-object",
+    "name": "Grasp object with gripper or hand",
+    "category": "robotic-manipulation",
+    "inputs": ["object_mass_kg", "friction_coefficient_estimate", "finger_contact_geometry", "actuator_force_or_torque"],
+    "outputs": ["grip_force_margin", "slip_risk", "finger_stress_margin", "actuator_limit"],
+    "capability_rating_ids": ["grip-force", "payload-static"],
+    "notes": "Surface friction and contact geometry dominate confidence. Mark results as advisory."
+  },
+  {
+    "id": "reach-envelope",
+    "name": "Reach target envelope",
+    "category": "kinematics",
+    "inputs": ["target_pose", "joint_limits", "link_lengths", "tool_geometry"],
+    "outputs": ["reachable", "clearance_risk", "joint_limit_margin"],
+    "capability_rating_ids": ["reach-envelope"],
+    "notes": "Use URDF as the preferred interchange for robot link and joint data."
+  },
+  {
+    "id": "wire-clearance-check",
+    "name": "Check wiring clearance and bend radius",
+    "category": "electronics-awareness",
+    "inputs": ["wire_routes", "connector_locations", "minimum_bend_radius", "moving_joint_sweeps"],
+    "outputs": ["clearance_pass_fail", "bend_radius_warnings", "service_loop_notes"],
+    "capability_rating_ids": ["wire-clearance"],
+    "notes": "WireViz can seed harness data while FreeCAD routing validates mechanical space claims."
+  },
+  {
+    "id": "manufacturing-substitution",
+    "name": "Compare manufacturing substitution",
+    "category": "manufacturing",
+    "inputs": ["part_geometry", "material_id", "manufacturing_method_id", "quantity", "tolerance_class"],
+    "outputs": ["cost_band", "lead_time_band", "risk_notes", "quote_packet_path"],
+    "capability_rating_ids": ["manufacturability"],
+    "notes": "Quote outputs should be supplier-neutral packets until a user chooses a vendor."
+  }
+]

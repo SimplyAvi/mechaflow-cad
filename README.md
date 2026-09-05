@@ -8,16 +8,29 @@ Example: open a robot hand or gripper design, set the task to "pick and place a 
 
 ## What this repository contains
 
-This repository starts as product and technical documentation.
+This repository contains product and technical documentation plus an integrated local MVP foundation: a FastAPI backend, a Vite React TypeScript frontend cockpit, and catalog/integration fixtures and validation.
 
+- [Frontend development](docs/frontend.md)
 - [Product requirements](docs/product-requirements.md)
 - [Technical architecture](docs/technical-architecture.md)
 - [User experience](docs/user-experience.md)
+- [Reference design catalog](docs/reference-design-catalog.md)
 - [Open-source integration candidates](docs/open-source-integrations.md)
+- [Integration adapter plan](docs/integrations/README.md)
+- [Dependency license verification](docs/dependency-license-verification.md)
+- [Local development](docs/local-development.md)
+- [Desktop demo](docs/desktop.md)
 - [Business model](docs/business-model.md)
 - [Cheap hosting plan](docs/hosting-plan.md)
 - [MVP roadmap](docs/mvp-roadmap.md)
 - [Data and standards strategy](docs/data-and-standards.md)
+- [Backend development](docs/backend.md)
+
+Machine-readable seeds:
+
+- `catalog/reference-designs/reference-designs.seed.json`
+- `catalog/schemas/reference-design.schema.json`
+- `data/*.seed.json`, including adapter and backend/frontend handoff projections
 
 ## Core product idea
 
@@ -54,7 +67,7 @@ The MVP should:
 
 ## Open-source first
 
-The intended foundation should use open-source components wherever possible.
+The intended foundation should use open-source components wherever possible. Required runtime dependencies must not be closed-source or paid-only, and every GitHub project or design asset must pass the license checklist before adoption.
 
 Candidate foundations include:
 
@@ -70,6 +83,35 @@ Some engineering standards are not freely redistributable.
 
 The platform should clearly separate open advisory rules from licensed authoritative standards packs.
 
+## Local seed app
+
+Run the frontend and backend catalog API together with no required third-party runtime dependencies:
+
+```bash
+PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
+```
+
+The process prints the selected URL. Use `python3 scripts/find-free-port.py` when you need an explicit unused port.
+
+The local API exposes reference designs at `/api/catalog/reference-designs` and each dataset at `/api/data/{dataset}`, including `integration-adapters` and `backend-frontend-handoff`.
+
+Exercise the standard-library app path:
+
+```bash
+PYTHONPATH=src python3 tests/smoke_test.py
+```
+
+After installing the development dependencies, validate catalog data and its focused regression coverage:
+
+```bash
+python3 scripts/validate_catalog.py
+python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'
+```
+
+The smoke test additionally needs Node.js matching `^22.22.2 || ^24.15.0 || >=26.0.0`, an open-source
+test-only dependency: it runs the frontend
+module's page bootstrap against the live backend API and asserts what the page renders.
+
 ## Hosting philosophy
 
 Keep hosting cheap by making the platform cloud-assisted rather than cloud-dependent.
@@ -80,11 +122,73 @@ Keep hosting cheap by making the platform cloud-assisted rather than cloud-depen
 - Use cloud compute only for heavy simulation jobs or collaboration.
 - Support bring-your-own AI keys during early prototypes to control cost.
 
+## Integrated local MVP quick start
+
+Backend dependencies are managed by Python packaging, while frontend dependencies are managed by npm.
+Use Node.js matching the `engines.node` requirement in `package.json`.
+
+To open the local desktop demo after installing npm dependencies:
+
+```bash
+npm run desktop:dev
+```
+
+This starts the mock API, Vite frontend, and an Electron desktop window for the interactive robot arm visual MVP with exploded-view, orbit, and part-selection controls. See [Desktop demo](docs/desktop.md).
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+npm ci
+```
+
+Run backend checks:
+
+```bash
+pytest
+```
+
+Run frontend checks:
+
+```bash
+npm test
+npm run build
+npm run smoke
+```
+
+Run the backend on an explicit local port:
+
+```bash
+export MECHAFLOW_API_PORT=8123
+mechaflow-api
+```
+
+Run the Vite product cockpit on an explicit local port and point it at the FastAPI backend:
+
+```bash
+export VITE_API_BASE_URL=http://127.0.0.1:8123
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Or run local helpers that choose available ports:
+
+```bash
+python scripts/run-dev.py
+npm run dev:full
+```
+
+`python scripts/run-dev.py` serves the static integration shell in `frontend/` against the FastAPI backend. `npm run dev:full` serves the React cockpit in `src/` against the Node mock backend used for frontend work. The catalog seed app can also serve `frontend/` and the catalog API together:
+
+```bash
+PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
+```
+
+Use `python scripts/find-free-port.py` for one unused port or `node scripts/find-ports.mjs` for one or more before setting `MECHAFLOW_API_PORT`, `MECHAFLOW_FRONTEND_PORT`, `MECHAFLOW_PORT`, or the Vite dev server port. See [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Local development](docs/local-development.md) for details.
+
 ## Repository status
 
-This repository is currently a planning and requirements repository.
-
-No production implementation exists yet.
+This repository now contains planning documents and an integrated local MVP foundation. The backend exposes CAD orchestration, report, worker, and catalog-shaped stubs. The frontend cockpit can use backend-shaped mock data or a running API. The desktop-friendly visual seed shows a robot arm assembly with honest demo criteria and no real FEA claims. Catalog data is validated locally where present. Heavy CAD, FEA, electronics, wiring, and supplier integrations are not wired to FreeCAD, CalculiX, KiCad, WireViz, or external supplier APIs yet.
 
 ## License
 
