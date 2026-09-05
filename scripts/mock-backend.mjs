@@ -324,7 +324,7 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         for (const partId of node.part_ids) if (!partIds.has(partId)) return `assembly node ${node.id} references unknown part ${partId}`;
         for (const childAssemblyId of node.child_assembly_ids) {
-          if (!assemblyIds.has(childAssemblyId) && !nodeIds.has(childAssemblyId)) return `assembly node ${node.id} references unknown child assembly ${childAssemblyId}`;
+          if (!assemblyIds.has(childAssemblyId)) return `assembly node ${node.id} references unknown child assembly ${childAssemblyId}`;
         }
       }
       if (!nodeIds.has(assembly.root_node_id)) return `assembly ${assembly.id} references unknown root node ${assembly.root_node_id}`;
