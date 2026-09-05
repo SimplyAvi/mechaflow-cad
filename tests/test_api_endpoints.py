@@ -766,6 +766,17 @@ def test_analysis_readiness_preview_covers_assemblies_and_honors_demo_estimate_f
     assert without_estimates.json()["demo_estimates"] == []
 
 
+def test_project_rejects_ambiguous_part_and_assembly_target_ids() -> None:
+    project = deepcopy(sample)
+    project["id"] = "project-ambiguous-targets"
+    project["assemblies"][0]["id"] = project["assemblies"][0]["parts"][0]["id"]
+
+    response = local_client.post("/api/projects", json=project)
+
+    assert response.status_code == 422
+    assert "must not overlap" in response.json()["detail"]
+
+
 def test_create_analysis_job_selects_matching_stub_adapter() -> None:
     response = client.post(
         "/api/analysis-jobs",

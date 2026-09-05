@@ -391,7 +391,7 @@ def build_analysis_readiness_preview(
         target_name = target_part.name
         target_kind: Literal["part", "assembly"] = "part"
         material = _find_material(project, target_part)
-        source_file = target_part.source_file
+        source_file = target_part.source_file.strip() if target_part.source_file and target_part.source_file.strip() else None
         dimensions_ready = any(
             value is not None
             for value in (
@@ -414,7 +414,9 @@ def build_analysis_readiness_preview(
             else None
         )
         source_files = [part.source_file for part in target_assembly.parts]
-        source_file = ", ".join(source_files) if source_files and all(source_files) else None
+        source_file = ", ".join(source.strip() for source in source_files) if source_files and all(
+            source and source.strip() for source in source_files
+        ) else None
         dimensions_ready = bool(part_ids) and all(
             any(value is not None for value in (
                 part.dimensions.length_mm,

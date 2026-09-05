@@ -467,6 +467,12 @@ const buildFallbackAssemblyReadiness = (
     summary: state === 'pre_solver_ready'
       ? 'Pre-solver ready: aggregate assembly loads, constraints, material properties, and expected solver artifacts are recorded. This is not a real FEA result.'
       : 'Review required before meshing or solving: aggregate assembly inputs are missing. No FEA was run.',
+    criteria: [
+      'Assembly load path: review how the active task load transfers across included parts, fixtures, and contacts.',
+      'Assembly stiffness: material modulus is input only; real displacement must come from a solver or test.',
+      'Assembly thermal limits: review each included material before heat-sensitive release decisions.',
+      `Assembly scope: includes ${partIds.length} part${partIds.length === 1 ? '' : 's'} from the selected assembly.`,
+    ],
     load_cases: loadCases,
     constraints,
     material_properties: aggregateMaterial ? base.material_properties : null,
@@ -475,6 +481,7 @@ const buildFallbackAssemblyReadiness = (
       geometry_source: sourceFile,
       mesh_size_mm: allDimensionsReady ? 4 : null,
     },
+    demo_estimates: [],
     review_required: [
       'Aggregate assembly fixtures, contacts, and material assumptions must be reviewed before solving.',
       'A qualified reviewer must approve any factor-of-safety interpretation before release.',

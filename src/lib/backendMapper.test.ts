@@ -95,6 +95,10 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(readiness.recommended_job_request?.target_id).toBe(design.assembly.id);
     expect(readiness.state).toBe('blocked_missing_inputs');
     expect(readiness.material_properties).toBeNull();
+    expect(readiness.criteria).toEqual(expect.arrayContaining([
+      expect.stringMatching(/assembly load path/i),
+    ]));
+    expect(readiness.demo_estimates).toEqual([]);
   });
 
   it('keeps unrated material previews material-only', () => {

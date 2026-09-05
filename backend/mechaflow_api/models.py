@@ -576,6 +576,12 @@ class Project(StrictModel):
         if duplicate_parts:
             raise ValueError(f"part ids must be unique across project assemblies: {sorted(duplicate_parts)}")
 
+        assembly_ids = {assembly.id for assembly in self.assemblies}
+        part_ids = {part.id for assembly in self.assemblies for part in assembly.parts}
+        ambiguous_targets = assembly_ids & part_ids
+        if ambiguous_targets:
+            raise ValueError(f"assembly and part ids must not overlap: {sorted(ambiguous_targets)}")
+
         duplicate_routes = _duplicate_ids(
             [route.id for assembly in self.assemblies for route in assembly.wiring_routes]
         )
