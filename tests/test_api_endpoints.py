@@ -176,6 +176,90 @@ def test_project_panel_endpoints_expose_frontend_handoff_data() -> None:
     assert client.get("/api/projects/project-panel-flow/reports").json() == []
 
 
+def test_project_file_export_import_round_trip_preserves_mvp_data() -> None:
+    local_client = TestClient(main_module.create_app())
+    pre_solver = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs",
+        json={"target_id": "part-finger-link"},
+    )
+    assert pre_solver.status_code == 202
+
+    export = local_client.get("/api/projects/project-open-gripper-demo/export-file")
+
+    assert export.status_code == 200
+    project_file = export.json()
+    assert project_file["format"] == "mechaflow-cad.project"
+    assert project_file["schema_version"] == "1.0"
+    assert project_file["project"]["id"] == "project-open-gripper-demo"
+    assert project_file["extensions"]["future_imports"]["step"]
+    assert {preview["target_id"] for preview in project_file["analysis_readiness_previews"]} >= {
+        "asm-open-gripper-demo",
+        "part-finger-link",
+        "part-palm-plate",
+        "part-controller-pcb",
+    }
+    assert any(job["artifacts"] for job in project_file["project"]["analysis_jobs"])
+
+    imported = local_client.post("/api/projects/import-file", json=project_file)
+
+    assert imported.status_code == 200
+    imported_payload = imported.json()
+    imported_project = imported_payload["project"]
+    assert imported_payload["project_id"] == "project-open-gripper-demo"
+    assert imported_project == project_file["project"]
+    assert imported_payload["panel_data"]["project"] == project_file["project"]
+    assert {assembly["id"] for assembly in imported_project["assemblies"]} == {
+        assembly["id"] for assembly in project_file["project"]["assemblies"]
+    }
+    assert {
+        part["id"]
+        for assembly in imported_project["assemblies"]
+        for part in assembly["parts"]
+    } == {
+        part["id"]
+        for assembly in project_file["project"]["assemblies"]
+        for part in assembly["parts"]
+    }
+    assert imported_project["materials"] == project_file["project"]["materials"]
+    assert imported_project["active_task"] == project_file["project"]["active_task"]
+    assert [assembly["wiring_routes"] for assembly in imported_project["assemblies"]] == [
+        assembly["wiring_routes"] for assembly in project_file["project"]["assemblies"]
+    ]
+    assert imported_project["analysis_jobs"] == project_file["project"]["analysis_jobs"]
+    assert {preview["target_id"] for preview in imported_payload["panel_data"]["analysis_readiness_previews"]} >= {
+        "part-finger-link",
+        "part-palm-plate",
+    }
+
+
+def test_project_file_import_rejects_malformed_and_unsupported_files_without_erasing_state() -> None:
+    local_client = TestClient(main_module.create_app())
+    original = local_client.get("/api/projects/project-open-gripper-demo").json()
+
+    malformed = local_client.post(
+        "/api/projects/import-file",
+        content="not json",
+        headers={"Content-Type": "application/json"},
+    )
+    assert malformed.status_code == 422
+    assert "json" in malformed.text.lower()
+
+    unsupported = local_client.post(
+        "/api/projects/import-file",
+        json={"format": "step", "schema_version": "1.0", "project": original},
+    )
+    assert unsupported.status_code == 422
+    assert "mechaflow-cad.project" in unsupported.text
+
+    missing_project = local_client.post(
+        "/api/projects/import-file",
+        json={"format": "mechaflow-cad.project", "schema_version": "1.0"},
+    )
+    assert missing_project.status_code == 422
+    assert "project" in missing_project.text
+    assert local_client.get("/api/projects/project-open-gripper-demo").json() == original
+
+
 def test_project_endpoints_store_and_return_local_projects() -> None:
     sample = client.get("/api/projects/sample").json()
     sample["id"] = "project-test"

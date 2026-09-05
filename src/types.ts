@@ -303,6 +303,29 @@ export interface BackendProjectPanelData {
   analysis_readiness_previews?: AnalysisReadinessPreview[];
 }
 
+export interface BackendProjectFile {
+  format: 'mechaflow-cad.project';
+  schema_version: '1.0';
+  metadata: {
+    exported_at?: string;
+    source_api_version: string;
+    exported_by: string;
+    notes: string[];
+  };
+  project: BackendProject;
+  analysis_readiness_previews: AnalysisReadinessPreview[];
+  extensions: Record<string, unknown>;
+}
+
+export interface BackendProjectFileImportResponse {
+  status: 'imported';
+  project_id: string;
+  message: string;
+  warnings: string[];
+  project: BackendProject;
+  panel_data: BackendProjectPanelData;
+}
+
 export interface BackendProject {
   id: string;
   name: string;
@@ -342,6 +365,8 @@ export interface BackendAssembly {
 export interface BackendAssemblyNode {
   id: string;
   name: string;
+  assembly_id?: string | null;
+  part_id?: string | null;
   part_ids: string[];
   child_assembly_ids: string[];
   exploded_transform: BackendTransform;

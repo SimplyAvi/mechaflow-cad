@@ -293,6 +293,8 @@ class Part(StrictModel):
 class AssemblyNode(StrictModel):
     id: str
     name: str
+    assembly_id: str | None = None
+    part_id: str | None = None
     part_ids: list[str] = Field(default_factory=list)
     child_assembly_ids: list[str] = Field(default_factory=list)
     exploded_transform: Transform = Field(default_factory=Transform)
@@ -646,3 +648,32 @@ class ProjectPanelData(BaseModel):
     wiring_routes: list[WiringRoute] = Field(default_factory=list)
     reports: list[AnalysisReport] = Field(default_factory=list)
     analysis_readiness_previews: list[AnalysisReadinessPreview] = Field(default_factory=list)
+
+
+PROJECT_FILE_FORMAT = "mechaflow-cad.project"
+PROJECT_FILE_SCHEMA_VERSION = "1.0"
+
+
+class ProjectFileMetadata(StrictModel):
+    exported_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    source_api_version: str = "0.1.0"
+    exported_by: str = "mechaflow-cad-api"
+    notes: list[str] = Field(default_factory=list)
+
+
+class ProjectFile(StrictModel):
+    format: Literal["mechaflow-cad.project"] = PROJECT_FILE_FORMAT
+    schema_version: Literal["1.0"] = PROJECT_FILE_SCHEMA_VERSION
+    metadata: ProjectFileMetadata = Field(default_factory=ProjectFileMetadata)
+    project: Project
+    analysis_readiness_previews: list[AnalysisReadinessPreview] = Field(default_factory=list)
+    extensions: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectFileImportResponse(BaseModel):
+    status: Literal["imported"] = "imported"
+    project_id: str
+    message: str
+    warnings: list[str] = Field(default_factory=list)
+    project: Project
+    panel_data: ProjectPanelData

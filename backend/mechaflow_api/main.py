@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -36,6 +36,9 @@ from .models import (
     Part,
     PartManufacturingOptions,
     Project,
+    ProjectFile,
+    ProjectFileImportResponse,
+    ProjectFileMetadata,
     ProjectModificationResponse,
     ProjectPanelData,
     ReferenceDesign,
@@ -134,6 +137,9 @@ SCHEMA_MODELS = [
     CatalogSeedResponse,
     PartManufacturingOptions,
     ProjectPanelData,
+    ProjectFile,
+    ProjectFileMetadata,
+    ProjectFileImportResponse,
     BOMItem,
 ]
 
@@ -158,6 +164,10 @@ CATALOG_TASKS_PATH = Path(__file__).resolve().parents[2] / "data" / "tasks.seed.
 def create_app(settings: Settings | None = None, project_store: ProjectStore | None = None) -> FastAPI:
     settings = settings or get_settings()
     project_store = project_store or build_default_project_store()
+    readiness_previews_by_project: dict[str, list[AnalysisReadinessPreview]] = {}
+
+    def invalidate_readiness(project_id: str) -> None:
+        readiness_previews_by_project.pop(project_id, None)
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
@@ -190,6 +200,73 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")
         return job
+
+    def build_project_file(project: Project) -> ProjectFile:
+        readiness_previews = readiness_previews_by_project.get(project.id)
+        if readiness_previews is None:
+            readiness_previews = []
+            for assembly in project.assemblies:
+                target_ids = [assembly.id, *[part.id for part in assembly.parts]]
+                for target_id in target_ids:
+                    try:
+                        readiness_previews.append(build_analysis_readiness_preview(project, target_id))
+                    except PartNotFoundError:
+                        continue
+        return ProjectFile(
+            metadata=ProjectFileMetadata(
+                source_api_version=settings.version,
+                notes=[
+                    "MVP JSON project file. Real STEP, FreeCAD, KiCad, and WireViz imports are future extensions.",
+                    "Analysis readiness records are exported as portable previews and can be regenerated from the project.",
+                ],
+            ),
+            project=project,
+            analysis_readiness_previews=readiness_previews,
+            extensions={
+                "future_imports": {
+                    "step": "reserved for a future FreeCAD-backed geometry import worker",
+                    "freecad": "reserved for a future FreeCAD document import worker",
+                }
+            },
+        )
+
+    def validate_readiness_previews(project: Project, previews: list[AnalysisReadinessPreview]) -> None:
+        target_records = [(assembly.id, "assembly", assembly.name) for assembly in project.assemblies]
+        target_records.extend((part.id, "part", part.name) for assembly in project.assemblies for part in assembly.parts)
+        target_ids = [target[0] for target in target_records]
+        if len(target_ids) != len(set(target_ids)):
+            raise ValueError("imported project assembly and part ids must be unique")
+        targets = {target[0]: (target[1], target[2]) for target in target_records}
+        part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
+        preview_target_ids: set[str] = set()
+        for preview in previews:
+            if preview.project_id != project.id:
+                raise ValueError(f"analysis readiness preview {preview.target_id!r} belongs to another project")
+            if preview.target_id in preview_target_ids:
+                raise ValueError(f"duplicate analysis readiness preview target {preview.target_id!r}")
+            preview_target_ids.add(preview.target_id)
+            target = targets.get(preview.target_id)
+            if target is None:
+                raise ValueError(f"analysis readiness target {preview.target_id!r} is not in the imported project")
+            if preview.target_kind != target[0] or preview.target_name != target[1]:
+                raise ValueError(f"analysis readiness metadata does not match target {preview.target_id!r}")
+            if (
+                preview.recommended_job_request is not None
+                and preview.recommended_job_request.target_id != preview.target_id
+            ):
+                raise ValueError(
+                    f"analysis readiness recommendation target does not match preview target {preview.target_id!r}"
+                )
+            for load_case in preview.load_cases:
+                unknown = set(load_case.target_part_ids) - part_ids
+                if unknown:
+                    raise ValueError(f"analysis readiness load case {load_case.id!r} references unknown parts: {sorted(unknown)}")
+            for constraint in preview.constraints:
+                unknown = set(constraint.target_part_ids) - part_ids
+                if unknown:
+                    raise ValueError(f"analysis readiness constraint {constraint.id!r} references unknown parts: {sorted(unknown)}")
+        if previews and preview_target_ids != set(target_ids):
+            raise ValueError("analysis readiness previews must cover every imported project target")
 
     @app.get("/health", response_model=HealthResponse, tags=["platform"])
     def health() -> HealthResponse:
@@ -294,6 +371,77 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=404, detail="sample project not found")
         return sample
 
+    @app.get(
+        f"{settings.api_prefix}/projects/{{project_id}}/export-file",
+        response_model=ProjectFile,
+        tags=["project-files"],
+    )
+    def export_project_file(project_id: str) -> ProjectFile:
+        if project_id == "sample":
+            project_id = "project-open-gripper-demo"
+        return build_project_file(get_project_or_404(project_id))
+
+    @app.post(
+        f"{settings.api_prefix}/projects/import-file",
+        response_model=ProjectFileImportResponse,
+        tags=["project-files"],
+    )
+    def import_project_file(
+        project_file: ProjectFile,
+        project_id: str | None = Query(
+            default=None,
+            description="Optional URL-safe project id to assign while opening this file.",
+        ),
+    ) -> ProjectFileImportResponse:
+        resolved_project_id = project_id or project_file.project.id
+        try:
+            validate_project_id(resolved_project_id)
+            validate_readiness_previews(project_file.project, project_file.analysis_readiness_previews)
+            stored_project = project_store.upsert_project(resolved_project_id, project_file.project)
+        except AnalysisJobAlreadyExistsError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="analysis job id already exists in another local project; import without a project_id override or remove the conflicting project",
+            ) from exc
+        except (
+            InvalidAnalysisJobAdapterError,
+            InvalidAnalysisJobArtifactError,
+            InvalidPartMaterialError,
+            InvalidWiringEndpointError,
+            NonFiniteStorageValueError,
+            ValueError,
+        ) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        imported_previews = [
+            preview.model_copy(
+                update={
+                    "project_id": stored_project.id,
+                    "recommended_job_request": (
+                        preview.recommended_job_request.model_copy(update={"project_id": stored_project.id})
+                        if preview.recommended_job_request is not None
+                        else None
+                    ),
+                },
+                deep=True,
+            )
+            for preview in project_file.analysis_readiness_previews
+        ]
+        panel_data = build_project_panel_data(stored_project)
+        if imported_previews:
+            readiness_previews_by_project[stored_project.id] = imported_previews
+            panel_data = panel_data.model_copy(
+                update={"analysis_readiness_previews": imported_previews},
+                deep=True,
+            )
+        else:
+            readiness_previews_by_project[stored_project.id] = panel_data.analysis_readiness_previews
+        return ProjectFileImportResponse(
+            project_id=stored_project.id,
+            message=f"Imported MechaFlow project file for {stored_project.id}.",
+            project=stored_project,
+            panel_data=panel_data,
+        )
+
     @app.get(f"{settings.api_prefix}/projects/{{project_id}}", response_model=Project, tags=["projects"])
     def project(project_id: str) -> Project:
         return get_project_or_404(project_id)
@@ -301,7 +449,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     @app.post(f"{settings.api_prefix}/projects", response_model=Project, status_code=201, tags=["projects"])
     def create_project(project: Project) -> Project:
         try:
-            return project_store.create_project(project)
+            created = project_store.create_project(project)
+            invalidate_readiness(created.id)
+            return created
         except ProjectAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="project already exists") from exc
         except AnalysisJobAlreadyExistsError as exc:
@@ -319,7 +469,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def upsert_project(project_id: str, project: Project) -> Project:
         try:
             validate_project_id(project_id)
-            return project_store.upsert_project(project_id, project)
+            updated = project_store.upsert_project(project_id, project)
+            invalidate_readiness(updated.id)
+            return updated
         except AnalysisJobAlreadyExistsError as exc:
             raise HTTPException(status_code=409, detail="analysis job id already exists") from exc
         except ValueError as exc:
@@ -329,7 +481,13 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def project_panel_data(project_id: str) -> ProjectPanelData:
         if project_id == "sample":
             project_id = "project-open-gripper-demo"
-        return build_project_panel_data(get_project_or_404(project_id))
+        project = get_project_or_404(project_id)
+        previews = readiness_previews_by_project.get(project.id)
+        panel_data = build_project_panel_data(project)
+        return panel_data.model_copy(
+            update={"analysis_readiness_previews": previews},
+            deep=True,
+        ) if previews is not None else panel_data
 
     @app.post(
         f"{settings.api_prefix}/projects/{{project_id}}/analysis-readiness/previews",
@@ -357,6 +515,9 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     )
     def analysis_readiness_preview(project_id: str, target_id: str) -> AnalysisReadinessPreview:
         project = get_project_or_404("project-open-gripper-demo" if project_id == "sample" else project_id)
+        for preview in readiness_previews_by_project.get(project.id, []):
+            if preview.target_id == target_id:
+                return preview
         try:
             return build_analysis_readiness_preview(project, target_id)
         except PartNotFoundError as exc:
@@ -415,6 +576,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if stored_project is None or result is None:
             raise HTTPException(status_code=404, detail="project not found")
+        invalidate_readiness(stored_project.id)
         return result.model_copy(update={"project": stored_project}, deep=True)
 
     @app.get(f"{settings.api_prefix}/analysis-jobs", response_model=list[AnalysisJob], tags=["jobs"])
@@ -467,7 +629,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 updated_at=now,
             )
             try:
-                return project_store.add_analysis_job(job)
+                stored_job = project_store.add_analysis_job(job)
+                return stored_job
             except AnalysisJobAlreadyExistsError:
                 continue
             except ProjectNotFoundError as exc:
@@ -522,7 +685,7 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                     deep=True,
                 )
 
-            project_store.update_analysis_job(job_id, mark_failed)
+            failed_job = project_store.update_analysis_job(job_id, mark_failed)
             raise HTTPException(status_code=404, detail="analysis target not found") from exc
         stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
         if stored_job is None:

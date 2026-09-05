@@ -141,6 +141,50 @@ try {
   if (panelData.wiring_routes[0].id !== 'route-finger-sensor') {
     throw new Error('Mock backend did not return wiring panel data.');
   }
+  const exportedProjectFile = await waitForJson(`${apiBaseUrl}/api/projects/${panelData.project.id}/export-file`);
+  if (
+    exportedProjectFile.format !== 'mechaflow-cad.project'
+    || exportedProjectFile.schema_version !== '1.0'
+    || exportedProjectFile.project.assemblies.length !== panelData.project.assemblies.length
+    || exportedProjectFile.project.materials.length !== panelData.project.materials.length
+    || exportedProjectFile.analysis_readiness_previews.length === 0
+  ) {
+    throw new Error('Mock backend project file export did not preserve MVP project data.');
+  }
+  const invalidProjectFile = await fetch(`${apiBaseUrl}/api/projects/import-file`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ format: 'step', schema_version: '1.0', project: panelData.project }),
+  });
+  if (invalidProjectFile.status !== 422) {
+    throw new Error('Mock backend accepted an unsupported project file format.');
+  }
+  const malformedProjectFile = structuredClone(exportedProjectFile);
+  delete malformedProjectFile.project.assemblies[0].root_node_id;
+  const malformedImport = await fetch(`${apiBaseUrl}/api/projects/import-file`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(malformedProjectFile),
+  });
+  if (malformedImport.status !== 422) {
+    throw new Error('Mock backend accepted an invalid nested project shape.');
+  }
+  const importedProjectFile = await fetch(`${apiBaseUrl}/api/projects/import-file`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(exportedProjectFile),
+  });
+  if (!importedProjectFile.ok) {
+    throw new Error(`Mock backend rejected an exported project file with ${importedProjectFile.status}.`);
+  }
+  const importedPayload = await importedProjectFile.json();
+  if (
+    importedPayload.project.id !== panelData.project.id
+    || importedPayload.panel_data.project.assemblies[0].parts.length !== panelData.project.assemblies[0].parts.length
+    || importedPayload.panel_data.wiring_routes[0].id !== 'route-finger-sensor'
+  ) {
+    throw new Error('Mock backend project file import lost assembly, part, or wiring data.');
+  }
   const referenceDesigns = await waitForJson(`${apiBaseUrl}/api/reference-designs`);
   const demoReference = referenceDesigns.find((design) => design.id === 'ref-open-gripper-demo');
   if (

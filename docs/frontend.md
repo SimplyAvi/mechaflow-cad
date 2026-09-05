@@ -15,6 +15,7 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 - Showing selected-part and selected-assembly pre-solver analysis readiness with explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes. Assembly fallback previews aggregate included parts and do not copy part-level demo estimates.
 - Showing background CAD, future FEA, wiring, and supplier job status without claiming that real FEA has run.
 - Triggering the FastAPI local pre-solver runner when `VITE_API_BASE_URL` points at the backend. The button creates a persisted review-required artifact and keeps it labeled as not FEA.
+- Exporting and importing portable `.mfcad.json` project files when the cockpit is connected to the FastAPI backend or desktop mock API.
 - Reviewing BOM, cost, manufacturing, and lead-time panels.
 - Surfacing wiring routes, bend radius, service loops, and clearance risk.
 - Mirroring the backend project, panel-data, modification preview, report, catalog, and metadata contracts.
@@ -158,14 +159,18 @@ GET /api/projects/project-open-gripper-demo/panel-data
 - `reports`: advisory summaries from local modification previews or workers.
 - `analysis_readiness_previews`: optional pre-solver readiness previews keyed by part or assembly id. When omitted, the frontend derives clearly labeled local previews from the same part, material, and task fields for demo continuity; assembly fallbacks aggregate all included parts and remain review-required when aggregate inputs are incomplete.
 
-The frontend also displays readiness endpoints and, when connected to FastAPI, can trigger the local pre-solver runner:
+The frontend also displays readiness endpoints, can save and reopen project files, and, when connected to FastAPI, can trigger the local pre-solver runner:
 
 ```text
+GET /api/projects/{project_id}/export-file
+POST /api/projects/import-file
 GET /api/projects/{project_id}/analysis-readiness/{target_id}
 POST /api/projects/{project_id}/analysis-readiness/previews
 POST /api/projects/{project_id}/analysis-jobs/pre-solver-runs
 GET /api/local-analysis/tool-boundaries
 ```
+
+The project file controls in the reference panel download and read `.mfcad.json` files in the browser or Electron shell. The JSON format is documented in [Project files](project-files.md). Unsupported or malformed files stay in the current project and show an understandable import error.
 
 Readiness responses are not FEA results. The local pre-solver run packages explicit worker inputs, computes only a demo-safe nominal screening estimate when possible, and lists FreeCAD, Gmsh, and CalculiX command availability. Missing solver binaries appear as `unavailable_review_required`; available binaries are still not invoked by this runner.
 

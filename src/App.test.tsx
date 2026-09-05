@@ -158,6 +158,82 @@ describe('MechaFlow cockpit', () => {
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
   });
 
+  it('imports a portable project file from the desktop picker and keeps cockpit data interactive', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
+    const importedPanelData = structuredClone(mockProjectPanelData);
+    importedPanelData.project.name = 'Imported robot arm project';
+    const projectFile = {
+      format: 'mechaflow-cad.project',
+      schema_version: '1.0',
+      metadata: {
+        exported_at: '2026-09-05T00:00:00Z',
+        source_api_version: '0.1.0',
+        exported_by: 'test',
+        notes: [],
+      },
+      project: importedPanelData.project,
+      analysis_readiness_previews: importedPanelData.analysis_readiness_previews ?? [],
+      extensions: {},
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/projects/import-file')) {
+        expect(init?.method).toBe('POST');
+        expect(init?.body).toBe(JSON.stringify(projectFile));
+        return Response.json({
+          status: 'imported',
+          project_id: importedPanelData.project.id,
+          message: 'Imported MechaFlow project file for project-open-gripper-demo.',
+          warnings: [],
+          project: importedPanelData.project,
+          panel_data: importedPanelData,
+        });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: /Robot arm CAD review cockpit/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Project file import and export/i)).toHaveTextContent(/Portable project file/i);
+    await user.upload(
+      screen.getByLabelText(/Import MechaFlow project file/i),
+      new File([JSON.stringify(projectFile)], 'demo.mfcad.json', { type: 'application/json' }),
+    );
+
+    expect(await screen.findByText(/Opened Imported robot arm project from demo.mfcad.json/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Imported robot arm project$/i })).toBeInTheDocument();
+    expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
+    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
+    expect(screen.getByText(/Wiring awareness/i)).toBeInTheDocument();
+  });
+
+  it('shows an understandable project-file error for invalid local JSON', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const user = userEvent.setup();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      return new Response('Not found', { status: 404 });
+    }));
+
+    render(<App />);
+
+    expect(await screen.findByLabelText(/Project file import and export/i)).toBeInTheDocument();
+    await user.upload(
+      screen.getByLabelText(/Import MechaFlow project file/i),
+      new File(['not json'], 'broken.mfcad.json', { type: 'application/json' }),
+    );
+
+    expect(await screen.findByText(/Project import failed: file is not valid JSON/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Robot arm visual MVP task-preserving edit demo/i })).toBeInTheDocument();
+  });
+
   it('triggers a backend local pre-solver run and shows review-required artifacts', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const user = userEvent.setup();

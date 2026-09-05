@@ -25,12 +25,13 @@
           {
             "id": "node-base",
             "name": "Base and electronics bay",
+            "assembly_id": "asm-open-gripper-demo",
             "part_ids": [
               "part-palm-plate",
               "part-controller-pcb"
             ],
             "child_assembly_ids": [
-              "node-shoulder"
+              "asm-finger"
             ],
             "exploded_transform": {
               "translation_mm": {
@@ -48,12 +49,12 @@
           {
             "id": "node-shoulder",
             "name": "Shoulder joint subassembly",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-shoulder-yoke",
             "part_ids": [
               "part-shoulder-yoke"
             ],
-            "child_assembly_ids": [
-              "node-upper-arm"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": -48,
@@ -70,12 +71,12 @@
           {
             "id": "node-upper-arm",
             "name": "Upper arm span",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-upper-arm-link",
             "part_ids": [
               "part-upper-arm-link"
             ],
-            "child_assembly_ids": [
-              "node-elbow"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": -12,
@@ -92,12 +93,12 @@
           {
             "id": "node-elbow",
             "name": "Elbow joint subassembly",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-elbow-joint",
             "part_ids": [
               "part-elbow-joint"
             ],
-            "child_assembly_ids": [
-              "node-forearm"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": 44,
@@ -114,13 +115,12 @@
           {
             "id": "node-forearm",
             "name": "Forearm and wrist span",
+            "assembly_id": "asm-open-gripper-demo",
             "part_ids": [
               "part-forearm-link",
               "part-wrist-plate"
             ],
-            "child_assembly_ids": [
-              "node-tool"
-            ],
+            "child_assembly_ids": [],
             "exploded_transform": {
               "translation_mm": {
                 "x": 84,
@@ -137,6 +137,8 @@
           {
             "id": "node-tool",
             "name": "Wrist gripper tool",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-finger-link",
             "part_ids": [
               "part-finger-link"
             ],
@@ -807,6 +809,36 @@
             }
           }
         ],
+        "wiring_routes": [],
+        "assembly_structure_confidence": "unknown_or_needs_review"
+      },
+      {
+        "id": "asm-finger",
+        "name": "Finger subassembly",
+        "root_node_id": "node-finger-assembly",
+        "nodes": [
+          {
+            "id": "node-finger-assembly",
+            "name": "Finger subassembly visual",
+            "assembly_id": "asm-finger",
+            "part_id": "part-finger-link",
+            "part_ids": [],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": 80,
+                "y": 0,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          }
+        ],
+        "parts": [],
         "wiring_routes": [],
         "assembly_structure_confidence": "unknown_or_needs_review"
       }

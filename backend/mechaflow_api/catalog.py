@@ -173,12 +173,15 @@ DEFAULT_ASSEMBLY = Assembly(
         AssemblyNode(
             id="node-root",
             name="Gripper root",
+            assembly_id="asm-open-gripper-demo",
             part_ids=["part-palm-plate", "part-actuator-bracket", "part-controller-pcb"],
-            child_assembly_ids=["node-finger"],
+            child_assembly_ids=["asm-finger"],
         ),
         AssemblyNode(
             id="node-finger",
             name="Finger subassembly",
+            assembly_id="asm-open-gripper-demo",
+            part_id="part-finger-link",
             part_ids=["part-finger-link"],
             exploded_transform={"translation_mm": {"x": 80, "y": 0, "z": 0}},
         ),
@@ -364,6 +367,21 @@ DEFAULT_ASSEMBLY = Assembly(
         ),
     ],
     assembly_structure_confidence=RecommendationConfidence.heuristic,
+)
+
+DEFAULT_FINGER_ASSEMBLY = Assembly(
+    id="asm-finger",
+    name="Finger subassembly",
+    root_node_id="node-finger-assembly",
+    nodes=[
+        AssemblyNode(
+            id="node-finger-assembly",
+            name="Finger subassembly visual",
+            assembly_id="asm-finger",
+            part_id="part-finger-link",
+            exploded_transform={"translation_mm": {"x": 80, "y": 0, "z": 0}},
+        )
+    ],
 )
 
 
