@@ -205,10 +205,12 @@ def _prepare_artifact_root(artifact_root: Path) -> None:
     artifact_root.mkdir(parents=True, exist_ok=True)
     cutoff = datetime.now(timezone.utc).timestamp() - ARTIFACT_RETENTION_DAYS * 86400
     bundles = sorted((path for path in artifact_root.iterdir() if path.is_dir()), key=lambda path: path.stat().st_mtime)
-    for path in bundles:
-        if path.stat().st_mtime < cutoff or len(bundles) > MAX_ARTIFACT_BUNDLES:
+    for path in tuple(bundles):
+        if path.stat().st_mtime < cutoff:
             shutil.rmtree(path)
-            bundles.remove(path)
+    remaining = sorted((path for path in artifact_root.iterdir() if path.is_dir()), key=lambda path: path.stat().st_mtime)
+    for path in remaining[:-MAX_ARTIFACT_BUNDLES]:
+        shutil.rmtree(path)
 
 
 def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, job_id: str) -> Path:
