@@ -76,6 +76,8 @@ curl -s -X POST http://127.0.0.1:8123/api/projects/project-open-gripper-demo/ana
 
 If CalculiX is missing, this endpoint returns a persisted `solver_unavailable` job with the generated `.inp` deck manifest and install guidance. If CalculiX is available, it invokes the deterministic fixture and collects stdout, stderr, `.dat`, `.frd`, `.sta`, and `.cvg` files where produced.
 
+Fixture files are copied into `.mechaflow-artifacts/<job-id>/` and are downloadable through the `download_url` in each file manifest entry. The local artifact store retains bundles for 7 days and caps storage at 100 bundles, pruning older bundles when a new run starts. Temporary execution directories are removed after collection.
+
 ## What is real analysis today
 
 Real today:

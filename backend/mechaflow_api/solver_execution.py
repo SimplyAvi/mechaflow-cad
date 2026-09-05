@@ -8,6 +8,7 @@ needs FreeCAD preparation and Gmsh meshing before real part FEA can be trusted.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -196,16 +197,47 @@ def _run_calculix(resolved_command: str, workdir: Path) -> subprocess.CompletedP
     )
 
 
-def _artifact_file_manifest(fixture: FixtureRunArtifacts) -> list[dict[str, Any]]:
-    paths = [fixture.input_deck, *[fixture.workdir / output for output in fixture.expected_outputs]]
+ARTIFACT_RETENTION_DAYS = 7
+MAX_ARTIFACT_BUNDLES = 100
+
+
+def _prepare_artifact_root(artifact_root: Path) -> None:
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    cutoff = datetime.now(timezone.utc).timestamp() - ARTIFACT_RETENTION_DAYS * 86400
+    bundles = sorted((path for path in artifact_root.iterdir() if path.is_dir()), key=lambda path: path.stat().st_mtime)
+    for path in bundles:
+        if path.stat().st_mtime < cutoff or len(bundles) > MAX_ARTIFACT_BUNDLES:
+            shutil.rmtree(path)
+            bundles.remove(path)
+
+
+def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, job_id: str) -> Path:
+    _prepare_artifact_root(artifact_root)
+    destination = artifact_root / job_id
+    destination.mkdir()
+    for path in fixture.workdir.iterdir():
+        if path.is_file():
+            shutil.copy2(path, destination / path.name)
+    return destination
+
+
+def _artifact_file_manifest(
+    workdir: Path,
+    api_prefix: str,
+    artifact_id: str,
+    expected_outputs: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    names = {path.name for path in workdir.iterdir() if path.is_file()}
+    names.update(expected_outputs or [])
+    paths = [workdir / name for name in sorted(names)]
     manifest: list[dict[str, Any]] = []
     for path in paths:
         if path.exists():
             content = path.read_text(encoding="utf-8", errors="replace")
             manifest.append(
                 {
-                    "path": str(path),
                     "name": path.name,
+                    "download_url": f"{api_prefix}/analysis-artifacts/{artifact_id}/{path.name}",
                     "bytes": path.stat().st_size,
                     "content_preview": content[:6000],
                 }
@@ -213,7 +245,6 @@ def _artifact_file_manifest(fixture: FixtureRunArtifacts) -> list[dict[str, Any]
         else:
             manifest.append(
                 {
-                    "path": str(path),
                     "name": path.name,
                     "missing": True,
                 }
@@ -221,7 +252,22 @@ def _artifact_file_manifest(fixture: FixtureRunArtifacts) -> list[dict[str, Any]
     return manifest
 
 
-def run_calculix_fixture(project: Project, job: AnalysisJob) -> AnalysisJob:
+def _solver_completion_evidence(workdir: Path) -> bool:
+    status_path = workdir / f"{CALCULIX_FIXTURE_DECK_NAME}.sta"
+    if not status_path.exists():
+        return False
+    status = status_path.read_text(encoding="utf-8", errors="replace").lower()
+    return "error" not in status and "fail" not in status and any(
+        marker in status for marker in ("complete", "success", "finished")
+    )
+
+
+def run_calculix_fixture(
+    project: Project,
+    job: AnalysisJob,
+    artifact_root: Path = Path(".mechaflow-artifacts"),
+    api_prefix: str = "/api",
+) -> AnalysisJob:
     """Run or prepare a deterministic CalculiX fixture job with honest provenance."""
 
     now = datetime.now(timezone.utc)
@@ -229,6 +275,7 @@ def run_calculix_fixture(project: Project, job: AnalysisJob) -> AnalysisJob:
     statuses = list_local_solver_tool_statuses()
     calculix = _calculix_status(statuses)
     fixture = _write_fixture_input()
+    artifact_id = f"artifact-{uuid4()}"
     common_payload: dict[str, Any] = {
         "artifact_contract": "local_calculix_fixture_run_v1",
         "target_context": {
@@ -255,7 +302,7 @@ def run_calculix_fixture(project: Project, job: AnalysisJob) -> AnalysisJob:
 
     if calculix.availability != LocalSolverToolAvailability.available or not calculix.resolved_command:
         artifact = AnalysisArtifact(
-            id=f"artifact-{uuid4()}",
+            id=artifact_id,
             job_id=job.id,
             kind=AnalysisArtifactKind.fea_summary,
             title="CalculiX solver fixture prepared, solver unavailable",
@@ -268,12 +315,19 @@ def run_calculix_fixture(project: Project, job: AnalysisJob) -> AnalysisJob:
                 "result_label": "solver_unavailable_review_required",
                 "missing_tools": ["CalculiX"],
                 "install_guidance": calculix.install_guidance,
-                "file_manifest": _artifact_file_manifest(fixture),
+                "file_manifest": _artifact_file_manifest(
+                    _persist_fixture_files(fixture, artifact_root, job.id),
+                    api_prefix,
+                    artifact_id,
+                    fixture.expected_outputs,
+                ),
+                "retention": f"Persisted for {ARTIFACT_RETENTION_DAYS} days, capped at {MAX_ARTIFACT_BUNDLES} bundles.",
             },
             confidence=RecommendationConfidence.unknown,
             generated_by=LOCAL_SOLVER_FIXTURE_RUNNER_NAME,
             created_at=now,
         )
+        shutil.rmtree(fixture.workdir)
         return job.model_copy(
             update={
                 "status": AnalysisJobStatus.solver_unavailable,
@@ -307,12 +361,20 @@ def run_calculix_fixture(project: Project, job: AnalysisJob) -> AnalysisJob:
         timed_out = True
         stderr = str(exc)
         stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+    except OSError as exc:
+        return_code = None
+        timed_out = False
+        stderr = str(exc)
+        stdout = ""
 
-    file_manifest = _artifact_file_manifest(fixture)
+    durable_workdir = _persist_fixture_files(fixture, artifact_root, job.id)
+    shutil.rmtree(fixture.workdir)
+    file_manifest = _artifact_file_manifest(durable_workdir, api_prefix, artifact_id)
     produced_outputs = [entry["name"] for entry in file_manifest if not entry.get("missing")]
-    solver_succeeded = return_code == 0 and any(name.endswith(".dat") for name in produced_outputs)
+    expected_outputs = {f"{CALCULIX_FIXTURE_DECK_NAME}.{suffix}" for suffix in ("dat", "frd", "sta")}
+    solver_succeeded = return_code == 0 and expected_outputs.issubset(produced_outputs) and _solver_completion_evidence(durable_workdir)
     artifact = AnalysisArtifact(
-        id=f"artifact-{uuid4()}",
+        id=artifact_id,
         job_id=job.id,
         kind=AnalysisArtifactKind.fea_summary,
         title=(
@@ -336,6 +398,7 @@ def run_calculix_fixture(project: Project, job: AnalysisJob) -> AnalysisJob:
             "stderr": stderr[-6000:],
             "file_manifest": file_manifest,
             "produced_outputs": produced_outputs,
+            "retention": f"Persisted for {ARTIFACT_RETENTION_DAYS} days, capped at {MAX_ARTIFACT_BUNDLES} bundles.",
         },
         confidence=RecommendationConfidence.calculated if solver_succeeded else RecommendationConfidence.unknown,
         generated_by=LOCAL_SOLVER_FIXTURE_RUNNER_NAME,

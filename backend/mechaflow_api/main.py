@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -734,6 +735,23 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
     def analysis_job(job_id: str) -> AnalysisJob:
         return get_analysis_job_or_404(job_id)
 
+    @app.get(f"{settings.api_prefix}/analysis-artifacts/{{artifact_id}}/{{file_name}}", tags=["jobs"])
+    def analysis_artifact_file(artifact_id: str, file_name: str) -> FileResponse:
+        if Path(file_name).name != file_name:
+            raise HTTPException(status_code=404, detail="artifact file not found")
+        for job in project_store.list_analysis_jobs():
+            artifact = next((item for item in job.artifacts if item.id == artifact_id), None)
+            if artifact is None:
+                continue
+            manifest = artifact.payload.get("file_manifest", [])
+            if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
+                raise HTTPException(status_code=404, detail="artifact file not found")
+            path = settings.artifact_dir / job.id / file_name
+            if not path.is_file():
+                raise HTTPException(status_code=404, detail="artifact file expired")
+            return FileResponse(path, filename=file_name)
+        raise HTTPException(status_code=404, detail="artifact not found")
+
     @app.get(f"{settings.api_prefix}/analysis-jobs/{{job_id}}/plan", response_model=AnalysisJobPlan, tags=["jobs"])
     def analysis_job_plan(job_id: str) -> AnalysisJobPlan:
         job = get_analysis_job_or_404(job_id)
@@ -832,7 +850,12 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             raise HTTPException(status_code=404, detail="analysis job not found")
         project = get_project_or_404(running_job.project_id)
         try:
-            completed_job = run_calculix_fixture(project, running_job)
+            completed_job = run_calculix_fixture(
+                project,
+                running_job,
+                artifact_root=settings.artifact_dir,
+                api_prefix=settings.api_prefix,
+            )
         except PartNotFoundError as exc:
             def mark_failed(job: AnalysisJob) -> AnalysisJob:
                 return job.model_copy(
