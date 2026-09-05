@@ -746,7 +746,10 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
             manifest = artifact.payload.get("file_manifest", [])
             if not any(item.get("name") == file_name and not item.get("missing") for item in manifest):
                 raise HTTPException(status_code=404, detail="artifact file not found")
-            path = settings.artifact_dir / job.id / file_name
+            artifact_root = settings.artifact_dir.resolve()
+            path = (artifact_root / job.id / file_name).resolve()
+            if not path.is_relative_to(artifact_root):
+                raise HTTPException(status_code=404, detail="artifact file not found")
             if not path.is_file():
                 raise HTTPException(status_code=404, detail="artifact file expired")
             return FileResponse(path, filename=file_name)
