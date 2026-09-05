@@ -30,7 +30,9 @@
               "part-palm-plate",
               "part-controller-pcb"
             ],
-            "child_assembly_ids": [],
+            "child_assembly_ids": [
+              "asm-finger"
+            ],
             "exploded_transform": {
               "translation_mm": {
                 "x": -90,
@@ -807,6 +809,36 @@
             }
           }
         ],
+        "wiring_routes": [],
+        "assembly_structure_confidence": "unknown_or_needs_review"
+      },
+      {
+        "id": "asm-finger",
+        "name": "Finger subassembly",
+        "root_node_id": "node-finger-assembly",
+        "nodes": [
+          {
+            "id": "node-finger-assembly",
+            "name": "Finger subassembly visual",
+            "assembly_id": "asm-finger",
+            "part_id": "part-finger-link",
+            "part_ids": [],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": 80,
+                "y": 0,
+                "z": 0
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
+          }
+        ],
+        "parts": [],
         "wiring_routes": [],
         "assembly_structure_confidence": "unknown_or_needs_review"
       }

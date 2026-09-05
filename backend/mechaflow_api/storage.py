@@ -14,7 +14,7 @@ from threading import RLock
 from typing import Protocol
 
 from .adapters import artifact_kind_for_job, get_adapter_for_job
-from .catalog import DEFAULT_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
+from .catalog import DEFAULT_ASSEMBLY, DEFAULT_FINGER_ASSEMBLY, DEFAULT_MATERIALS, DEFAULT_REFERENCE_DESIGNS, GRIPPER_TASK
 from .models import (
     AnalysisArtifact,
     AnalysisArtifactKind,
@@ -405,7 +405,7 @@ def build_sample_project() -> Project:
         description="Local seed project for frontend integration before persistence is added.",
         reference_design_id=DEFAULT_REFERENCE_DESIGNS[0].id,
         active_task=GRIPPER_TASK,
-        assemblies=[DEFAULT_ASSEMBLY],
+        assemblies=[DEFAULT_ASSEMBLY, DEFAULT_FINGER_ASSEMBLY],
         materials=DEFAULT_MATERIALS,
         analysis_jobs=build_sample_analysis_jobs(),
         reports=build_sample_reports(),

@@ -206,9 +206,13 @@ const fallbackReadinessPreviews = () => project.assemblies.flatMap((assembly) =>
   return [assemblyPreview, ...partPreviews];
 });
 
-const currentReadinessPreviews = () => (
-  analysisReadinessPreviews.length > 0 ? analysisReadinessPreviews : fallbackReadinessPreviews()
-);
+const currentReadinessPreviews = () => {
+  const targetIds = project.assemblies.flatMap((assembly) => [assembly.id, ...assembly.parts.map((part) => part.id)]);
+  const previewIds = new Set(analysisReadinessPreviews.map((preview) => preview.target_id));
+  return targetIds.every((targetId) => previewIds.has(targetId))
+    ? analysisReadinessPreviews
+    : fallbackReadinessPreviews();
+};
 
 const projectPanelData = () => ({
   ...mockBackendPanelData,

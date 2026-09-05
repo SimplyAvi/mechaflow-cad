@@ -369,6 +369,21 @@ DEFAULT_ASSEMBLY = Assembly(
     assembly_structure_confidence=RecommendationConfidence.heuristic,
 )
 
+DEFAULT_FINGER_ASSEMBLY = Assembly(
+    id="asm-finger",
+    name="Finger subassembly",
+    root_node_id="node-finger-assembly",
+    nodes=[
+        AssemblyNode(
+            id="node-finger-assembly",
+            name="Finger subassembly visual",
+            assembly_id="asm-finger",
+            part_id="part-finger-link",
+            exploded_transform={"translation_mm": {"x": 80, "y": 0, "z": 0}},
+        )
+    ],
+)
+
 
 DEFAULT_REFERENCE_DESIGNS = [
     ReferenceDesign(
