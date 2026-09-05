@@ -6,7 +6,11 @@ const appName = process.env.MECHAFLOW_DESKTOP_APP_NAME || 'MechaFlow CAD';
 const desktopUrl = process.env.MECHAFLOW_DESKTOP_URL;
 const smokeMode = process.env.MECHAFLOW_DESKTOP_SMOKE === '1';
 const iconPath = path.resolve(__dirname, '..', 'resources', 'mechaflow-icon.svg');
-const appIcon = nativeImage.createFromPath(iconPath);
+const appIcon = fs.existsSync(iconPath)
+  ? nativeImage.createFromBuffer(
+      nativeImage.createFromDataURL(`data:image/svg+xml;base64,${fs.readFileSync(iconPath).toString('base64')}`).toPNG(),
+    )
+  : nativeImage.createEmpty();
 
 if (!desktopUrl) {
   throw new Error('MECHAFLOW_DESKTOP_URL must point to the local Vite demo URL. Use npm start or npm run desktop:dev.');
@@ -26,7 +30,6 @@ app.setAboutPanelOptions({
   applicationVersion: app.getVersion(),
   copyright: 'MIT licensed open-source MVP demo',
   website: 'https://github.com/SimplyAvi/mechaflow-cad',
-  ...(fs.existsSync(iconPath) ? { iconPath } : {}),
 });
 
 const isDesktopOrigin = (url) => {
