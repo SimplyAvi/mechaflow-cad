@@ -9,7 +9,13 @@ from fastapi.testclient import TestClient
 
 import mechaflow_api.main as main_module
 from mechaflow_api.main import app
-from mechaflow_api.models import AnalysisJobType, ManufacturingProcess
+from mechaflow_api.models import (
+    AnalysisJobType,
+    LocalSolverToolAvailability,
+    LocalSolverToolReviewStatus,
+    LocalSolverToolStatus,
+    ManufacturingProcess,
+)
 from mechaflow_api.storage import InMemoryProjectStore, build_sample_project
 
 
@@ -303,6 +309,26 @@ def test_project_file_import_rejects_inconsistent_non_empty_wiring_lists() -> No
 
     assert imported.status_code == 422
     assert "mismatched terminals" in imported.json()["detail"]
+
+
+def test_project_file_import_rejects_stale_artifact_download_references() -> None:
+    local_client = TestClient(main_module.create_app())
+    project_file = local_client.get("/api/projects/project-open-gripper-demo/export-file").json()
+    artifact = project_file["project"]["analysis_jobs"][0]["artifacts"][0]
+    artifact["payload"] = {
+        "file_manifest": [
+            {
+                "name": "report.json",
+                "download_url": "/api/analysis-artifacts/another-artifact/report.json",
+                "bytes": 12,
+            }
+        ]
+    }
+
+    imported = local_client.post("/api/projects/import-file", json=project_file)
+
+    assert imported.status_code == 422
+    assert "stale or impossible download_url" in imported.json()["detail"]
 
 
 
@@ -1083,6 +1109,86 @@ def test_project_pre_solver_run_creates_review_required_artifact(monkeypatch) ->
     assert fetched.json()["status"] == "completed"
     panel_jobs = local_client.get("/api/projects/project-open-gripper-demo/panel-data").json()["project"]["analysis_jobs"]
     assert any(job["id"] == payload["id"] for job in panel_jobs)
+
+
+def _unavailable_tool_statuses() -> list[LocalSolverToolStatus]:
+    return [
+        LocalSolverToolStatus(
+            adapter_name=f"{tool.lower()}-worker",
+            open_source_tool=tool,
+            role="Test unavailable local tool boundary.",
+            binary_candidates=[tool.lower()],
+            availability=LocalSolverToolAvailability.unavailable,
+            review_status=LocalSolverToolReviewStatus.unavailable_review_required,
+            message=f"{tool} is not installed for this deterministic test.",
+        )
+        for tool in ["FreeCAD", "Gmsh", "CalculiX"]
+    ]
+
+
+def test_analysis_job_queue_explains_targets_estimates_and_cached_artifacts(monkeypatch) -> None:
+    monkeypatch.setattr(main_module, "list_local_solver_tool_statuses", _unavailable_tool_statuses)
+    local_client = TestClient(main_module.create_app())
+
+    completed = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs",
+        json={"target_id": "part-finger-link"},
+    )
+    queue = local_client.get("/api/projects/project-open-gripper-demo/analysis-job-queue")
+
+    assert completed.status_code == 202
+    assert queue.status_code == 200
+    payload = queue.json()
+    assert payload["project_id"] == "project-open-gripper-demo"
+    assert payload["status_counts"]["completed"] >= 1
+    assert "cloud-planning only" in payload["summary"]
+    job = next(item for item in payload["jobs"] if item["id"] == completed.json()["id"])
+    assert job["recommendation"]["recommended_target"] == "local"
+    assert job["recommendation"]["cost_estimate"] == {
+        "label": "local pre-solver cost estimate",
+        "min": 0,
+        "max": 0,
+        "unit": "USD",
+        "basis": "deterministic_local_heuristic",
+        "confidence": "estimated_from_heuristic",
+        "notice": "Local pre-solver packaging uses the desktop machine. This is not paid compute.",
+    }
+    assert job["cached_artifact_refs"][0]["status"] == "metadata_only"
+    assert job["artifacts"][-1]["payload"]["result_label"] == "review_required_not_fea"
+
+
+def test_analysis_recommendation_prefers_cloud_planning_when_local_tools_are_missing(monkeypatch) -> None:
+    monkeypatch.setattr(main_module, "list_local_solver_tool_statuses", _unavailable_tool_statuses)
+    local_client = TestClient(main_module.create_app())
+
+    local_response = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/recommendation",
+        json={
+            "job_type": AnalysisJobType.quick_load_heuristic.value,
+            "target_id": "part-finger-link",
+            "project_id": "ignored-by-path",
+        },
+    )
+    cloud_response = local_client.post(
+        "/api/projects/project-open-gripper-demo/analysis-jobs/recommendation",
+        json={
+            "job_type": AnalysisJobType.generate_exploded_view.value,
+            "target_id": "asm-open-gripper-demo",
+            "project_id": "ignored-by-path",
+        },
+    )
+
+    assert local_response.status_code == 200
+    assert local_response.json()["recommended_target"] == "local"
+    assert local_response.json()["cost_estimate"]["notice"].endswith("not a paid compute quote.")
+    assert cloud_response.status_code == 200
+    cloud_payload = cloud_response.json()
+    assert cloud_payload["recommended_target"] == "cloud_recommended_when_configured"
+    assert cloud_payload["cloud_execution_available"] is False
+    assert cloud_payload["cloud_configuration_required"] is True
+    assert cloud_payload["cost_estimate"]["basis"] == "cloud_planning_estimate"
+    assert "not real billing" in cloud_payload["cost_estimate"]["notice"]
+    assert "FreeCAD" in cloud_payload["missing_local_tools"]
 
 
 def test_existing_analysis_job_can_run_local_pre_solver_boundary() -> None:

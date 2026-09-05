@@ -24,6 +24,7 @@ from .catalog import (
     DEFAULT_WIRING_RULES,
     GRIPPER_TASK,
 )
+from .job_queue import validate_cached_references
 from .models import (
     AnalysisArtifact,
     AnalysisArtifactKind,
@@ -122,10 +123,26 @@ def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None
             )
     normalized_job_id = job.id if job_id is None else job_id
     artifacts = [artifact.model_copy(update={"job_id": normalized_job_id}, deep=True) for artifact in job.artifacts]
-    return job.model_copy(
-        update={"id": normalized_job_id, "project_id": project_id, "artifacts": artifacts},
+    cached_artifact_refs = [
+        ref.model_copy(update={"job_id": normalized_job_id, "project_id": project_id}, deep=True)
+        for ref in job.cached_artifact_refs
+    ]
+    cached_report_refs = [
+        ref.model_copy(update={"project_id": project_id}, deep=True)
+        for ref in job.cached_report_refs
+    ]
+    normalized = job.model_copy(
+        update={
+            "id": normalized_job_id,
+            "project_id": project_id,
+            "artifacts": artifacts,
+            "cached_artifact_refs": cached_artifact_refs,
+            "cached_report_refs": cached_report_refs,
+        },
         deep=True,
     )
+    validate_cached_references(project_id, normalized)
+    return normalized
 
 
 def normalize_project_references(project_id: str, project: Project) -> Project:

@@ -831,9 +831,41 @@ small,
 
 .solver-state-grid,
 .solver-tools,
-.runner-actions {
+.runner-actions,
+.queue-metrics,
+.estimate-grid {
   display: grid;
   gap: 10px;
+}
+
+.job-queue-panel {
+  grid-column: span 2;
+}
+
+.queue-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 14px 0;
+}
+
+.queue-metrics div,
+.recommendation-card,
+.cache-strip {
+  background: rgba(2, 6, 23, 0.34);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.queue-metrics strong {
+  display: block;
+  font-size: 1.35rem;
+}
+
+.queue-metrics span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .solver-state-grid,
@@ -944,6 +976,72 @@ small,
 .job-row {
   display: grid;
   gap: 8px;
+}
+
+.job-row-heading {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.recommendation-card {
+  border-color: rgba(56, 189, 248, 0.26);
+  display: grid;
+  gap: 8px;
+}
+
+.recommendation-card.target-cloud_recommended_when_configured {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.recommendation-card.target-unavailable {
+  border-color: rgba(248, 113, 113, 0.42);
+}
+
+.recommendation-card span,
+.recommendation-card dt,
+.cache-strip strong {
+  color: #7dd3fc;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.estimate-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.estimate-grid div {
+  background: rgba(15, 23, 42, 0.52);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.estimate-grid dd {
+  margin: 2px 0 0;
+}
+
+.cache-strip {
+  display: grid;
+  gap: 4px;
+}
+
+.artifact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.artifact-links a,
+.artifact-list a {
+  color: #7dd3fc;
+  font-weight: 800;
+  margin-left: 8px;
 }
 
 .selected-manufacturing {
@@ -1172,6 +1270,7 @@ small,
     grid-template-columns: 1fr 1fr;
   }
 
+  .job-queue-panel,
   .wiring-workflow-panel {
     grid-column: 1 / -1;
   }
@@ -1210,7 +1309,9 @@ small,
   .meta-grid,
   .readiness-summary,
   .connector-list,
-  .wiring-context-grid {
+  .wiring-context-grid,
+  .queue-metrics,
+  .estimate-grid {
     grid-template-columns: 1fr;
   }
 }

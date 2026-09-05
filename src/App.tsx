@@ -46,6 +46,18 @@ const formatLeadTimeRange = (range?: { min: number | null; max: number | null } 
   return `up to ${range.max} days`;
 };
 
+const formatAnalysisEstimate = (estimate?: { min: number | null; max: number | null; unit: string } | null): string => {
+  if (!estimate || (estimate.min == null && estimate.max == null)) return 'unavailable until configured';
+  const unit = estimate.unit === 'USD' ? '' : ` ${estimate.unit}`;
+  const value = (amount: number) => estimate.unit === 'USD' ? formatCurrency(amount) : formatMeasurement(amount);
+  if (estimate.min != null && estimate.max != null) {
+    if (estimate.min === estimate.max) return `${value(estimate.min)}${unit}`;
+    return `${value(estimate.min)}-${value(estimate.max)}${unit}`;
+  }
+  if (estimate.min != null) return `from ${value(estimate.min)}${unit}`;
+  return `up to ${value(estimate.max ?? 0)}${unit}`;
+};
+
 const formatThresholdMeasurement = (value: number, threshold: number): string => {
   const isBelow = value < threshold;
   for (let digits = 2; digits <= 6; digits += 1) {
@@ -995,14 +1007,28 @@ function AnalysisPanel({
 }) {
   const canRun = Boolean(design.backend.apiBaseUrl) && !runPending;
   const fixtureMode = solverReadiness?.execution_modes.find((mode) => mode.id === 'calculix_fixture');
+  const jobCounts = design.analysisJobs.reduce<Record<string, number>>((counts, job) => {
+    counts[job.status] = (counts[job.status] ?? 0) + 1;
+    return counts;
+  }, {});
+  const resolveArtifactUrl = (downloadUrl: string): string => {
+    if (/^https?:\/\//.test(downloadUrl)) return downloadUrl;
+    return `${design.backend.apiBaseUrl ?? ''}${downloadUrl}`;
+  };
   return (
-    <article className="panel">
-      <p className="eyebrow">Background analysis status</p>
-      <h2>Local solver readiness</h2>
+    <article className="panel job-queue-panel">
+      <p className="eyebrow">Analysis job queue</p>
+      <h2>Local-first orchestration and cached reports</h2>
       <p>
-        Pre-solver packages are still separate from real solver output. The executable boundary can run a small
-        deterministic CalculiX fixture when the binary is installed, or it reports exactly which tool is missing.
+        The queue explains every pending, running, completed, failed, solver-unavailable, and review-required job.
+        Cloud guidance is planning-only until a provider, credentials, budget guardrails, and explicit approval exist.
       </p>
+      <div className="queue-metrics" aria-label="Analysis job queue status counts">
+        <div><strong>{design.analysisJobs.length}</strong><span>jobs tracked</span></div>
+        <div><strong>{jobCounts.running ?? 0}</strong><span>running</span></div>
+        <div><strong>{jobCounts.complete ?? 0}</strong><span>completed</span></div>
+        <div><strong>{(jobCounts['review-required'] ?? 0) + (jobCounts['solver-unavailable'] ?? 0) + (jobCounts.blocked ?? 0)}</strong><span>need action</span></div>
+      </div>
       <div className="solver-state-grid" aria-label="Local solver readiness states">
         <div>
           <strong>Selected target</strong>
@@ -1046,57 +1072,128 @@ function AnalysisPanel({
         <small className="runner-note">Connect the React desktop demo to the local FastAPI backend to persist runner jobs.</small>
       ) : null}
       {runMessage ? <p className="runner-message" aria-live="polite">{runMessage}</p> : null}
-      <div className="job-list">
-        {design.analysisJobs.map((job) => (
-          <div className="job-row" key={job.id}>
-            <div>
-              <strong>{job.name}</strong>
-              <small>{job.worker}</small>
-            </div>
-            <div
-              className="progress-track"
-              aria-label={`${job.name} ${job.progress == null ? 'progress unknown' : `${job.progress}%`}`}
-            >
-              <span style={{ width: `${job.progress ?? 0}%` }} />
-            </div>
-            <span className={`job-status ${job.status}`}>{job.status.replaceAll('-', ' ')}</span>
-            <p>{job.summary}</p>
-            {job.trustLabel || job.reviewStatus ? (
-              <small className="runner-note">
-                {job.trustLabel?.replaceAll('_', ' ') ?? 'analysis job'} - {job.reviewStatus?.replaceAll('_', ' ') ?? 'status review required'}
-              </small>
-            ) : null}
-            {job.artifacts.length > 0 ? (
-              <ul className="artifact-list" aria-label={`${job.name} artifacts`}>
-                {job.artifacts.map((artifact) => {
-                  const manifestValue = artifact.payload?.file_manifest;
-                  const fileManifest = Array.isArray(manifestValue)
-                    ? manifestValue as Array<Record<string, unknown>>
-                    : [];
-                  return (
-                    <li key={`${job.id}-${artifact.kind}-${artifact.title}`}>
-                      {artifact.title} ({artifact.kind.replaceAll('_', ' ')})
-                      {artifact.generatedBy ? ` from ${artifact.generatedBy}` : ''}
-                      {artifact.summary ? <small>{artifact.summary}</small> : null}
-                      {fileManifest.length > 0 ? (
-                        <details>
-                          <summary>Generated files and logs</summary>
-                          <ul>
-                            {fileManifest.slice(0, 5).map((file) => (
-                              <li key={`${String(file.name)}-${String(file.path)}`}>
-                                <code>{String(file.name)}</code>{file.missing ? ' missing until solver runs' : ` ${String(file.bytes ?? '?')} bytes`}
-                              </li>
+      <div className="job-list" aria-label="Analysis jobs with recommendations and cached artifacts">
+        {design.analysisJobs.map((job) => {
+          const recommendation = job.recommendation;
+          const targetLabel = recommendation?.recommended_target.replaceAll('_', ' ') ?? 'recommendation unavailable';
+          return (
+            <div className="job-row" key={job.id}>
+              <div className="job-row-heading">
+                <div>
+                  <strong>{job.name}</strong>
+                  <small>{job.worker} for {job.targetId}</small>
+                </div>
+                <span className={`job-status ${job.status}`}>{job.status.replaceAll('-', ' ')}</span>
+              </div>
+              <div
+                className="progress-track"
+                aria-label={`${job.name} ${job.progress == null ? 'progress unknown' : `${job.progress}%`}`}
+              >
+                <span style={{ width: `${job.progress ?? 0}%` }} />
+              </div>
+              <p>{job.summary}</p>
+              {recommendation ? (
+                <section className={`recommendation-card target-${recommendation.recommended_target}`}>
+                  <div>
+                    <span>Recommended target</span>
+                    <strong>{targetLabel}</strong>
+                    <small>{recommendation.status.replaceAll('_', ' ')}</small>
+                  </div>
+                  <p>{recommendation.summary}</p>
+                  <dl className="estimate-grid">
+                    <div>
+                      <dt>Runtime estimate</dt>
+                      <dd>{formatAnalysisEstimate(recommendation.expected_runtime_minutes)}</dd>
+                    </div>
+                    <div>
+                      <dt>Cost estimate</dt>
+                      <dd>{formatAnalysisEstimate(recommendation.cost_estimate)}</dd>
+                    </div>
+                    <div>
+                      <dt>Wait estimate</dt>
+                      <dd>{formatAnalysisEstimate(recommendation.wait_time_estimate)}</dd>
+                    </div>
+                  </dl>
+                  <small className="runner-note">{recommendation.cost_estimate.notice}</small>
+                  {recommendation.missing_local_tools.length > 0 ? (
+                    <small className="runner-note">Missing local tools: {recommendation.missing_local_tools.join(', ')}</small>
+                  ) : null}
+                  <details>
+                    <summary>Why this recommendation?</summary>
+                    <ul>
+                      {recommendation.reasons.slice(0, 4).map((reason) => <li key={reason}>{reason}</li>)}
+                      {recommendation.review_required.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </details>
+                </section>
+              ) : null}
+              {job.trustLabel || job.reviewStatus ? (
+                <small className="runner-note">
+                  {job.trustLabel?.replaceAll('_', ' ') ?? 'analysis job'} - {job.reviewStatus?.replaceAll('_', ' ') ?? 'status review required'}
+                </small>
+              ) : null}
+              {job.cachedReportRefs.length > 0 ? (
+                <div className="cache-strip" aria-label={`${job.name} cached reports`}>
+                  <strong>Cached reports</strong>
+                  {job.cachedReportRefs.map((report) => (
+                    <small key={report.report_id}>{report.title} - {report.status.replaceAll('_', ' ')}{report.current ? '' : ' superseded'}</small>
+                  ))}
+                </div>
+              ) : null}
+              {job.cachedArtifactRefs.length > 0 || job.artifacts.length > 0 ? (
+                <ul className="artifact-list" aria-label={`${job.name} artifacts`}>
+                  {(job.cachedArtifactRefs.length > 0 ? job.cachedArtifactRefs : job.artifacts.map((artifact) => ({
+                    artifact_id: artifact.id ?? `${job.id}-${artifact.kind}`,
+                    kind: artifact.kind,
+                    title: artifact.title,
+                    status: 'metadata_only' as const,
+                    generated_by: artifact.generatedBy ?? job.worker,
+                    download_urls: [],
+                    summary: artifact.summary,
+                    stale_reason: undefined,
+                  }))).map((artifactRef) => {
+                    const artifact = job.artifacts.find((item) => item.id === artifactRef.artifact_id || item.kind === artifactRef.kind);
+                    const manifestValue = artifact?.payload?.file_manifest;
+                    const fileManifest = Array.isArray(manifestValue)
+                      ? manifestValue as Array<Record<string, unknown>>
+                      : [];
+                    return (
+                      <li key={`${job.id}-${artifactRef.artifact_id}-${artifactRef.title}`}>
+                        {artifactRef.title} ({artifactRef.kind.replaceAll('_', ' ')})
+                        <small>{artifactRef.status.replaceAll('_', ' ')} from {artifactRef.generated_by}</small>
+                        {artifactRef.summary ? <small>{artifactRef.summary}</small> : null}
+                        {artifactRef.stale_reason ? <small className="runner-note">{artifactRef.stale_reason}</small> : null}
+                        {artifactRef.download_urls.length > 0 ? (
+                          <div className="artifact-links">
+                            {artifactRef.download_urls.map((url) => (
+                              <a href={resolveArtifactUrl(url)} key={url}>Download cached artifact</a>
                             ))}
-                          </ul>
-                        </details>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-          </div>
-        ))}
+                          </div>
+                        ) : null}
+                        {fileManifest.length > 0 ? (
+                          <details>
+                            <summary>Generated files and logs</summary>
+                            <ul>
+                              {fileManifest.slice(0, 5).map((file) => {
+                                const downloadUrl = typeof file.download_url === 'string' ? file.download_url : null;
+                                return (
+                                  <li key={`${String(file.name)}-${downloadUrl ?? String(file.path)}`}>
+                                    <code>{String(file.name)}</code>{file.missing ? ' missing until solver runs' : ` ${String(file.bytes ?? '?')} bytes`}
+                                    {downloadUrl && !file.missing ? <a href={resolveArtifactUrl(downloadUrl)}>open</a> : null}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </details>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </article>
   );

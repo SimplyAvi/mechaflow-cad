@@ -237,6 +237,112 @@ const localSolverReadiness = () => ({
   summary: 'Mock backend cannot execute solver tools. Connect FastAPI for real command detection and CalculiX fixture execution.',
 });
 
+const estimate = (label, min, max, unit, basis, notice) => ({
+  label,
+  min,
+  max,
+  unit,
+  basis,
+  confidence: basis === 'unavailable' ? 'unknown_or_needs_review' : 'estimated_from_heuristic',
+  notice,
+});
+
+const mockJobRecommendation = (job) => {
+  const target = findTarget(job.target_id);
+  const isSafeLocal = job.adapter_name === 'local-pre-solver-runner' || job.job_type === 'quick_load_heuristic';
+  const needsCloudPlanning = ['freecad-worker', 'calculix-fea-worker'].includes(job.adapter_name) && !isSafeLocal;
+  const complexity = target?.kind === 'assembly' ? Math.max(1, target.partIds.length * 3) : 3;
+  if (isSafeLocal) {
+    return {
+      recommended_target: 'local',
+      status: 'review_required',
+      summary: 'Mock queue recommends the safe local pre-solver boundary because it does not invoke CAD, solver, cloud, or paid compute.',
+      reasons: ['Mock local pre-solver packaging is metadata-only.', `Target complexity score is ${complexity}.`],
+      missing_local_tools: [],
+      review_required: ['Artifact remains review-required and not FEA.'],
+      model_complexity_score: complexity,
+      expected_runtime_minutes: estimate('mock local runtime estimate', 1, 3, 'minutes', 'deterministic_local_heuristic', 'Mock estimate only. No solver benchmark was run.'),
+      cost_estimate: estimate('mock local cost estimate', 0, 0, 'USD', 'deterministic_local_heuristic', 'Local mock runs use no paid compute. This is not a quote.'),
+      wait_time_estimate: estimate('mock local queue wait estimate', 0, 2, 'minutes', 'deterministic_local_heuristic', 'Single mock queue estimate.'),
+      cloud_execution_available: false,
+      cloud_configuration_required: true,
+      cloud_notice: 'Cloud execution is not configured in the mock backend.',
+    };
+  }
+  if (needsCloudPlanning) {
+    return {
+      recommended_target: 'cloud_recommended_when_configured',
+      status: 'review_required',
+      summary: 'Mock queue shows cloud as planning-only because local heavy CAD or solver tools are unavailable.',
+      reasons: ['FreeCAD, Gmsh, or CalculiX are not available in the mock backend.', `Target complexity score is ${complexity}.`],
+      missing_local_tools: ['FreeCAD', 'Gmsh', 'CalculiX'],
+      review_required: ['Configure provider, credentials, budget guardrails, and explicit approval before remote execution.'],
+      model_complexity_score: complexity,
+      expected_runtime_minutes: estimate('mock local runtime planning estimate', complexity * 8, complexity * 12, 'minutes', 'deterministic_local_heuristic', 'Planning estimate only. No solver benchmark was run.'),
+      cost_estimate: estimate('mock cloud planning cost estimate, not a quote', complexity * 0.35, complexity * 1.25 + 2, 'USD', 'cloud_planning_estimate', 'Planning estimate only. This is not real billing, a supplier quote, or a compute-provider price.'),
+      wait_time_estimate: estimate('mock cloud planning wait estimate', 5, 20, 'minutes', 'cloud_planning_estimate', 'Hypothetical wait only until a cloud provider is configured.'),
+      cloud_execution_available: false,
+      cloud_configuration_required: true,
+      cloud_notice: 'Cloud execution is not configured in the mock backend.',
+    };
+  }
+  return {
+    recommended_target: 'local',
+    status: 'ready',
+    summary: 'Mock queue keeps this lightweight orchestration job local.',
+    reasons: ['This mock job is metadata, wiring, BOM, or manufacturing planning only.'],
+    missing_local_tools: [],
+    review_required: [],
+    model_complexity_score: complexity,
+    expected_runtime_minutes: estimate('mock local runtime estimate', 1, 8, 'minutes', 'deterministic_local_heuristic', 'Mock estimate only.'),
+    cost_estimate: estimate('mock local cost estimate', 0, 0, 'USD', 'deterministic_local_heuristic', 'Local mock runs use no paid compute. This is not a quote.'),
+    wait_time_estimate: estimate('mock local wait estimate', 0, 5, 'minutes', 'deterministic_local_heuristic', 'Single mock queue estimate.'),
+    cloud_execution_available: false,
+    cloud_configuration_required: true,
+    cloud_notice: 'Cloud execution is not configured in the mock backend.',
+  };
+};
+
+const cachedArtifactRefsFor = (job) => (job.artifacts ?? []).map((artifact) => ({
+  artifact_id: artifact.id,
+  job_id: job.id,
+  project_id: projectId,
+  kind: artifact.kind,
+  title: artifact.title,
+  status: Array.isArray(artifact.payload?.file_manifest) ? 'stale_missing_files' : 'metadata_only',
+  generated_by: artifact.generated_by,
+  generated_at: artifact.created_at ?? new Date().toISOString(),
+  download_urls: [],
+  summary: artifact.summary,
+  stale_reason: Array.isArray(artifact.payload?.file_manifest) ? 'Mock backend does not serve persisted artifact files.' : 'Artifact metadata only.',
+}));
+
+const analysisJobQueue = () => {
+  const jobs = project.analysis_jobs.map((job) => ({
+    ...job,
+    recommendation: job.recommendation ?? mockJobRecommendation(job),
+    cached_artifact_refs: job.cached_artifact_refs ?? cachedArtifactRefsFor(job),
+    cached_report_refs: job.cached_report_refs ?? [],
+  }));
+  const statusCounts = Object.fromEntries([...new Set(jobs.map((job) => job.status))].map((status) => [
+    status,
+    jobs.filter((job) => job.status === status).length,
+  ]));
+  const localReady = jobs.filter((job) => job.recommendation.recommended_target === 'local').length;
+  const cloudPlanning = jobs.filter((job) => job.recommendation.recommended_target === 'cloud_recommended_when_configured').length;
+  const reviewRequired = jobs.filter((job) => job.recommendation.status === 'review_required').length;
+  return {
+    project_id: projectId,
+    jobs,
+    status_counts: statusCounts,
+    local_ready_count: localReady,
+    cloud_planning_count: cloudPlanning,
+    review_required_count: reviewRequired,
+    unavailable_count: jobs.filter((job) => job.recommendation.status === 'unavailable').length,
+    summary: `${jobs.length} analysis jobs: ${localReady} local-ready, ${cloudPlanning} cloud-planning only, ${reviewRequired} review-required.`,
+  };
+};
+
 const fallbackReadinessPreviews = () => project.assemblies.flatMap((assembly) => {
   const assemblyPreview = {
     project_id: project.id,
@@ -1138,7 +1244,7 @@ const projectFileValidationError = (file) => {
     error = uniqueIds(candidate.analysis_jobs, 'project.analysis_jobs');
     if (error) return error;
     for (const job of candidate.analysis_jobs) {
-      error = rejectUnknownFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'local_compute_preferred', 'input_summary', 'result_summary', 'artifacts', 'created_at', 'updated_at'], 'project.analysis_jobs');
+      error = rejectUnknownFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'local_compute_preferred', 'input_summary', 'result_summary', 'artifacts', 'recommendation', 'cached_artifact_refs', 'cached_report_refs', 'created_at', 'updated_at'], 'project.analysis_jobs');
       if (error) return error;
       error = requiredFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'input_summary', 'result_summary', 'artifacts'], 'project.analysis_jobs');
       if (error) return error;
@@ -1152,6 +1258,16 @@ const projectFileValidationError = (file) => {
       if (typeof job.local_compute_preferred !== 'boolean') return `analysis job ${job.id}.local_compute_preferred must be a boolean`;
       error = requireObject(job.input_summary, `analysis job ${job.id}.input_summary`) || requireObject(job.result_summary, `analysis job ${job.id}.result_summary`);
       if (error) return error;
+      if (job.recommendation != null) {
+        error = requireObject(job.recommendation, `analysis job ${job.id}.recommendation`);
+        if (error) return error;
+      }
+      for (const field of ['cached_artifact_refs', 'cached_report_refs']) {
+        if (job[field] != null) {
+          error = requireArray(job[field], `analysis job ${job.id}.${field}`);
+          if (error) return error;
+        }
+      }
       for (const field of ['created_at', 'updated_at']) {
         if (Object.hasOwn(job, field)) {
           error = requireDateString(job[field], `analysis job ${job.id}.${field}`);
@@ -1846,6 +1962,53 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/local-analysis/solver-readiness') {
       send(200, localSolverReadiness());
+      return;
+    }
+
+    if (request.method === 'GET' && isProjectPath(url.pathname, '/analysis-job-queue')) {
+      send(200, analysisJobQueue());
+      return;
+    }
+
+    if (request.method === 'GET' && isProjectPath(url.pathname, '/analysis-jobs')) {
+      send(200, analysisJobQueue().jobs);
+      return;
+    }
+
+    if (request.method === 'POST' && isProjectPath(url.pathname, '/analysis-jobs/recommendation')) {
+      if (!isOriginAllowed(request)) {
+        send(403, { error: 'origin is not allowed' });
+        return;
+      }
+      const contentType = request.headers['content-type']?.split(';', 1)[0].trim().toLowerCase();
+      if (contentType !== 'application/json') {
+        send(415, { error: 'content-type must be application/json' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(request);
+      } catch {
+        send(422, { error: 'request body must contain valid JSON' });
+        return;
+      }
+      if (!body || typeof body.job_type !== 'string' || typeof body.target_id !== 'string') {
+        send(422, { error: 'job_type and target_id are required' });
+        return;
+      }
+      const defaultAdapter = ['import_design', 'generate_exploded_view', 'extract_part_list', 'estimate_mass_properties'].includes(body.job_type)
+        ? 'freecad-worker'
+        : ['run_fea', 'rerate_payload_capability'].includes(body.job_type)
+          ? 'calculix-fea-worker'
+          : body.job_type === 'check_wire_routing'
+            ? 'wireviz-harness-worker'
+            : 'supplier-options-worker';
+      send(200, mockJobRecommendation({
+        job_type: body.job_type,
+        target_id: body.target_id,
+        adapter_name: defaultAdapter,
+        artifacts: [],
+      }));
       return;
     }
 

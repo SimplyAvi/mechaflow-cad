@@ -91,6 +91,32 @@ class AnalysisJobStatus(str, Enum):
     failed = "failed"
 
 
+class AnalysisExecutionTarget(str, Enum):
+    local = "local"
+    cloud_recommended_when_configured = "cloud_recommended_when_configured"
+    unavailable = "unavailable"
+
+
+class AnalysisExecutionRecommendationStatus(str, Enum):
+    ready = "ready"
+    review_required = "review_required"
+    unavailable = "unavailable"
+
+
+class EstimateBasis(str, Enum):
+    measured_local = "measured_local"
+    deterministic_local_heuristic = "deterministic_local_heuristic"
+    cloud_planning_estimate = "cloud_planning_estimate"
+    unavailable = "unavailable"
+
+
+class CachedArtifactStatus(str, Enum):
+    current = "current"
+    metadata_only = "metadata_only"
+    stale_missing_files = "stale_missing_files"
+    superseded = "superseded"
+
+
 class AnalysisArtifactKind(str, Enum):
     cad_metadata = "cad_metadata"
     exploded_view = "exploded_view"
@@ -547,6 +573,63 @@ class AnalysisArtifact(StrictModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class AnalysisEstimateRange(StrictModel):
+    label: str
+    min: NonNegativeFloat | None = None
+    max: NonNegativeFloat | None = None
+    unit: str
+    basis: EstimateBasis = EstimateBasis.unavailable
+    confidence: RecommendationConfidence = RecommendationConfidence.unknown
+    notice: str
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> AnalysisEstimateRange:
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError("min must be less than or equal to max")
+        return self
+
+
+class AnalysisExecutionTargetRecommendation(StrictModel):
+    recommended_target: AnalysisExecutionTarget
+    status: AnalysisExecutionRecommendationStatus
+    summary: str
+    reasons: list[str] = Field(default_factory=list)
+    missing_local_tools: list[str] = Field(default_factory=list)
+    review_required: list[str] = Field(default_factory=list)
+    model_complexity_score: NonNegativeFloat = 0
+    expected_runtime_minutes: AnalysisEstimateRange
+    cost_estimate: AnalysisEstimateRange
+    wait_time_estimate: AnalysisEstimateRange
+    cloud_execution_available: bool = False
+    cloud_configuration_required: bool = True
+    cloud_notice: str = "Cloud execution is a planning boundary only. No provider, billing, credentials, or remote execution is configured."
+
+
+class CachedAnalysisArtifactReference(StrictModel):
+    artifact_id: str
+    job_id: str
+    project_id: str
+    kind: AnalysisArtifactKind
+    title: str
+    status: CachedArtifactStatus
+    generated_by: str
+    generated_at: datetime
+    download_urls: list[str] = Field(default_factory=list)
+    summary: str | None = None
+    stale_reason: str | None = None
+
+
+class CachedAnalysisReportReference(StrictModel):
+    report_id: str
+    project_id: str
+    title: str
+    status: ReportStatus
+    generated_at: datetime
+    derived_from_job_id: str | None = None
+    current: bool = True
+    summary: str | None = None
+
+
 class AnalysisJob(StrictModel):
     id: str
     job_type: AnalysisJobType
@@ -558,8 +641,22 @@ class AnalysisJob(StrictModel):
     input_summary: dict[str, Any] = Field(default_factory=dict)
     result_summary: dict[str, Any] = Field(default_factory=dict)
     artifacts: list[AnalysisArtifact] = Field(default_factory=list)
+    recommendation: AnalysisExecutionTargetRecommendation | None = None
+    cached_artifact_refs: list[CachedAnalysisArtifactReference] = Field(default_factory=list)
+    cached_report_refs: list[CachedAnalysisReportReference] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AnalysisJobQueue(StrictModel):
+    project_id: str
+    jobs: list[AnalysisJob] = Field(default_factory=list)
+    status_counts: dict[str, int] = Field(default_factory=dict)
+    local_ready_count: int = 0
+    cloud_planning_count: int = 0
+    review_required_count: int = 0
+    unavailable_count: int = 0
+    summary: str
 
 
 class AnalysisJobPlan(BaseModel):
@@ -853,6 +950,7 @@ class ProjectPanelData(BaseModel):
     wiring_review: WiringReviewReport | None = None
     reports: list[AnalysisReport] = Field(default_factory=list)
     analysis_readiness_previews: list[AnalysisReadinessPreview] = Field(default_factory=list)
+    analysis_job_queue: AnalysisJobQueue | None = None
 
 
 class MaterialSubstitutionPreview(StrictModel):
