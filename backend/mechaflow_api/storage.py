@@ -241,6 +241,20 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                 raise InvalidWiringEndpointError(
                     f"wiring route {route.id!r} references unknown wire segments: {unknown_wire_segments}"
                 )
+            expected_segment_endpoints = (
+                (route.from_connector.id, route.from_connector.part_id),
+                (route.to_connector.id, route.to_connector.part_id),
+            )
+            for segment_id in route.wire_segment_ids:
+                segment = next(segment for segment in project.wire_segments if segment.id == segment_id)
+                actual_segment_endpoints = (
+                    (segment.from_endpoint.connector_id, segment.from_endpoint.part_id),
+                    (segment.to_endpoint.connector_id, segment.to_endpoint.part_id),
+                )
+                if actual_segment_endpoints != expected_segment_endpoints:
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} references wire segment {segment_id!r} with mismatched endpoints"
+                    )
             if route.rule_set_id is not None and route.rule_set_id not in wiring_rule_ids:
                 raise InvalidWiringEndpointError(
                     f"wiring route {route.id!r} references unknown wiring rule set {route.rule_set_id!r}"

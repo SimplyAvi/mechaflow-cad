@@ -1040,6 +1040,12 @@ const projectFileValidationError = (file) => {
           if (endpoint.connector_id !== connector.id || endpoint.part_id !== connector.part_id) return `wiring route ${route.id} endpoints do not match route connectors`;
         }
         for (const bomId of route.harness_bom ?? []) if (!bomIds.has(bomId)) return `wiring route ${route.id} references unknown BOM item ${bomId}`;
+        for (const segmentId of route.wire_segment_ids ?? []) {
+          const segment = candidate.wire_segments.find((item) => item.id === segmentId);
+          const expected = [[route.from_connector.id, route.from_connector.part_id], [route.to_connector.id, route.to_connector.part_id]];
+          const actual = [[segment?.from_endpoint?.connector_id, segment?.from_endpoint?.part_id], [segment?.to_endpoint?.connector_id, segment?.to_endpoint?.part_id]];
+          if (!segment || JSON.stringify(actual) !== JSON.stringify(expected)) return `wiring route ${route.id} references wire segment ${segmentId} with mismatched endpoints`;
+        }
       }
     }
     for (const component of candidate.electronics_components) {
