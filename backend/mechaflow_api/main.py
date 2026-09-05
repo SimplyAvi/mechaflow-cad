@@ -240,6 +240,8 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
         preview_target_ids: set[str] = set()
         for preview in previews:
+            if preview.project_id != project.id:
+                raise ValueError(f"analysis readiness preview {preview.target_id!r} belongs to another project")
             if preview.target_id in preview_target_ids:
                 raise ValueError(f"duplicate analysis readiness preview target {preview.target_id!r}")
             preview_target_ids.add(preview.target_id)

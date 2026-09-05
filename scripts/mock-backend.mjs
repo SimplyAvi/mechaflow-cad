@@ -53,6 +53,8 @@ const readinessStates = new Set(['pre_solver_ready', 'review_required', 'blocked
 const readinessTrustLabels = new Set(['demo_estimate', 'pre_solver_input', 'solver_result']);
 const readinessLoadTypes = new Set(['force', 'moment', 'pressure', 'gravity', 'thermal']);
 const readinessConstraintTypes = new Set(['fixed', 'pinned', 'bearing', 'contact', 'symmetry', 'review_required']);
+const taskKinds = new Set(['lift_payload', 'reach', 'cycle_time', 'fit_envelope', 'fatigue_life', 'serviceability', 'wiring_clearance', 'custom']);
+const taskValidationMethods = new Set(['heuristic', 'simulation', 'test', 'review', 'unknown']);
 const analysisAdaptersByJobType = {
   import_design: new Set(['freecad-worker']),
   generate_exploded_view: new Set(['freecad-worker']),
@@ -314,6 +316,22 @@ const projectFileValidationError = (file) => {
       if (error) return error;
       for (const field of ['id', 'kind', 'description']) {
         error = requireString(candidate.active_task[field], `project.active_task.${field}`);
+        if (error) return error;
+      }
+      if (!taskKinds.has(candidate.active_task.kind)) return 'project.active_task.kind is invalid';
+      if (candidate.active_task.validation_method != null && !taskValidationMethods.has(candidate.active_task.validation_method)) return 'project.active_task.validation_method is invalid';
+      for (const field of ['unit', 'validation_method']) {
+        if (candidate.active_task[field] != null) {
+          error = requireString(candidate.active_task[field], `project.active_task.${field}`);
+          if (error) return error;
+        }
+      }
+      if (candidate.active_task.target_value != null) {
+        error = requireFiniteNumber(candidate.active_task.target_value, 'project.active_task.target_value');
+        if (error) return error;
+      }
+      if (candidate.active_task.safety_factor_min != null) {
+        error = requireFiniteNumber(candidate.active_task.safety_factor_min, 'project.active_task.safety_factor_min', Number.MIN_VALUE);
         if (error) return error;
       }
       if (candidate.active_task.assumptions != null) {
