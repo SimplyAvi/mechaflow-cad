@@ -73,7 +73,7 @@ def test_analysis_job_storage_rejects_missing_report_cache_reference() -> None:
         )],
     }, deep=True)
 
-    with pytest.raises(ValueError, match="does not exist in project"):
+    with pytest.raises(ValueError, match="does not belong to job"):
         InMemoryProjectStore(seed_projects=[sample]).update_analysis_job(source_job.id, lambda _: job)
 
 

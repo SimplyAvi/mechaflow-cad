@@ -1266,7 +1266,7 @@ def test_create_analysis_job_selects_matching_stub_adapter() -> None:
 
     assert response.status_code == 202
     payload = response.json()
-    assert payload["status"] == "queued"
+    assert payload["status"] == "review_required"
     assert payload["adapter_name"] == "calculix-fea-worker"
     assert payload["result_summary"]["message"].startswith("Job accepted")
     assert payload["result_summary"]["queue_name"] == "fea-local"

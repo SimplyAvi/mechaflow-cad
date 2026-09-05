@@ -775,13 +775,14 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         if not jobs:
             return jobs
         tool_statuses = list_local_solver_tool_statuses()
+        project = project_store.get_project(project_id) if project_id is not None else None
         enriched_jobs = []
         for job in jobs:
-            project = project_store.get_project(job.project_id)
-            if project is None:
+            owning_project = project or project_store.get_project(job.project_id)
+            if owning_project is None:
                 enriched_jobs.append(job)
                 continue
-            enriched_jobs.append(enrich_analysis_job_for_queue(project, job, tool_statuses, artifact_file_exists))
+            enriched_jobs.append(enrich_analysis_job_for_queue(owning_project, job, tool_statuses, artifact_file_exists))
         return enriched_jobs
 
     @app.get(
