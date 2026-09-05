@@ -349,6 +349,27 @@ const normalizeProjectFileDefaults = (file) => {
         generated_at: withDefault(report.generated_at, now),
       })),
     },
+    analysis_readiness_previews: mapObjects(file.analysis_readiness_previews, (preview) => ({
+      ...preview,
+      criteria: withDefault(preview.criteria, []),
+      load_cases: withDefault(preview.load_cases, []),
+      constraints: withDefault(preview.constraints, []),
+      solver_inputs: preview.solver_inputs === undefined ? { notes: [] } : {
+        ...preview.solver_inputs,
+        notes: isObject(preview.solver_inputs) ? withDefault(preview.solver_inputs.notes, []) : preview.solver_inputs,
+      },
+      material_properties: isObject(preview.material_properties)
+        ? {
+          ...preview.material_properties,
+          properties: withDefault(preview.material_properties.properties, {}),
+        }
+        : preview.material_properties,
+      expected_result_artifacts: withDefault(preview.expected_result_artifacts, []),
+      solver_pipeline: withDefault(preview.solver_pipeline, []),
+      demo_estimates: withDefault(preview.demo_estimates, []),
+      review_required: withDefault(preview.review_required, []),
+      generated_at: withDefault(preview.generated_at, now),
+    })),
   };
 };
 
@@ -634,7 +655,11 @@ const projectFileValidationError = (file) => {
       if (error) return error;
       error = requiredFields(material, ['id', 'name', 'family', 'properties', 'compatible_processes', 'notes'], 'project.materials');
       if (error) return error;
+      error = requireString(material.name, `project.materials.${material.id}.name`) || requireString(material.family, `project.materials.${material.id}.family`);
+      if (error) return error;
       error = requireObject(material.properties, 'project.materials.properties') || requireArray(material.compatible_processes, 'project.materials.compatible_processes') || requireArray(material.notes, 'project.materials.notes');
+      if (error) return error;
+      error = rejectUnknownFields(material.properties, ['density_kg_m3', 'elastic_modulus_gpa', 'yield_strength_mpa', 'ultimate_strength_mpa', 'poisson_ratio', 'thermal_conductivity_w_mk', 'heat_deflection_temp_c', 'max_service_temp_c'], 'project.materials.properties');
       if (error) return error;
       for (const field of ['density_kg_m3', 'elastic_modulus_gpa', 'yield_strength_mpa', 'ultimate_strength_mpa', 'thermal_conductivity_w_mk', 'heat_deflection_temp_c', 'max_service_temp_c']) {
         if (material.properties[field] != null) {
