@@ -536,7 +536,7 @@ const projectFileValidationError = (file) => {
         if (node.assembly_id != null && node.assembly_id !== assembly.id) return `${nodePath}.assembly_id must match the containing assembly`;
         if (node.part_id != null && !partIds.has(node.part_id)) return `${nodePath}.part_id references an unknown part`;
         for (const field of ['part_ids', 'child_assembly_ids']) {
-          error = requireArray(node[field], `${nodePath}.${field}`);
+          error = requireStringArray(node[field], `${nodePath}.${field}`);
           if (error) return error;
         }
         error = requireObject(node.exploded_transform, `${nodePath}.exploded_transform`);
