@@ -743,7 +743,9 @@ const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElec
     && route.electronics_component_ids.every((id) => componentIds.has(id))
     && [route.from_connector, route.to_connector].every((connector) => {
       const component = components.find((candidate) => candidate.id === connector.component_id);
-      return component?.connector_ids.includes(connector.id) && component.mounted_part_id === connector.part_id;
+      return component?.connector_ids.includes(connector.id)
+        && component.mounted_part_id === connector.part_id
+        && (connector.component_id == null || route.electronics_component_ids.includes(connector.component_id));
     })
     && route.harness_bom.length > 0
     && route.harness_bom.every((id) => bomIds.has(id))

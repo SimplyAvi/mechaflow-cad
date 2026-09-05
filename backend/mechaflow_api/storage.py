@@ -143,14 +143,13 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
     bom_ids = {f"bom-{part.id}" for assembly in project.assemblies for part in assembly.parts}
     for component in project.electronics_components:
         bom_ids.update(component.bom_item_ids)
-        if component.mounted_part_id is not None:
-            for connector_id in component.connector_ids:
-                owner = (component.mounted_part_id, component.id)
-                if connector_id in connector_owners and connector_owners[connector_id] != owner:
-                    raise InvalidWiringEndpointError(
-                        f"connector {connector_id!r} is claimed by multiple electronics components"
-                    )
-                connector_owners[connector_id] = owner
+        for connector_id in component.connector_ids:
+            owner = (component.mounted_part_id, component.id)
+            if connector_id in connector_owners and connector_owners[connector_id] != owner:
+                raise InvalidWiringEndpointError(
+                    f"connector {connector_id!r} is claimed by multiple electronics components"
+                )
+            connector_owners[connector_id] = owner
     for segment in project.wire_segments:
         if segment.bom_item_id is not None:
             bom_ids.add(segment.bom_item_id)

@@ -1079,12 +1079,11 @@ def collect_project_task_requirements(project: Project) -> list[TaskRequirement]
 
 
 def collect_project_bom_items(project: Project) -> list[BOMItem]:
-    items: list[BOMItem] = []
+    items_by_id: dict[str, BOMItem] = {}
     for assembly in project.assemblies:
         for part in assembly.parts:
             manufacturing_option = _active_manufacturing_option(part)
-            items.append(
-                BOMItem(
+            items_by_id[f"bom-{part.id}"] = BOMItem(
                     id=f"bom-{part.id}",
                     part_id=part.id,
                     name=part.name,
@@ -1099,11 +1098,9 @@ def collect_project_bom_items(project: Project) -> list[BOMItem]:
                         else "Derived from local project assembly metadata; price review required."
                     ),
                 )
-            )
     for component in project.electronics_components:
         for bom_item_id in component.bom_item_ids:
-            items.append(
-                BOMItem(
+            items_by_id[bom_item_id] = BOMItem(
                     id=bom_item_id,
                     part_id=component.mounted_part_id,
                     name=component.name,
@@ -1114,12 +1111,10 @@ def collect_project_bom_items(project: Project) -> list[BOMItem]:
                     lead_time_days_max=10,
                     license_or_terms="Electronics BOM seed is heuristic and review-required; not a supplier quote.",
                 )
-            )
     for segment in project.wire_segments:
         if segment.bom_item_id is None:
             continue
-        items.append(
-            BOMItem(
+        items_by_id[segment.bom_item_id] = BOMItem(
                 id=segment.bom_item_id,
                 name=segment.name,
                 quantity=round((segment.length_mm or 1000) / 1000, 3),
@@ -1129,8 +1124,7 @@ def collect_project_bom_items(project: Project) -> list[BOMItem]:
                 lead_time_days_max=7,
                 license_or_terms="Harness BOM seed is estimated from recorded route length; not a supplier quote.",
             )
-        )
-    return items
+    return list(items_by_id.values())
 
 
 def collect_project_manufacturing_options(project: Project) -> list[PartManufacturingOptions]:
