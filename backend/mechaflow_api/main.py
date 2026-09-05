@@ -869,6 +869,24 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
 
             project_store.update_analysis_job(job_id, mark_failed)
             raise HTTPException(status_code=404, detail="analysis target not found") from exc
+        except Exception as exc:
+            def mark_failed(job: AnalysisJob) -> AnalysisJob:
+                return job.model_copy(
+                    update={
+                        "status": AnalysisJobStatus.failed,
+                        "result_summary": {
+                            **job.result_summary,
+                            "message": "solver fixture execution failed before a result was produced",
+                            "error": str(exc)[:1000],
+                            "review_status": "solver_artifact_preparation_failed",
+                        },
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                    deep=True,
+                )
+
+            project_store.update_analysis_job(job_id, mark_failed)
+            raise HTTPException(status_code=500, detail="solver fixture execution failed") from exc
         stored_job = project_store.update_analysis_job(job_id, lambda _: completed_job)
         if stored_job is None:
             raise HTTPException(status_code=404, detail="analysis job not found")

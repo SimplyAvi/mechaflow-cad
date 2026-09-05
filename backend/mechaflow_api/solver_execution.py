@@ -215,13 +215,17 @@ def _prepare_artifact_root(artifact_root: Path, reserved_bundles: int = 0) -> No
 
 
 def _persist_fixture_files(fixture: FixtureRunArtifacts, artifact_root: Path, job_id: str) -> Path:
-    _prepare_artifact_root(artifact_root, reserved_bundles=1)
-    destination = artifact_root / job_id
-    destination.mkdir()
-    for path in fixture.workdir.iterdir():
-        if path.is_file():
-            shutil.copy2(path, destination / path.name)
-    return destination
+    try:
+        _prepare_artifact_root(artifact_root, reserved_bundles=1)
+        destination = artifact_root / job_id
+        destination.mkdir()
+        for path in fixture.workdir.iterdir():
+            if path.is_file():
+                shutil.copy2(path, destination / path.name)
+        return destination
+    except Exception:
+        shutil.rmtree(fixture.workdir, ignore_errors=True)
+        raise
 
 
 def _artifact_file_manifest(
@@ -320,7 +324,7 @@ def run_calculix_fixture(
             generated_by=LOCAL_SOLVER_FIXTURE_RUNNER_NAME,
             created_at=now,
         )
-        shutil.rmtree(fixture.workdir)
+        shutil.rmtree(fixture.workdir, ignore_errors=True)
         return job.model_copy(
             update={
                 "status": AnalysisJobStatus.solver_unavailable,
@@ -361,7 +365,7 @@ def run_calculix_fixture(
         stdout = ""
 
     durable_workdir = _persist_fixture_files(fixture, artifact_root, job.id)
-    shutil.rmtree(fixture.workdir)
+    shutil.rmtree(fixture.workdir, ignore_errors=True)
     file_manifest = _artifact_file_manifest(
         durable_workdir,
         api_prefix,
