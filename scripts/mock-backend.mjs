@@ -305,11 +305,15 @@ function buildMockWiringReview(sourceProject) {
       related_ids: route.endpoints?.map((endpoint) => endpoint.connector_id) ?? [],
     });
     const connectorsComplete = [route.from_connector.id, route.to_connector.id].every((id) => componentConnectorIds.has(id));
+    const componentLinksComplete = [route.from_connector, route.to_connector].every((connector) => {
+      const component = components.find((candidate) => candidate.id === connector.component_id);
+      return component?.connector_ids?.includes(connector.id) && component.mounted_part_id === connector.part_id && route.electronics_component_ids?.includes(connector.component_id);
+    });
     evidence.push({
       check: 'connector details',
-      status: connectorsComplete ? 'pass' : 'review_required',
-      basis: connectorsComplete ? 'explicit_data' : 'missing_input',
-      message: connectorsComplete ? 'Route connectors are tied to electronics component records.' : 'Route connectors are missing electronics component records.',
+      status: connectorsComplete && componentLinksComplete ? 'pass' : 'review_required',
+      basis: connectorsComplete && componentLinksComplete ? 'explicit_data' : 'missing_input',
+      message: connectorsComplete && componentLinksComplete ? 'Route connectors are tied to electronics component records.' : 'Route connector ownership links are incomplete.',
       related_ids: [route.from_connector.id, route.to_connector.id],
     });
     const geometryComplete = (route.path_points_mm ?? []).length >= 2;
@@ -325,7 +329,10 @@ function buildMockWiringReview(sourceProject) {
     evidence.push({ check: 'bend radius', status: bendStatus, basis: route.bend_radius_min_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Bend radius is a heuristic screening signal.' });
     const serviceStatus = route.service_loop_mm == null ? 'review_required' : route.service_loop_mm < 25 ? 'warning' : 'pass';
     evidence.push({ check: 'service loop', status: serviceStatus, basis: route.service_loop_mm == null ? 'missing_input' : 'heuristic_estimate', message: 'Service loop is a heuristic screening signal.' });
-    const bomStatus = route.wire_segment_ids?.length > 0 && route.wire_segment_ids.every((id) => segmentIds.has(id)) && route.harness_bom?.length > 0 && route.harness_bom.every((id) => bomIds.has(id)) ? 'pass' : 'review_required';
+    const bomStatus = route.wire_segment_ids?.length > 0 && route.wire_segment_ids.every((id) => {
+      const segment = segments.find((candidate) => candidate.id === id);
+      return segmentIds.has(id) && (!segment.bom_item_id || route.harness_bom?.includes(segment.bom_item_id));
+    }) && route.harness_bom?.length > 0 && route.harness_bom.every((id) => bomIds.has(id)) ? 'pass' : 'review_required';
     evidence.push({ check: 'BOM linkage', status: bomStatus, basis: bomStatus === 'pass' ? 'explicit_data' : 'missing_input', message: 'Wire segments and harness BOM links are required.' });
     const status = evidence.some((item) => item.status === 'review_required')
       ? 'review_required'
@@ -1039,12 +1046,15 @@ const projectFileValidationError = (file) => {
           const connector = route[endpointIndex === 0 ? 'from_connector' : 'to_connector'];
           if (endpoint.connector_id !== connector.id || endpoint.part_id !== connector.part_id) return `wiring route ${route.id} endpoints do not match route connectors`;
         }
+        const connectorComponentIds = [route.from_connector.component_id, route.to_connector.component_id].filter(Boolean);
+        if (!connectorComponentIds.every((id) => (route.electronics_component_ids ?? []).includes(id))) return `wiring route ${route.id} is missing connector component links`;
         for (const bomId of route.harness_bom ?? []) if (!bomIds.has(bomId)) return `wiring route ${route.id} references unknown BOM item ${bomId}`;
         for (const segmentId of route.wire_segment_ids ?? []) {
           const segment = candidate.wire_segments.find((item) => item.id === segmentId);
           const expected = [[route.from_connector.id, route.from_connector.part_id], [route.to_connector.id, route.to_connector.part_id]];
           const actual = [[segment?.from_endpoint?.connector_id, segment?.from_endpoint?.part_id], [segment?.to_endpoint?.connector_id, segment?.to_endpoint?.part_id]];
           if (!segment || JSON.stringify(actual) !== JSON.stringify(expected)) return `wiring route ${route.id} references wire segment ${segmentId} with mismatched endpoints`;
+          if (segment.bom_item_id && !route.harness_bom.includes(segment.bom_item_id)) return `wiring route ${route.id} is missing BOM link for wire segment ${segmentId}`;
         }
       }
     }

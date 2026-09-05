@@ -723,7 +723,9 @@ const routeLengthMm = (route: BackendWiringRoute): number | null => {
   return round(length, 1);
 };
 
-const fallbackWiringStatus = (route: BackendWiringRoute, componentIds: Set<string>, segmentIds: Set<string>, bomIds: Set<string>): WiringRoute['reviewStatus'] => {
+const fallbackWiringStatus = (route: BackendWiringRoute, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>): WiringRoute['reviewStatus'] => {
+  const componentIds = new Set(components.map((component) => component.id));
+  const segmentIds = new Set(segments.map((segment) => segment.id));
   const connectorIds = new Set([route.from_connector.id, route.to_connector.id]);
   const completeEvidence = route.path_points_mm.length >= 2
     && route.endpoints?.length === 2
@@ -732,11 +734,24 @@ const fallbackWiringStatus = (route: BackendWiringRoute, componentIds: Set<strin
     && route.wire_segment_ids.every((id) => segmentIds.has(id))
     && route.electronics_component_ids.length > 0
     && route.electronics_component_ids.every((id) => componentIds.has(id))
+    && [route.from_connector, route.to_connector].every((connector) => {
+      const component = components.find((candidate) => candidate.id === connector.component_id);
+      return component?.connector_ids.includes(connector.id) && component.mounted_part_id === connector.part_id;
+    })
     && route.harness_bom.length > 0
     && route.harness_bom.every((id) => bomIds.has(id))
     && route.endpoints.every((endpoint) => {
       const connector = [route.from_connector, route.to_connector].find((candidate) => candidate.id === endpoint.connector_id);
       return connector?.part_id === endpoint.part_id;
+    })
+    && route.wire_segment_ids.every((id) => {
+      const segment = segments.find((candidate) => candidate.id === id);
+      return segment != null
+        && segment.from_endpoint?.connector_id === route.from_connector.id
+        && segment.from_endpoint.part_id === route.from_connector.part_id
+        && segment.to_endpoint?.connector_id === route.to_connector.id
+        && segment.to_endpoint.part_id === route.to_connector.part_id
+        && (segment.bom_item_id == null || route.harness_bom.includes(segment.bom_item_id));
     })
     && route.clearance_min_mm != null
     && route.bend_radius_min_mm != null
@@ -824,11 +839,11 @@ const mapWiringReview = (review?: BackendWiringReviewReport | null) => review ==
   })),
 });
 
-const mapWiring = (routes: BackendWiringRoute[], review: BackendWiringReviewReport | null | undefined, componentIds: Set<string>, segmentIds: Set<string>, bomIds: Set<string>): WiringRoute[] => {
+const mapWiring = (routes: BackendWiringRoute[], review: BackendWiringReviewReport | null | undefined, components: BackendElectronicsComponent[], segments: BackendWireSegment[], bomIds: Set<string>): WiringRoute[] => {
   const routeReviews = mapWiringEvidence(review);
   return routes.map((route) => {
     const routeReview = routeReviews.get(route.id);
-    const reviewStatus = routeReview?.status ?? fallbackWiringStatus(route, componentIds, segmentIds, bomIds);
+    const reviewStatus = routeReview?.status ?? fallbackWiringStatus(route, components, segments, bomIds);
     return {
       id: route.id,
       name: route.name,
@@ -952,8 +967,8 @@ export function mapProjectPanelDataToReferenceDesign(
         ? panelData.wiring_routes
         : backendAssemblies.flatMap((candidate) => candidate.wiring_routes),
       panelData.wiring_review,
-      new Set((panelData.electronics_components ?? []).map((component) => component.id)),
-      new Set((panelData.wire_segments ?? []).map((segment) => segment.id)),
+      panelData.electronics_components ?? [],
+      panelData.wire_segments ?? [],
       new Set((panelData.bom_items ?? []).map((item) => item.id)),
     ),
     wiringReview: mapWiringReview(panelData.wiring_review),

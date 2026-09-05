@@ -236,6 +236,15 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                 raise InvalidWiringEndpointError(
                     f"wiring route {route.id!r} references unknown electronics components: {unknown_route_components}"
                 )
+            connector_component_ids = {
+                connector.component_id
+                for connector in (route.from_connector, route.to_connector)
+                if connector.component_id is not None
+            }
+            if not connector_component_ids.issubset(set(route.electronics_component_ids)):
+                raise InvalidWiringEndpointError(
+                    f"wiring route {route.id!r} is missing connector component links"
+                )
             unknown_wire_segments = sorted(set(route.wire_segment_ids) - wire_segment_ids)
             if unknown_wire_segments:
                 raise InvalidWiringEndpointError(
@@ -254,6 +263,10 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
                 if actual_segment_endpoints != expected_segment_endpoints:
                     raise InvalidWiringEndpointError(
                         f"wiring route {route.id!r} references wire segment {segment_id!r} with mismatched endpoints"
+                    )
+                if segment.bom_item_id is not None and segment.bom_item_id not in route.harness_bom:
+                    raise InvalidWiringEndpointError(
+                        f"wiring route {route.id!r} is missing BOM link for wire segment {segment_id!r}"
                     )
             if route.rule_set_id is not None and route.rule_set_id not in wiring_rule_ids:
                 raise InvalidWiringEndpointError(
