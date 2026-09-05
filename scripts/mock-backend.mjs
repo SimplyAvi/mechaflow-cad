@@ -1314,7 +1314,7 @@ const projectFileValidationError = (file) => {
         if (manifest != null) {
           if (!Array.isArray(manifest)) return `analysis artifact ${artifact.id}.payload.file_manifest must be an array`;
           for (const item of manifest) {
-            if (!item || typeof item.name !== 'string' || !item.name.trim() || item.name === '.' || item.name === '..' || item.name.includes('/') || item.name.includes('\\')) return `analysis artifact ${artifact.id} has an unsafe file name`;
+            if (!item || typeof item.name !== 'string' || !item.name.trim() || item.name === '.' || item.name === '..' || item.name.includes('/') || item.name.includes('\\') || [...item.name].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) return `analysis artifact ${artifact.id} has an unsafe file name`;
             if (item.download_url != null && item.download_url !== `/api/analysis-artifacts/${artifact.id}/${item.name}`) return `analysis artifact ${artifact.id} has stale or impossible download_url metadata`;
           }
         }
