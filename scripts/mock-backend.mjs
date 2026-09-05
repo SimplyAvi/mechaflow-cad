@@ -365,7 +365,7 @@ const projectPanelData = (sourceProject = project, readinessPreviews = null) => 
   ...mockBackendPanelData,
   project: sourceProject,
   task_requirements: sourceProject.active_task ? [sourceProject.active_task] : [],
-  bom_items: [
+  bom_items: Array.from(new Map([
     ...sourceProject.assemblies.flatMap((assembly) => assembly.parts.map((part) => {
       const option = activeManufacturingOption(part);
       return {
@@ -393,7 +393,7 @@ const projectPanelData = (sourceProject = project, readinessPreviews = null) => 
       price: null, lead_time_days_min: null, lead_time_days_max: null,
       license_or_terms: 'Imported harness BOM addition; review required.',
     })),
-  ],
+  ].map((item) => [item.id, item])).values()),
   analysis_readiness_previews: readinessPreviews ?? (sourceProject === project ? currentReadinessPreviews() : []),
   manufacturing_options: projectManufacturingOptions(sourceProject),
   electronics_components: sourceProject.electronics_components ?? [],
