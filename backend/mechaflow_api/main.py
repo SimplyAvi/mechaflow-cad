@@ -231,10 +231,12 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
         )
 
     def validate_readiness_previews(project: Project, previews: list[AnalysisReadinessPreview]) -> None:
-        targets = {
-            **{assembly.id: ("assembly", assembly.name) for assembly in project.assemblies},
-            **{part.id: ("part", part.name) for assembly in project.assemblies for part in assembly.parts},
-        }
+        target_records = [(assembly.id, "assembly", assembly.name) for assembly in project.assemblies]
+        target_records.extend((part.id, "part", part.name) for assembly in project.assemblies for part in assembly.parts)
+        target_ids = [target[0] for target in target_records]
+        if len(target_ids) != len(set(target_ids)):
+            raise ValueError("imported project assembly and part ids must be unique")
+        targets = {target[0]: (target[1], target[2]) for target in target_records}
         part_ids = {part.id for assembly in project.assemblies for part in assembly.parts}
         for preview in previews:
             target = targets.get(preview.target_id)

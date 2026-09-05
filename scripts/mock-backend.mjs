@@ -512,10 +512,24 @@ const projectFileValidationError = (file) => {
       for (const field of ['load_cases', 'constraints']) {
         for (const [nestedIndex, nested] of preview[field].entries()) {
           const nestedPath = `${previewPath}.${field}[${nestedIndex}]`;
-          const nestedError = requiredFields(nested, ['id', 'name', 'target_part_ids'], nestedPath);
+          const requiredNestedFields = field === 'load_cases'
+            ? ['id', 'name', 'description', 'load_type', 'target_part_ids', 'direction', 'application_region', 'confidence', 'review_required']
+            : ['id', 'name', 'constraint_type', 'target_part_ids', 'region', 'degrees_of_freedom', 'confidence', 'review_required'];
+          const nestedError = requiredFields(nested, requiredNestedFields, nestedPath);
           if (nestedError) return nestedError;
           const targetPartsError = requireArray(nested.target_part_ids, `${nestedPath}.target_part_ids`);
           if (targetPartsError) return targetPartsError;
+          const directionOrDofError = field === 'load_cases'
+            ? requireObject(nested.direction, `${nestedPath}.direction`)
+            : requireArray(nested.degrees_of_freedom, `${nestedPath}.degrees_of_freedom`);
+          if (directionOrDofError) return directionOrDofError;
+          for (const scalarField of field === 'load_cases'
+            ? ['id', 'name', 'description', 'load_type', 'application_region', 'confidence']
+            : ['id', 'name', 'constraint_type', 'region', 'confidence']) {
+            const scalarError = requireString(nested[scalarField], `${nestedPath}.${scalarField}`);
+            if (scalarError) return scalarError;
+          }
+          if (typeof nested.review_required !== 'boolean') return `${nestedPath}.review_required must be a boolean`;
           for (const partId of nested.target_part_ids) if (!partIds.has(partId)) return `${nestedPath}.target_part_ids references an unknown part ${partId}`;
         }
       }
