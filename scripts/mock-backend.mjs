@@ -51,6 +51,7 @@ const manufacturingProcesses = new Set([
 const projectIdPattern = /^[A-Za-z0-9._~-]+$/;
 const readinessStates = new Set(['pre_solver_ready', 'review_required', 'blocked_missing_inputs', 'solver_result_available']);
 const readinessTrustLabels = new Set(['demo_estimate', 'pre_solver_input', 'solver_result']);
+const readinessConfidenceValues = new Set(['verified_from_authoritative_source', 'verified_from_manufacturer_data', 'calculated_from_user_inputs', 'estimated_from_heuristic', 'unknown_or_needs_review']);
 const readinessLoadTypes = new Set(['force', 'moment', 'pressure', 'gravity', 'thermal']);
 const readinessConstraintTypes = new Set(['fixed', 'pinned', 'bearing', 'contact', 'symmetry', 'review_required']);
 const taskKinds = new Set(['lift_payload', 'reach', 'cycle_time', 'fit_envelope', 'fatigue_life', 'serviceability', 'wiring_clearance', 'custom']);
@@ -304,8 +305,15 @@ const projectFileValidationError = (file) => {
     }
     return null;
   };
+  const rejectUnknownFields = (value, fields, path) => {
+    if (!isObject(value)) return `${path} must be an object`;
+    const unknownFields = Object.keys(value).filter((field) => !fields.includes(field));
+    return unknownFields.length > 0 ? `${path} contains unsupported fields: ${unknownFields.sort().join(', ')}` : null;
+  };
   const validateProject = (candidate) => {
     let error = requiredFields(candidate, ['id', 'name', 'assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports'], 'project');
+    if (error) return error;
+    error = rejectUnknownFields(candidate, ['id', 'name', 'description', 'reference_design_id', 'active_task', 'assemblies', 'materials', 'modifications', 'analysis_jobs', 'reports', 'created_at', 'updated_at'], 'project');
     if (error) return error;
     error = requireString(candidate.id, 'project.id') || requireString(candidate.name, 'project.name');
     if (error) return error;
@@ -368,6 +376,9 @@ const projectFileValidationError = (file) => {
       const assemblyPath = `project.assemblies[${assemblyIndex}]`;
       error = requiredFields(assembly, ['id', 'name', 'root_node_id', 'nodes', 'parts', 'wiring_routes'], assemblyPath);
       if (error) return error;
+      error = rejectUnknownFields(assembly, ['id', 'name', 'root_node_id', 'nodes', 'parts', 'wiring_routes', 'assembly_structure_confidence'], assemblyPath);
+      if (error) return error;
+      if (assembly.assembly_structure_confidence != null && !readinessConfidenceValues.has(assembly.assembly_structure_confidence)) return `${assemblyPath}.assembly_structure_confidence is invalid`;
       error = requireString(assembly.name, `${assemblyPath}.name`) || requireString(assembly.root_node_id, `${assemblyPath}.root_node_id`);
       if (error) return error;
       for (const field of ['nodes', 'parts', 'wiring_routes']) {
@@ -378,6 +389,8 @@ const projectFileValidationError = (file) => {
       for (const [nodeIndex, node] of assembly.nodes.entries()) {
         const nodePath = `${assemblyPath}.nodes[${nodeIndex}]`;
         error = requiredFields(node, ['id', 'name', 'part_ids', 'child_assembly_ids', 'exploded_transform'], nodePath);
+        if (error) return error;
+        error = rejectUnknownFields(node, ['id', 'name', 'part_ids', 'child_assembly_ids', 'exploded_transform'], nodePath);
         if (error) return error;
         if (assembly.nodes.findIndex((candidate) => candidate?.id === node.id) !== nodeIndex) return `${assemblyPath}.nodes ids must be unique: ${node.id}`;
         error = requireString(node.name, `${nodePath}.name`);
@@ -398,6 +411,8 @@ const projectFileValidationError = (file) => {
       if (error) return error;
       for (const part of assembly.parts) {
         if (assemblyIds.has(part?.id)) return `part id overlaps another project target: ${part?.id}`;
+        error = rejectUnknownFields(part, ['id', 'name', 'category', 'purpose', 'material_id', 'dimensions', 'mass_kg', 'manufacturing_options', 'related_fasteners', 'wiring_route_ids', 'source_file', 'metadata'], `${assemblyPath}.parts`);
+        if (error) return error;
         error = requiredFields(part, ['id', 'name', 'category', 'dimensions', 'manufacturing_options', 'related_fasteners', 'wiring_route_ids', 'metadata'], `${assemblyPath}.parts`);
         if (error) return error;
         error = requireString(part.name, `${assemblyPath}.parts.name`) || requireString(part.category, `${assemblyPath}.parts.category`);
@@ -422,10 +437,14 @@ const projectFileValidationError = (file) => {
         }
         for (const [optionIndex, option] of part.manufacturing_options.entries()) {
           const optionPath = `${assemblyPath}.parts.manufacturing_options[${optionIndex}]`;
+          error = rejectUnknownFields(option, ['id', 'process', 'description', 'cost', 'lead_time_days_min', 'lead_time_days_max', 'supplier_url', 'risk_notes', 'confidence'], optionPath);
+          if (error) return error;
           error = requiredFields(option, ['id', 'process', 'description', 'risk_notes'], optionPath);
           if (error) return error;
           error = requireString(option.process, `${optionPath}.process`) || requireString(option.description, `${optionPath}.description`);
           if (error) return error;
+          if (!manufacturingProcesses.has(option.process)) return `${optionPath}.process is invalid`;
+          if (option.confidence != null && !readinessConfidenceValues.has(option.confidence)) return `${optionPath}.confidence is invalid`;
           if (option.lead_time_days_min != null) {
             error = requireFiniteNumber(option.lead_time_days_min, `${optionPath}.lead_time_days_min`);
             if (error) return error;
@@ -441,6 +460,8 @@ const projectFileValidationError = (file) => {
       for (const route of assembly.wiring_routes) {
         if (routeIds.has(route?.id)) return `wiring route ids must be unique: ${route?.id}`;
         routeIds.add(route?.id);
+        error = rejectUnknownFields(route, ['id', 'name', 'from_connector', 'to_connector', 'path_points_mm', 'bend_radius_min_mm', 'clearance_min_mm', 'harness_bom', 'risk_notes', 'confidence'], `${assemblyPath}.wiring_routes`);
+        if (error) return error;
         error = requiredFields(route, ['id', 'name', 'from_connector', 'to_connector', 'path_points_mm', 'harness_bom', 'risk_notes'], `${assemblyPath}.wiring_routes`);
         if (error) return error;
         error = requireString(route.name, `${assemblyPath}.wiring_routes.name`);
@@ -451,6 +472,7 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         error = requireString(route.confidence, `${assemblyPath}.wiring_routes.confidence`);
         if (error) return error;
+        if (!readinessConfidenceValues.has(route.confidence)) return `${assemblyPath}.wiring_routes.confidence is invalid`;
         for (const [pointIndex, point] of route.path_points_mm.entries()) {
           error = requiredFields(point, ['x', 'y', 'z'], `${assemblyPath}.wiring_routes.path_points_mm[${pointIndex}]`);
           if (error) return error;
@@ -467,6 +489,8 @@ const projectFileValidationError = (file) => {
           }
         }
         for (const connectorField of ['from_connector', 'to_connector']) {
+          error = rejectUnknownFields(route[connectorField], ['id', 'name', 'pin_count', 'part_id'], `${assemblyPath}.wiring_routes.${connectorField}`);
+          if (error) return error;
           error = requiredFields(route[connectorField], ['id', 'name'], `${assemblyPath}.wiring_routes.${connectorField}`);
           if (error) return error;
           error = requireString(route[connectorField].id, `${assemblyPath}.wiring_routes.${connectorField}.id`);
@@ -488,6 +512,8 @@ const projectFileValidationError = (file) => {
     }
     const materialIds = new Set(candidate.materials.map((material) => material?.id));
     for (const material of candidate.materials) {
+      error = rejectUnknownFields(material, ['id', 'name', 'family', 'properties', 'compatible_processes', 'cost', 'source', 'confidence', 'notes'], 'project.materials');
+      if (error) return error;
       error = requiredFields(material, ['id', 'name', 'family', 'properties', 'compatible_processes', 'notes'], 'project.materials');
       if (error) return error;
       error = requireObject(material.properties, 'project.materials.properties') || requireArray(material.compatible_processes, 'project.materials.compatible_processes') || requireArray(material.notes, 'project.materials.notes');
@@ -502,6 +528,8 @@ const projectFileValidationError = (file) => {
         error = typeof material.properties.poisson_ratio === 'number' && Number.isFinite(material.properties.poisson_ratio) && material.properties.poisson_ratio >= 0 && material.properties.poisson_ratio < 0.5 ? null : 'project.materials.properties.poisson_ratio is invalid';
         if (error) return error;
       }
+      if (material.confidence != null && !readinessConfidenceValues.has(material.confidence)) return `project.materials.${material.id}.confidence is invalid`;
+      for (const process of material.compatible_processes) if (!manufacturingProcesses.has(process)) return `material ${material.id} has an invalid compatible process`;
     }
     for (const assembly of candidate.assemblies) {
       for (const part of assembly.parts) {
@@ -510,6 +538,8 @@ const projectFileValidationError = (file) => {
     }
     for (const [modificationIndex, modification] of candidate.modifications.entries()) {
       const modificationPath = `project.modifications[${modificationIndex}]`;
+      error = rejectUnknownFields(modification, ['id', 'target_part_id', 'description', 'material_id', 'dimension_changes', 'manufacturing_process', 'created_at'], modificationPath);
+      if (error) return error;
       error = requiredFields(modification, ['id', 'target_part_id', 'description', 'dimension_changes'], modificationPath);
       if (error) return error;
       for (const field of ['id', 'target_part_id', 'description']) {
@@ -527,6 +557,8 @@ const projectFileValidationError = (file) => {
     error = uniqueIds(candidate.analysis_jobs, 'project.analysis_jobs');
     if (error) return error;
     for (const job of candidate.analysis_jobs) {
+      error = rejectUnknownFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'local_compute_preferred', 'input_summary', 'result_summary', 'artifacts', 'created_at', 'updated_at'], 'project.analysis_jobs');
+      if (error) return error;
       error = requiredFields(job, ['id', 'job_type', 'status', 'target_id', 'project_id', 'adapter_name', 'input_summary', 'result_summary', 'artifacts'], 'project.analysis_jobs');
       if (error) return error;
       if (job.project_id !== candidate.id) return `analysis job ${job.id} belongs to another project`;
@@ -549,6 +581,8 @@ const projectFileValidationError = (file) => {
     error = uniqueIds(candidate.reports, 'project.reports');
     if (error) return error;
     for (const report of candidate.reports) {
+      error = rejectUnknownFields(report, ['id', 'project_id', 'title', 'status', 'summary', 'task_results', 'weight_delta_kg', 'cost_delta', 'manufacturing_impacts', 'wiring_impacts', 'risks', 'unknowns', 'recommendations', 'assumptions', 'generated_at'], 'project.reports');
+      if (error) return error;
       error = requiredFields(report, ['id', 'project_id', 'title', 'summary', 'task_results', 'manufacturing_impacts', 'wiring_impacts', 'risks', 'unknowns', 'recommendations', 'assumptions', 'generated_at'], 'project.reports');
       if (error) return error;
       if (report.project_id !== candidate.id) return `report ${report.id} belongs to another project`;
@@ -556,6 +590,12 @@ const projectFileValidationError = (file) => {
     return null;
   };
   if (!file || typeof file !== 'object' || Array.isArray(file)) return 'project file must be a JSON object';
+  const envelopeError = rejectUnknownFields(file, ['format', 'schema_version', 'metadata', 'project', 'analysis_readiness_previews', 'extensions'], 'project file');
+  if (envelopeError) return envelopeError;
+  if (file.metadata != null) {
+    const metadataError = rejectUnknownFields(file.metadata, ['exported_at', 'source_api_version', 'exported_by', 'notes'], 'project file.metadata');
+    if (metadataError) return metadataError;
+  }
   if (file.format !== 'mechaflow-cad.project') return 'unsupported project file format';
   if (file.schema_version !== '1.0') return 'unsupported MechaFlow project file schema_version';
   if (!file.project || typeof file.project !== 'object' || Array.isArray(file.project)) return 'project is required';
