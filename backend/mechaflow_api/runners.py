@@ -158,7 +158,6 @@ def _minimum_section_area_mm2(parts: list[Part]) -> float | None:
             area = first * second
             if math.isfinite(area) and area > 0:
                 areas.append(area)
-                break
     return min(areas) if areas else None
 
 
