@@ -45,8 +45,16 @@ function createElement(tagName) {
   };
 }
 
-function createDocument() {
-  const byId = { status: createElement('section'), catalog: createElement('section') };
+const pageElementIds = [
+  'connection-status',
+  'concepts',
+  'reference-designs',
+  'catalog-status',
+  'catalog-reference-designs',
+];
+
+function createDocument(ids = pageElementIds) {
+  const byId = Object.fromEntries(ids.map((id) => [id, createElement('section')]));
   return {
     byId,
     createElement,
@@ -54,6 +62,11 @@ function createDocument() {
       return byId[id] ?? null;
     },
   };
+}
+
+function documentFromHtml(html) {
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+  return createDocument(ids);
 }
 
 function descendants(node) {
@@ -72,12 +85,11 @@ const pageResponse = await originFetch(`${baseUrl}/`);
 assert.equal(pageResponse.status, 200, 'server must serve the frontend page');
 const html = await pageResponse.text();
 
-const scriptSources = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(
-  (match) => new URL(match[1], `${baseUrl}/`).href,
-);
-assert.ok(scriptSources.length > 0, 'served page must load at least one script');
+const scripts = [...html.matchAll(/<script\b([^>]*)\bsrc="([^"]+)"[^>]*>/g)];
+const moduleScript = scripts.find((match) => /\btype="module"/.test(match[1]));
+assert.ok(moduleScript, 'served page must load a module script');
 
-const moduleUrl = scriptSources[0];
+const moduleUrl = new URL(moduleScript[2], `${baseUrl}/`).href;
 const moduleResponse = await originFetch(moduleUrl);
 assert.equal(moduleResponse.status, 200, `server must serve ${moduleUrl}`);
 assert.match(
@@ -89,9 +101,16 @@ const moduleSource = await moduleResponse.text();
 
 // Browser-like globals: the module's page bootstrap runs on import and resolves
 // its relative endpoints against the page origin, exactly as a browser would.
-const pageDocument = createDocument();
+const pageDocument = documentFromHtml(html);
+const pageWindow = { document: pageDocument, location: new URL(`${baseUrl}/`) };
+for (const script of scripts.filter((match) => !/\btype="module"/.test(match[1]))) {
+  const scriptUrl = new URL(script[2], `${baseUrl}/`).href;
+  const scriptResponse = await originFetch(scriptUrl);
+  assert.equal(scriptResponse.status, 200, `server must serve ${scriptUrl}`);
+  Function('window', await scriptResponse.text())(pageWindow);
+}
 globalThis.document = pageDocument;
-globalThis.window = { document: pageDocument, location: new URL(`${baseUrl}/`) };
+globalThis.window = pageWindow;
 globalThis.fetch = (input, init) => originFetch(new URL(input, `${baseUrl}/`), init);
 
 const frontend = await import(
@@ -99,7 +118,7 @@ const frontend = await import(
 );
 
 assert.notEqual(frontend.pageLoad, null, 'module must bootstrap itself when loaded by a page');
-const rendered = await frontend.pageLoad;
+const [backendRendered, catalogRendered] = await frontend.pageLoad;
 
 const apiItems = (await originFetch(`${baseUrl}${frontend.CATALOG_ENDPOINT}`).then((r) => r.json()))
   .items;
@@ -107,13 +126,17 @@ const apiTasks = (await originFetch(`${baseUrl}${frontend.TASKS_ENDPOINT}`).then
   .items;
 assert.ok(apiItems.length > 0, 'backend must return catalog items');
 
-assert.equal(rendered, apiItems.length, 'page bootstrap must render every item the backend returned');
-const cards = pageDocument.byId.catalog.children;
+assert.ok(backendRendered > 0, 'page bootstrap must render backend reference designs');
+assert.equal(catalogRendered, apiItems.length, 'page bootstrap must render every catalog item');
+const cards = pageDocument.byId['catalog-reference-designs'].children;
 assert.equal(cards.length, apiItems.length, 'one card per backend item');
 assert.equal(
-  pageDocument.byId.status.textContent,
-  `Loaded ${apiItems.length} reference designs from the backend API.`,
+  pageDocument.byId['catalog-status'].textContent,
+  `Loaded ${apiItems.length} reference designs from the catalog API.`,
 );
+assert.match(pageDocument.byId['connection-status'].textContent, / is ok at same origin\.$/);
+assert.equal(pageDocument.byId['connection-status'].getAttribute('class'), 'status-ok');
+assert.ok(pageDocument.byId.concepts.textContent.includes('reference_designs'));
 
 const taskNames = new Map(apiTasks.map((task) => [task.id, task.name]));
 for (const [index, item] of apiItems.entries()) {
