@@ -269,11 +269,22 @@ const projectFile = () => ({
 });
 
 const projectFileValidationError = (file) => {
+  let error;
   const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
   const requireObject = (value, path) => isObject(value) ? null : `${path} must be an object`;
   const requireArray = (value, path) => Array.isArray(value) ? null : `${path} must be an array`;
   const requireString = (value, path) => typeof value === 'string' && value.trim() ? null : `${path} is required and must be a non-blank string`;
   const requireFiniteNumber = (value, path, minimum = 0) => typeof value === 'number' && Number.isFinite(value) && value >= minimum ? null : `${path} must be a finite number greater than or equal to ${minimum}`;
+  const requireFiniteScalar = (value, path) => typeof value === 'number' && Number.isFinite(value) ? null : `${path} must be a finite number`;
+  const requireStringArray = (value, path) => {
+    const error = requireArray(value, path);
+    if (error) return error;
+    for (const [index, item] of value.entries()) {
+      const itemError = requireString(item, `${path}[${index}]`);
+      if (itemError) return itemError;
+    }
+    return null;
+  };
   const requireDateString = (value, path) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? null : `${path} must be a valid datetime string`;
   const uniqueIds = (items, path) => {
     const seen = new Set();
@@ -577,6 +588,48 @@ const projectFileValidationError = (file) => {
       }
       const solverInputsError = requireObject(preview.solver_inputs, `${previewPath}.solver_inputs`);
       if (solverInputsError) return solverInputsError;
+      for (const field of ['geometry_source', 'units', 'freecad_document', 'gmsh_model', 'calculix_input_deck']) {
+        if (preview.solver_inputs[field] != null) {
+          const scalarError = requireString(preview.solver_inputs[field], `${previewPath}.solver_inputs.${field}`);
+          if (scalarError) return scalarError;
+        }
+      }
+      if (preview.solver_inputs.mesh_size_mm != null) {
+        error = requireFiniteNumber(preview.solver_inputs.mesh_size_mm, `${previewPath}.solver_inputs.mesh_size_mm`, Number.MIN_VALUE);
+        if (error) return error;
+      }
+      error = requireStringArray(preview.solver_inputs.notes, `${previewPath}.solver_inputs.notes`);
+      if (error) return error;
+      error = requireStringArray(preview.criteria, `${previewPath}.criteria`) || requireStringArray(preview.review_required, `${previewPath}.review_required`) || requireStringArray(preview.demo_estimates, `${previewPath}.demo_estimates`);
+      if (error) return error;
+      for (const [artifactIndex, artifact] of preview.expected_result_artifacts.entries()) {
+        const artifactPath = `${previewPath}.expected_result_artifacts[${artifactIndex}]`;
+        error = requiredFields(artifact, ['kind', 'title', 'file_format', 'produced_by', 'replaces_demo_estimate', 'review_required_before_release'], artifactPath);
+        if (error) return error;
+        for (const field of ['kind', 'title', 'file_format', 'produced_by']) {
+          error = requireString(artifact[field], `${artifactPath}.${field}`);
+          if (error) return error;
+        }
+        for (const field of ['replaces_demo_estimate', 'review_required_before_release']) {
+          if (typeof artifact[field] !== 'boolean') return `${artifactPath}.${field} must be a boolean`;
+        }
+      }
+      const pipelineStatuses = new Set(['stub_contract', 'ready_for_worker', 'unavailable_review_required', 'blocked_missing_input', 'completed_by_solver']);
+      for (const [stepIndex, step] of preview.solver_pipeline.entries()) {
+        const stepPath = `${previewPath}.solver_pipeline[${stepIndex}]`;
+        error = requiredFields(step, ['order', 'adapter_name', 'open_source_tool', 'action', 'consumes', 'produces', 'status', 'review_notes'], stepPath);
+        if (error) return error;
+        if (!Number.isInteger(step.order) || step.order < 1) return `${stepPath}.order must be a positive integer`;
+        for (const field of ['adapter_name', 'open_source_tool', 'action', 'status']) {
+          error = requireString(step[field], `${stepPath}.${field}`);
+          if (error) return error;
+        }
+        if (!pipelineStatuses.has(step.status)) return `${stepPath}.status is invalid`;
+        for (const field of ['consumes', 'produces', 'review_notes']) {
+          error = requireStringArray(step[field], `${stepPath}.${field}`);
+          if (error) return error;
+        }
+      }
       if (preview.project_id !== file.project.id) return `${previewPath}.project_id must match project.id`;
       if (previewTargetIds.has(preview.target_id)) return `${previewPath}.target_id must be unique across readiness previews`;
       previewTargetIds.add(preview.target_id);
@@ -597,6 +650,20 @@ const projectFileValidationError = (file) => {
             ? requireObject(nested.direction, `${nestedPath}.direction`)
             : requireArray(nested.degrees_of_freedom, `${nestedPath}.degrees_of_freedom`);
           if (directionOrDofError) return directionOrDofError;
+          if (field === 'load_cases') {
+            for (const axis of ['x', 'y', 'z']) {
+              const vectorError = requireFiniteScalar(nested.direction[axis], `${nestedPath}.direction.${axis}`);
+              if (vectorError) return vectorError;
+            }
+            if (nested.magnitude != null) {
+              const magnitudeError = requireFiniteScalar(nested.magnitude, `${nestedPath}.magnitude`);
+              if (magnitudeError) return magnitudeError;
+            }
+            if (nested.unit != null) {
+              const unitError = requireString(nested.unit, `${nestedPath}.unit`);
+              if (unitError) return unitError;
+            }
+          }
           for (const scalarField of field === 'load_cases'
             ? ['id', 'name', 'description', 'load_type', 'application_region', 'confidence']
             : ['id', 'name', 'constraint_type', 'region', 'confidence']) {
@@ -607,6 +674,9 @@ const projectFileValidationError = (file) => {
           const nestedEnum = field === 'load_cases' ? nested.load_type : nested.constraint_type;
           const enumValues = field === 'load_cases' ? readinessLoadTypes : readinessConstraintTypes;
           if (!(enumValues.has(nestedEnum))) return `${nestedPath}.${field === 'load_cases' ? 'load_type' : 'constraint_type'} is invalid`;
+          if (!new Set(['verified_from_authoritative_source', 'verified_from_manufacturer_data', 'calculated_from_user_inputs', 'estimated_from_heuristic', 'unknown_or_needs_review']).has(nested.confidence)) return `${nestedPath}.confidence is invalid`;
+          if (field === 'constraints') error = requireStringArray(nested.degrees_of_freedom, `${nestedPath}.degrees_of_freedom`);
+          if (error) return error;
           for (const partId of nested.target_part_ids) if (!partIds.has(partId)) return `${nestedPath}.target_part_ids references an unknown part ${partId}`;
         }
       }
