@@ -24,7 +24,7 @@ from .catalog import (
     DEFAULT_WIRING_RULES,
     GRIPPER_TASK,
 )
-from .job_queue import validate_cached_references
+from .job_queue import normalize_cached_references
 from .models import (
     AnalysisArtifact,
     AnalysisArtifactKind,
@@ -108,7 +108,12 @@ def _ensure_json_finite(value: object, path: str) -> None:
             _ensure_json_finite(item, f"{path}[{index}]")
 
 
-def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None = None) -> AnalysisJob:
+def normalize_analysis_job(
+    project_id: str,
+    job: AnalysisJob,
+    job_id: str | None = None,
+    reports: list[AnalysisReport] | None = None,
+) -> AnalysisJob:
     _ensure_json_finite(job.model_dump(mode="python"), "analysis_job")
     if get_adapter_for_job(job) is None:
         raise InvalidAnalysisJobAdapterError(
@@ -141,8 +146,7 @@ def normalize_analysis_job(project_id: str, job: AnalysisJob, job_id: str | None
         },
         deep=True,
     )
-    validate_cached_references(project_id, normalized)
-    return normalized
+    return normalize_cached_references(project_id, normalized, reports or [])
 
 
 def normalize_project_references(project_id: str, project: Project) -> Project:
@@ -334,8 +338,8 @@ def normalize_project_references(project_id: str, project: Project) -> Project:
         )
         for assembly in project.assemblies
     ]
-    analysis_jobs = [normalize_analysis_job(project_id, job) for job in project.analysis_jobs]
     reports = [report.model_copy(update={"project_id": project_id}, deep=True) for report in project.reports]
+    analysis_jobs = [normalize_analysis_job(project_id, job, reports=reports) for job in project.analysis_jobs]
     return project.model_copy(
         update={"id": project_id, "assemblies": assemblies, "analysis_jobs": analysis_jobs, "reports": reports},
         deep=True,
@@ -426,7 +430,7 @@ class InMemoryProjectStore:
             project = self._projects.get(job.project_id)
             if project is None:
                 raise ProjectNotFoundError(job.project_id)
-            stored = normalize_analysis_job(project.id, job)
+            stored = normalize_analysis_job(project.id, job, reports=project.reports)
             self._projects[project.id] = project.model_copy(
                 update={"analysis_jobs": [*project.analysis_jobs, stored]},
                 deep=True,
@@ -443,7 +447,12 @@ class InMemoryProjectStore:
                 for index, job in enumerate(project.analysis_jobs):
                     if job.id != job_id:
                         continue
-                    stored = normalize_analysis_job(project_id, update(job.model_copy(deep=True)), job_id)
+                    stored = normalize_analysis_job(
+                        project_id,
+                        update(job.model_copy(deep=True)),
+                        job_id,
+                        reports=project.reports,
+                    )
                     jobs = list(project.analysis_jobs)
                     jobs[index] = stored
                     self._projects[project_id] = project.model_copy(update={"analysis_jobs": jobs}, deep=True)

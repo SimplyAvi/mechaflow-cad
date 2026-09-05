@@ -25,6 +25,7 @@ from .models import (
     AnalysisJobStatus,
     AnalysisJobType,
     AnalysisReadinessState,
+    AnalysisReport,
     CachedAnalysisArtifactReference,
     CachedAnalysisReportReference,
     CachedArtifactStatus,
@@ -502,6 +503,19 @@ def build_cached_report_refs(project: Project, job: AnalysisJob) -> list[CachedA
     return refs[:3]
 
 
+def _status_for_recommendation(
+    status: AnalysisJobStatus,
+    recommendation: AnalysisExecutionTargetRecommendation,
+) -> AnalysisJobStatus:
+    if status != AnalysisJobStatus.queued:
+        return status
+    if recommendation.status == AnalysisExecutionRecommendationStatus.review_required:
+        return AnalysisJobStatus.review_required
+    if recommendation.status == AnalysisExecutionRecommendationStatus.unavailable:
+        return AnalysisJobStatus.solver_unavailable
+    return status
+
+
 def enrich_analysis_job_for_queue(
     project: Project,
     job: AnalysisJob,
@@ -517,6 +531,7 @@ def enrich_analysis_job_for_queue(
     recommendation = build_execution_target_recommendation(project, request, tool_statuses, adapter_name=job.adapter_name)
     return job.model_copy(
         update={
+            "status": _status_for_recommendation(job.status, recommendation),
             "recommendation": recommendation,
             "cached_artifact_refs": build_cached_artifact_refs(job),
             "cached_report_refs": build_cached_report_refs(project, job),
@@ -547,7 +562,11 @@ def build_analysis_job_queue(project: Project, tool_statuses: list[LocalSolverTo
     )
 
 
-def validate_cached_references(project_id: str, job: AnalysisJob) -> None:
+def normalize_cached_references(
+    project_id: str,
+    job: AnalysisJob,
+    reports: Iterable[AnalysisReport],
+) -> AnalysisJob:
     artifact_by_id = {artifact.id: artifact for artifact in job.artifacts}
     for artifact in job.artifacts:
         manifest = artifact.payload.get("file_manifest", [])
@@ -564,12 +583,47 @@ def validate_cached_references(project_id: str, job: AnalysisJob) -> None:
                 raise ValueError(f"analysis artifact {artifact.id!r} has a file reference without a stable name")
             if download_url is not None and (not isinstance(download_url, str) or f"/analysis-artifacts/{artifact.id}/{name}" not in download_url):
                 raise ValueError(f"analysis artifact {artifact.id!r} has stale or impossible download_url metadata")
+    normalized_artifact_refs = []
     for ref in job.cached_artifact_refs:
         artifact = artifact_by_id.get(ref.artifact_id)
         if artifact is None:
             raise ValueError(f"cached artifact reference {ref.artifact_id!r} is not attached to job {job.id!r}")
         if ref.job_id != job.id or ref.project_id != project_id or ref.kind != artifact.kind:
             raise ValueError(f"cached artifact reference {ref.artifact_id!r} does not match its current job")
+        status, stale_reason = _artifact_cache_status(artifact)
+        normalized_artifact_refs.append(ref.model_copy(update={
+            "project_id": project_id,
+            "job_id": job.id,
+            "kind": artifact.kind,
+            "title": artifact.title,
+            "status": status,
+            "generated_by": artifact.generated_by,
+            "generated_at": artifact.created_at,
+            "download_urls": _manifest_download_urls(artifact),
+            "summary": artifact.summary,
+            "stale_reason": stale_reason,
+        }, deep=True))
+    reports_by_id = {report.id: report for report in reports}
+    normalized_report_refs = []
     for ref in job.cached_report_refs:
         if ref.project_id != project_id:
             raise ValueError(f"cached report reference {ref.report_id!r} belongs to another project")
+        report = reports_by_id.get(ref.report_id)
+        if report is None:
+            raise ValueError(f"cached report reference {ref.report_id!r} does not exist in project {project_id!r}")
+        normalized_report_refs.append(ref.model_copy(update={
+            "project_id": project_id,
+            "title": report.title,
+            "status": report.status,
+            "generated_at": report.generated_at,
+            "current": report.status != ReportStatus.superseded,
+            "summary": report.summary,
+        }, deep=True))
+    return job.model_copy(update={
+        "cached_artifact_refs": normalized_artifact_refs,
+        "cached_report_refs": normalized_report_refs,
+    }, deep=True)
+
+
+def validate_cached_references(project_id: str, job: AnalysisJob, reports: Iterable[AnalysisReport] = ()) -> None:
+    normalize_cached_references(project_id, job, reports)

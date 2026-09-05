@@ -1157,6 +1157,23 @@ def test_analysis_job_queue_explains_targets_estimates_and_cached_artifacts(monk
     assert job["artifacts"][-1]["payload"]["result_label"] == "review_required_not_fea"
 
 
+def test_analysis_job_enqueue_projects_recommendation_blocker_into_status(monkeypatch) -> None:
+    monkeypatch.setattr(main_module, "list_local_solver_tool_statuses", _unavailable_tool_statuses)
+    local_client = TestClient(main_module.create_app())
+
+    response = local_client.post(
+        "/api/analysis-jobs",
+        json={
+            "job_type": AnalysisJobType.run_fea.value,
+            "target_id": "part-finger-link",
+            "project_id": "project-open-gripper-demo",
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "review_required"
+
+
 def test_analysis_recommendation_prefers_cloud_planning_when_local_tools_are_missing(monkeypatch) -> None:
     monkeypatch.setattr(main_module, "list_local_solver_tool_statuses", _unavailable_tool_statuses)
     local_client = TestClient(main_module.create_app())
