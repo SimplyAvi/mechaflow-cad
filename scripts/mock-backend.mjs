@@ -885,6 +885,7 @@ const projectFileValidationError = (file) => {
           if (error) return error;
         }
         if (!analysisJobTypes.has(preview.recommended_job_request.job_type)) return `${requestPath}.job_type is invalid`;
+        if (preview.recommended_job_request.target_id !== preview.target_id) return `${requestPath}.target_id must match preview.target_id`;
         if (preview.recommended_job_request.project_id !== file.project.id) return `${requestPath}.project_id must match project.id`;
         if (preview.recommended_job_request.local_compute_preferred != null && typeof preview.recommended_job_request.local_compute_preferred !== 'boolean') return `${requestPath}.local_compute_preferred must be a boolean`;
         if (preview.recommended_job_request.input_summary != null) {

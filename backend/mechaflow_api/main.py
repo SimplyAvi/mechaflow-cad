@@ -250,6 +250,13 @@ def create_app(settings: Settings | None = None, project_store: ProjectStore | N
                 raise ValueError(f"analysis readiness target {preview.target_id!r} is not in the imported project")
             if preview.target_kind != target[0] or preview.target_name != target[1]:
                 raise ValueError(f"analysis readiness metadata does not match target {preview.target_id!r}")
+            if (
+                preview.recommended_job_request is not None
+                and preview.recommended_job_request.target_id != preview.target_id
+            ):
+                raise ValueError(
+                    f"analysis readiness recommendation target does not match preview target {preview.target_id!r}"
+                )
             for load_case in preview.load_cases:
                 unknown = set(load_case.target_part_ids) - part_ids
                 if unknown:
