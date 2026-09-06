@@ -423,7 +423,7 @@ function App() {
         setExportedEvidence({
           projectId: projectFile.project.id,
           jobIds: projectFile.project.analysis_jobs.map((job) => job.id),
-          artifactIds: projectFile.project.analysis_jobs.flatMap((job) => job.artifacts.map((artifact) => artifact.id)),
+          artifactIds: projectFile.project.analysis_jobs.flatMap((job) => job.artifacts.flatMap((artifact) => (artifact.id ? [artifact.id] : []))),
           artifactContent: evidenceArtifactSignature(projectFile.project.analysis_jobs.flatMap((job) => job.artifacts)),
         });
         setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}. Re-import it to complete the round trip.`);
