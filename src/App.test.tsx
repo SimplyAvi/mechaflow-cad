@@ -17,6 +17,11 @@ describe('MechaFlow cockpit', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Robot arm CAD review cockpit/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Guided end-to-end MVP flow');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('1/8');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Open reference robot');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Try material substitution');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Run local-safe analysis path');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('50 lb');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('8s cycle');
     expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('0.65m reach');
@@ -76,6 +81,34 @@ describe('MechaFlow cockpit', () => {
     );
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('"dimension_changes": {}');
     expect(screen.getByText(/mat-carbon-fiber-nylon/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('2/8');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Try material substitutionReady');
+  });
+
+  it('does not mark downstream workflow available without electronics records', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelDataWithoutElectronics = structuredClone(mockProjectPanelData);
+    panelDataWithoutElectronics.electronics_components = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) {
+        return Response.json(panelDataWithoutElectronics);
+      }
+      if (url.endsWith('/api/projects/project-open-gripper-demo/analysis-readiness')) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const checklist = await screen.findByLabelText(/Captain demo checklist/i);
+    const downstreamStep = within(checklist).getByText('Review BOM, manufacturing, and wiring').parentElement;
+    expect(downstreamStep).not.toBeNull();
+    expect(downstreamStep).toHaveTextContent('Review required');
+    expect(within(checklist).getByText('One or more downstream workflow panels need seed or backend data before the captain demo is complete.')).toBeInTheDocument();
   });
 
   it('selects a different part from the assembly and shows its wiring context', async () => {
@@ -320,6 +353,7 @@ describe('MechaFlow cockpit', () => {
     await user.click(screen.getByRole('button', { name: /Preview backend impact/i }));
 
     expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('3/8');
     expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
@@ -353,6 +387,17 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({
+          status: 'ready',
+          summary: 'Prior project solver state.',
+          tool_statuses: [],
+          available_tools: [],
+          missing_tools: [],
+          execution_modes: [],
+          install_guidance: [],
+        });
+      }
       if (url.endsWith('/api/projects/import-file')) {
         expect(init?.method).toBe('POST');
         expect(init?.body).toBe(JSON.stringify(projectFile));
@@ -372,6 +417,7 @@ describe('MechaFlow cockpit', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Robot arm CAD review cockpit/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Prior project solver state/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Project file import and export/i)).toHaveTextContent(/Portable project file/i);
     await user.upload(
       screen.getByLabelText(/Import MechaFlow project file/i),
@@ -383,6 +429,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
     expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
+    expect(screen.getByText(/Prior project solver state/i)).toBeInTheDocument();
   });
 
   it('shows an understandable project-file error for invalid local JSON', async () => {

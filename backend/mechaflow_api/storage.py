@@ -394,18 +394,42 @@ class InMemoryProjectStore:
             if conflict:
                 raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
+    def _artifact_has_downloadable_file(self, artifact: AnalysisArtifact) -> bool:
+        file_manifest = artifact.payload.get("file_manifest")
+        if not isinstance(file_manifest, list):
+            return False
+        produced_files = [
+            item
+            for item in file_manifest
+            if isinstance(item, dict)
+            and not item.get("missing")
+            and isinstance(item.get("name"), str)
+            and isinstance(item.get("download_url"), str)
+        ]
+        if self._artifact_file_exists is None:
+            return False
+        return any(self._artifact_file_exists(artifact, item["name"]) for item in produced_files)
+
     def _ensure_artifact_ids_available(self, project_id: str, project: Project) -> None:
-        incoming_ids = [artifact.id for job in project.analysis_jobs for artifact in job.artifacts]
+        incoming_artifacts = [artifact for job in project.analysis_jobs for artifact in job.artifacts]
+        incoming_ids = [artifact.id for artifact in incoming_artifacts]
         if len(incoming_ids) != len(set(incoming_ids)):
             raise ValueError("analysis artifact IDs must be unique within a project")
-        existing_ids = {
-            artifact.id
+        existing_artifacts = [
+            artifact
             for existing_project_id, existing_project in self._projects.items()
             if existing_project_id != project_id
             for job in existing_project.analysis_jobs
             for artifact in job.artifacts
+        ]
+        existing_ids = {artifact.id for artifact in existing_artifacts}
+        incoming_downloadable_ids = {
+            artifact.id for artifact in incoming_artifacts if self._artifact_has_downloadable_file(artifact)
         }
-        conflict = set(incoming_ids) & existing_ids
+        existing_downloadable_ids = {
+            artifact.id for artifact in existing_artifacts if self._artifact_has_downloadable_file(artifact)
+        }
+        conflict = (set(incoming_ids) & existing_downloadable_ids) | (incoming_downloadable_ids & existing_ids)
         if conflict:
             raise ValueError(f"analysis artifact ID already belongs to another project: {next(iter(conflict))!r}")
 
@@ -473,7 +497,7 @@ class InMemoryProjectStore:
             for project in self._projects.values():
                 for job in project.analysis_jobs:
                     for artifact in job.artifacts:
-                        if artifact.id == artifact_id:
+                        if artifact.id == artifact_id and self._artifact_has_downloadable_file(artifact):
                             return job.model_copy(deep=True), artifact.model_copy(deep=True)
             return None
 
@@ -489,12 +513,16 @@ class InMemoryProjectStore:
                 raise ValueError("analysis artifact IDs must be unique within a job")
             existing_artifact_ids = {
                 artifact.id
-                for existing_project in self._projects.values()
-                for existing_job in existing_project.analysis_jobs
+                for existing_job in project.analysis_jobs
                 for artifact in existing_job.artifacts
             }
             if set(incoming_artifact_ids) & existing_artifact_ids:
                 raise ValueError("analysis artifact ID already exists")
+            candidate = project.model_copy(
+                update={"analysis_jobs": [*project.analysis_jobs, job]},
+                deep=True,
+            )
+            self._ensure_artifact_ids_available(project.id, candidate)
             stored = normalize_analysis_job(
                 project.id,
                 job,
@@ -524,6 +552,16 @@ class InMemoryProjectStore:
                         reports=project.reports,
                         artifact_file_exists=self._artifact_file_exists,
                     )
+                    candidate = project.model_copy(
+                        update={
+                            "analysis_jobs": [
+                                stored if candidate_job.id == job.id else candidate_job
+                                for candidate_job in project.analysis_jobs
+                            ],
+                        },
+                        deep=True,
+                    )
+                    self._ensure_artifact_ids_available(project_id, candidate)
                     jobs = list(project.analysis_jobs)
                     jobs[index] = stored
                     self._projects[project_id] = project.model_copy(update={"analysis_jobs": jobs}, deep=True)
