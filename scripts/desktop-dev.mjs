@@ -108,6 +108,11 @@ const start = (name, command, args, env = {}, options = {}) => {
 
 const viteBin = requireLocalBin('vite');
 const electronBin = requireLocalBin('electron');
+const electronArgs = ['desktop/main.cjs'];
+if (process.platform === 'linux' && process.env.CI === 'true') {
+  // GitHub-hosted runners do not preserve Electron's setuid sandbox helper mode.
+  electronArgs.unshift('--no-sandbox');
+}
 
 console.log(`Starting ${appName} desktop demo with local explicit ports:`);
 console.log(`  app:      ${appName}`);
@@ -135,7 +140,7 @@ start('web', viteBin, ['--host', frontendHost, '--port', String(frontendPort), '
 try {
   await waitForUrl(`${apiBaseUrl}/health`, 'mock backend');
   await waitForUrl(frontendOrigin, 'Vite frontend');
-  start('desktop', electronBin, ['desktop/main.cjs'], {
+  start('desktop', electronBin, electronArgs, {
     MECHAFLOW_DESKTOP_APP_NAME: appName,
     MECHAFLOW_DESKTOP_URL: frontendOrigin,
     MECHAFLOW_DESKTOP_SMOKE: process.env.MECHAFLOW_DESKTOP_SMOKE || '0',
