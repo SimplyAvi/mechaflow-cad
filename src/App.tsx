@@ -141,6 +141,7 @@ function App() {
   const [substitutionPending, setSubstitutionPending] = useState(false);
   const [demoStepReviews, setDemoStepReviews] = useState<Set<string>>(() => new Set());
   const projectLoadVersion = useRef(0);
+  const importRequestVersion = useRef(0);
 
   const markDemoStep = (stepId: string) => {
     setDemoStepReviews((current) => new Set(current).add(stepId));
@@ -379,12 +380,15 @@ function App() {
       setProjectFileMessage('Start the desktop demo with a local backend or mock API to import a project file.');
       return;
     }
+    const requestVersion = importRequestVersion.current + 1;
+    importRequestVersion.current = requestVersion;
     setProjectFilePending(true);
     setProjectFileMessage(`Opening ${file.name}...`);
     try {
       const text = await file.text();
       const projectFile = JSON.parse(text) as unknown;
       const importedDesign = await importProjectFile(design.backend.apiBaseUrl, projectFile);
+      if (importRequestVersion.current !== requestVersion) return;
       applyLoadedDesign(importedDesign);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
       markDemoStep('export-import');
@@ -393,9 +397,9 @@ function App() {
       const message = error instanceof SyntaxError
         ? 'Project import failed: file is not valid JSON.'
         : 'Project import failed: malformed or unsupported MechaFlow project file.';
-      setProjectFileMessage(message);
+      if (importRequestVersion.current === requestVersion) setProjectFileMessage(message);
     } finally {
-      setProjectFilePending(false);
+      if (importRequestVersion.current === requestVersion) setProjectFilePending(false);
     }
   };
 
