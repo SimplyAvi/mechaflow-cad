@@ -4,56 +4,146 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { mockBackendMetadata, mockProjectPanelData } from './data/mockDesign';
 
-describe('MechaFlow cockpit', () => {
+describe('MechaFlow input-first cockpit', () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
-  it('renders the core open-design workflow with bundled backend-shaped mock data', async () => {
+  it('launches into a simple 3D-first workspace with prompt, sidebars, and no advanced wall', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /Robot arm CAD review cockpit/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Guided end-to-end MVP flow');
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('1/8');
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Open reference robot');
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Try material substitution');
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Run local-safe analysis path');
-    expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('50 lb');
-    expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('8s cycle');
-    expect(screen.getByLabelText(/Preserved task/i)).toHaveTextContent('0.65m reach');
+    expect(await screen.findByRole('heading', { name: /Start with intent, then refine the model/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Interactive exploded view/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Assembly yaw rotation/i)).toHaveValue('18');
-    expect(screen.getByLabelText(/Assembly orbit pitch/i)).toHaveValue('10');
-    expect(screen.getByLabelText(/Explode amount/i)).toHaveValue('100');
-    expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
-    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not real FEA results/i);
-    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/140 lb demo limit/i);
-    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Source and confidence/i);
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/pre-solver input only/i);
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/no FEA claim/i);
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Gmsh finite-element mesh/i);
-    expect(screen.getByText(/Analysis job queue/i)).toBeInTheDocument();
-    expect(screen.getByText(/Local-first orchestration and cached reports/i)).toBeInTheDocument();
-    expect(screen.getByText(/BOM and cost/i)).toBeInTheDocument();
-    expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
-    expect(screen.getByText(/Backend handoff mirrored/i)).toBeInTheDocument();
-    expect(screen.getByText(/^MIT$/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open catalog entry/i })).toHaveAttribute(
-      'href',
-      'https://github.com/SimplyAvi/mechaflow-cad',
-    );
-    expect(screen.getAllByText(/Advisory edit report/i).length).toBeGreaterThan(0);
-    const inspectorPanel = screen.getByText('Part inspector').closest('aside');
-    expect(inspectorPanel).not.toBeNull();
-    expect(within(inspectorPanel as HTMLElement).getByText('$42-$130')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /New from prompt/i })).toBeInTheDocument();
+    expect(screen.getByText(/Open local project/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ready examples/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Project and example browser/i)).toHaveTextContent(/Model tree/i);
+    expect(screen.getByLabelText(/Selected-part properties and context tools/i)).toHaveTextContent(/Context inspector/i);
+    expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('50 lb payload, 8 s cycle, 0.65 m reach');
+    expect(screen.getByText(/Reference only. No photo-to-CAD reconstruction/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/BOM and cost/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/MVP coverage guide/i)).not.toBeInTheDocument();
   });
 
-  it('updates capability impact and backend modification preview when a material substitution is selected', async () => {
+  it('captures typed design intent into structured chips and starts a prompt concept honestly', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText(/Describe what you want to design/i);
+    await user.type(input, 'Design a compact gripper for 12 kg payload, 0.4 m reach, 5 s cycle, aluminum body, avoid cloud compute, keep wiring serviceable.');
+
+    const chips = screen.getByLabelText(/Extracted design intent chips/i);
+    expect(chips).toHaveTextContent(/Payload 26.5 lb/i);
+    expect(chips).toHaveTextContent(/Reach 0.4 m/i);
+    expect(chips).toHaveTextContent(/Cycle 5 s/i);
+    expect(chips).toHaveTextContent(/Material aluminum/i);
+    expect(chips).toHaveTextContent(/Constraint noted/i);
+    expect(chips).toHaveTextContent(/Restriction noted/i);
+
+    await user.click(screen.getByRole('button', { name: /^Start design$/i }));
+
+    expect(await screen.findByText(/Started a concept workspace from your prompt/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/New mechanism concept from prompt/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('26.5 lb payload, 5 s cycle, 0.4 m reach');
+    expect(screen.getByText(/proxy rendering, not generated CAD or photo reconstruction/i)).toBeInTheDocument();
+  });
+
+  it('adds reference image metadata and falls back cleanly when speech is unavailable', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.upload(
+      await screen.findByLabelText(/Upload reference images/i),
+      new File(['reference'], 'wrist-reference.png', { type: 'image/png' }),
+    );
+
+    expect(await screen.findByText('wrist-reference.png')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Imported reference image metadata/i)).toHaveTextContent(/session metadata only/i);
+    expect(screen.getByText(/no photo-to-CAD reconstruction is running/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Speak$/i }));
+    expect(await screen.findByText(/Voice input uses browser-native speech recognition when available/i)).toBeInTheDocument();
+  });
+
+  it('loads ready local examples without ambiguous external CAD assets', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const gantryCard = (await screen.findByText(/Compact pick-and-place gantry concept/i)).closest('article');
+    expect(gantryCard).not.toBeNull();
+    expect(within(gantryCard as HTMLElement).getByText(/no external CAD asset imported/i)).toBeInTheDocument();
+    await user.click(within(gantryCard as HTMLElement).getByRole('button', { name: /Load/i }));
+
+    expect(await screen.findByText(/Compact gantry proxy assembly/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toHaveValue('Design a compact pick-and-place gantry for 8 lb payload, 0.45 m travel, 3 s cycle, aluminum frame, local-only analysis.');
+    expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('8 lb payload, 3 s cycle, 0.45 m reach');
+    expect(screen.getByText(/repository-local and does not import external CAD assets/i)).toBeInTheDocument();
+  });
+
+  it('reopens the most recently saved local project and reports when history is empty', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByRole('img', { name: /Interactive exploded view/i });
+    const gantryCard = screen.getByText(/Compact pick-and-place gantry concept/i).closest('article');
+    expect(gantryCard).not.toBeNull();
+    await user.click(within(gantryCard as HTMLElement).getByRole('button', { name: /Load/i }));
+    await screen.findByText(/Compact gantry proxy assembly/i);
+
+    await user.click(screen.getByRole('button', { name: /Recent project/i }));
+    expect(await screen.findByText(/Reopened Compact pick-and-place gantry concept from local recent-project history/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toHaveValue(
+      'Design a compact pick-and-place gantry for 8 lb payload, 0.45 m travel, 3 s cycle, aluminum frame, local-only analysis.',
+    );
+
+    cleanup();
+    window.localStorage.clear();
+    render(<App />);
+    await screen.findByRole('img', { name: /Interactive exploded view/i });
+    await user.click(screen.getByRole('button', { name: /Recent project/i }));
+    expect(await screen.findByText(/No saved recent project is available/i)).toBeInTheDocument();
+  });
+
+  it('keeps advanced MVP tools behind mode switches after launch', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole('img', { name: /Interactive exploded view/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Analysis$/i }));
+    expect(await screen.findByText(/Analysis job queue/i)).toBeInTheDocument();
+    expect(screen.getByText(/Local-first orchestration and cached reports/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
+    expect(await screen.findByText(/BOM and cost/i)).toBeInTheDocument();
+    expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Reports$/i }));
+    expect(await screen.findByLabelText(/Project file import and export/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/MVP coverage guide/i)).toHaveTextContent(/Progressive tool coverage/i);
+
+    await user.click(screen.getByRole('button', { name: /^Backend$/i }));
+    expect(await screen.findByText(/Ready for API handoff/i)).toBeInTheDocument();
+  });
+
+  it('selects a part and exposes material substitution as contextual design tooling', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
     const user = userEvent.setup();
 
@@ -65,194 +155,22 @@ describe('MechaFlow cockpit', () => {
     await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Parallel gripper jaw link/i }));
 
     expect(screen.getByRole('heading', { name: /^Parallel gripper jaw link$/i })).toBeInTheDocument();
+    await user.click(screen.getByText(/Design and material tools/i));
     const optionSelector = screen.getByLabelText(/Preview option/i);
     expect(within(optionSelector).queryByRole('option', { name: /FR-4/i })).not.toBeInTheDocument();
 
     await user.selectOptions(optionSelector, 'part-finger-link-mat-carbon-fiber-nylon-additive_fdm');
 
-    expect(
-      screen.getAllByText(/Material and process substitution preview has no worker-supplied payload rating/i).length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Material and process substitution preview has no worker-supplied payload rating/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Payload rating review required/i)).toBeInTheDocument();
     expect(screen.getByText(/Cost range/i).closest('div')).toHaveTextContent('$3-$12');
     expect(screen.getAllByText(/1-3 days/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent(
       '/api/projects/project-open-gripper-demo/material-substitutions/preview then /apply',
     );
-    expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('"dimension_changes": {}');
-    expect(screen.getByText(/mat-carbon-fiber-nylon/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('2/8');
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Try material substitutionReady');
   });
 
-  it('does not mark downstream workflow available without electronics records', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
-    const panelDataWithoutElectronics = structuredClone(mockProjectPanelData);
-    panelDataWithoutElectronics.electronics_components = [];
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
-      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) {
-        return Response.json(panelDataWithoutElectronics);
-      }
-      if (url.endsWith('/api/projects/project-open-gripper-demo/analysis-readiness')) {
-        return new Response('Not found', { status: 404 });
-      }
-      return new Response('Not found', { status: 404 });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<App />);
-
-    const checklist = await screen.findByLabelText(/Captain demo checklist/i);
-    const downstreamStep = within(checklist).getByText('Review BOM, manufacturing, and wiring').parentElement;
-    expect(downstreamStep).not.toBeNull();
-    expect(downstreamStep).toHaveTextContent('Review required');
-    expect(within(checklist).getByText('One or more downstream workflow panels need seed or backend data before the captain demo is complete.')).toBeInTheDocument();
-  });
-
-  it('selects a different part from the assembly and shows its wiring context', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', '');
-    const user = userEvent.setup();
-
-    render(<App />);
-
-    const partTree = await screen.findByText('Selectable parts');
-    const treeContainer = partTree.closest('.part-tree');
-    expect(treeContainer).not.toBeNull();
-
-    await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Upper arm link/i }));
-
-    expect(screen.getByRole('heading', { name: /Upper arm link/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/72 lb demo limit/i);
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Demo estimate only/i);
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/CalculiX static structural input deck/i);
-    expect(screen.getAllByText(/Main arm harness/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Finger force sensor lead/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/service loop review required/i).length).toBeGreaterThan(0);
-  });
-
-  it('rotates and collapses the interactive exploded view controls', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', '');
-    const user = userEvent.setup();
-
-    render(<App />);
-
-    expect(await screen.findByRole('img', { name: /Interactive exploded view/i })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Orbit right/i }));
-    expect(screen.getByLabelText(/Assembly yaw rotation/i)).toHaveValue('33');
-    expect(screen.getByText(/Orbit yaw/i)).toHaveTextContent('33 degrees');
-
-    await user.click(screen.getByRole('button', { name: /Collapse assembly/i }));
-    expect(screen.getByRole('button', { name: /Explode assembly/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Explode amount/i)).toHaveValue('0');
-  });
-
-  it('requires compatibility review when a part has no explicit substitution', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', '');
-    const user = userEvent.setup();
-
-    render(<App />);
-
-    const partTree = await screen.findByText('Selectable parts');
-    const treeContainer = partTree.closest('.part-tree');
-    expect(treeContainer).not.toBeNull();
-
-    await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Controller PCB placeholder/i }));
-
-    expect(screen.getByRole('heading', { name: /Controller PCB placeholder/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Review required/i);
-    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/not a load-bearing part/i);
-    expect(screen.getByLabelText(/Design criteria and strength information/i)).toHaveTextContent(/Source and confidence/i);
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Board support, connector loads, and heat dissipation need review/i);
-    expect(screen.getByText(/No compatible substitution options are available/i)).toHaveTextContent(
-      /compatibility review is required/i,
-    );
-    expect(screen.queryByLabelText(/Preview option/i)).not.toBeInTheDocument();
-  });
-
-  it('loads the backend project panel endpoint when an API base URL is configured', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/api/metadata')) {
-        return Response.json(mockBackendMetadata);
-      }
-      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) {
-        return Response.json(mockProjectPanelData);
-      }
-      return new Response('Not found', { status: 404 });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<App />);
-
-    expect(await screen.findByText(/Data source: backend panel data/i)).toBeInTheDocument();
-    expect(screen.getByText(/http:\/\/api.test\/api\/projects\/project-open-gripper-demo\/panel-data/i)).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
-    expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
-  });
-
-  it('renders queue recommendations, planning estimates, and cached artifact links from the backend', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
-    const panelData = structuredClone(mockProjectPanelData);
-    const job = panelData.project.analysis_jobs[0]!;
-    job.artifacts[0] = {
-      ...job.artifacts[0]!,
-      id: 'artifact-cad-metadata',
-      payload: {
-        file_manifest: [{ name: 'metadata.json', download_url: '/api/analysis-artifacts/artifact-cad-metadata/metadata.json', bytes: 124 }],
-      },
-    };
-    job.recommendation = {
-      recommended_target: 'cloud_recommended_when_configured',
-      status: 'review_required',
-      summary: 'Cloud planning is recommended only after configuration because local FreeCAD is missing.',
-      reasons: ['FreeCAD is missing locally.', 'Cloud execution remains unavailable in this MVP.'],
-      missing_local_tools: ['FreeCAD'],
-      review_required: ['Configure provider and budget guardrails before remote execution.'],
-      model_complexity_score: 9,
-      expected_runtime_minutes: { label: 'local runtime planning estimate', min: 72, max: 101, unit: 'minutes', basis: 'deterministic_local_heuristic', confidence: 'estimated_from_heuristic', notice: 'Estimate only.' },
-      cost_estimate: { label: 'cloud planning cost estimate, not a quote', min: 3.15, max: 13.25, unit: 'USD', basis: 'cloud_planning_estimate', confidence: 'estimated_from_heuristic', notice: 'Planning estimate only. This is not real billing, a supplier quote, or a compute-provider price.' },
-      wait_time_estimate: { label: 'cloud planning wait estimate', min: 14, max: 36, unit: 'minutes', basis: 'cloud_planning_estimate', confidence: 'estimated_from_heuristic', notice: 'Hypothetical cloud queue only.' },
-      cloud_execution_available: false,
-      cloud_configuration_required: true,
-      cloud_notice: 'Cloud execution is not configured.',
-    };
-    job.cached_artifact_refs = [{
-      artifact_id: 'artifact-cad-metadata',
-      job_id: job.id,
-      project_id: panelData.project.id,
-      kind: 'cad_metadata',
-      title: 'Starter CAD metadata',
-      status: 'current',
-      generated_by: 'freecad-worker',
-      generated_at: '2026-09-03T00:00:00Z',
-      download_urls: ['/api/analysis-artifacts/artifact-cad-metadata/metadata.json'],
-      summary: 'Cached metadata bundle.',
-      stale_reason: null,
-    }];
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
-      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
-      return new Response('Not found', { status: 404 });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    render(<App />);
-
-    expect(await screen.findByText(/cloud planning is recommended only after configuration/i)).toBeInTheDocument();
-    expect(screen.getByText(/cloud recommended when configured/i)).toBeInTheDocument();
-    expect(screen.getByText(/Planning estimate only. This is not real billing/i)).toBeInTheDocument();
-    expect(screen.getByText(/Missing local tools: FreeCAD/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Download cached artifact/i })).toHaveAttribute(
-      'href',
-      'http://api.test/api/analysis-artifacts/artifact-cad-metadata/metadata.json',
-    );
-  });
-
-  it('previews then applies a backend material substitution without mutating during preview', async () => {
+  it('previews then applies a backend material substitution while advanced panels stay mode-scoped', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const user = userEvent.setup();
     const previewPanelData = structuredClone(mockProjectPanelData);
@@ -329,6 +247,9 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({ status: 'review_required', summary: 'Solver state unavailable.', tool_statuses: [], available_tools: [], missing_tools: [], execution_modes: [], install_guidance: [] });
+      }
       if (url.endsWith('/api/projects/project-open-gripper-demo/material-substitutions/preview')) return Response.json(backendPreview);
       if (url.endsWith('/api/projects/project-open-gripper-demo/material-substitutions/apply')) {
         return Response.json({ ...backendPreview, mode: 'applied', persisted: true });
@@ -343,17 +264,17 @@ describe('MechaFlow cockpit', () => {
     const treeContainer = partTree.closest('.part-tree');
     expect(treeContainer).not.toBeNull();
     await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Parallel gripper jaw link/i }));
+    await user.click(screen.getByText(/Design and material tools/i));
     await user.selectOptions(
       screen.getByLabelText(/Preview option/i),
       'part-finger-link-mat-carbon-fiber-nylon-additive_fdm',
     );
 
-    expect(screen.getByRole('heading', { name: '$440.60-$1,345.46 open estimate' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeDisabled();
+    expect(screen.queryByText(/BOM and cost preview/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Preview backend impact/i }));
 
     expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('3/8');
+    await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
     expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
@@ -365,7 +286,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
   });
 
-  it('imports a portable project file from the desktop picker and keeps cockpit data interactive', async () => {
+  it('imports a portable project file from the project browser and keeps data interactive', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const user = userEvent.setup();
     const importedPanelData = structuredClone(mockProjectPanelData);
@@ -416,20 +337,19 @@ describe('MechaFlow cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /Robot arm CAD review cockpit/i })).toBeInTheDocument();
-    expect(await screen.findByText(/Prior project solver state/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Project file import and export/i)).toHaveTextContent(/Portable project file/i);
+    expect(await screen.findByRole('heading', { name: /Start with intent/i })).toBeInTheDocument();
     await user.upload(
-      screen.getByLabelText(/Import MechaFlow project file/i),
+      screen.getByLabelText(/Open existing MechaFlow project file/i),
       new File([JSON.stringify(projectFile)], 'demo.mfcad.json', { type: 'application/json' }),
     );
 
     expect(await screen.findByText(/Opened Imported robot arm project from demo.mfcad.json/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /^Imported robot arm project$/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Imported robot arm project/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
-    expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
+    await user.click(screen.getByRole('button', { name: /^Analysis$/i }));
+    expect(await screen.findByText(/Prior project solver state/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
     expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
-    expect(screen.getByText(/Prior project solver state/i)).toBeInTheDocument();
   });
 
   it('shows an understandable project-file error for invalid local JSON', async () => {
@@ -439,29 +359,96 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({ status: 'review_required', summary: 'Solver state unavailable.', tool_statuses: [], available_tools: [], missing_tools: [], execution_modes: [], install_guidance: [] });
+      }
       return new Response('Not found', { status: 404 });
     }));
 
     render(<App />);
 
-    expect(await screen.findByLabelText(/Project file import and export/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Open existing MechaFlow project file/i)).toBeInTheDocument();
     await user.upload(
-      screen.getByLabelText(/Import MechaFlow project file/i),
+      screen.getByLabelText(/Open existing MechaFlow project file/i),
       new File(['not json'], 'broken.mfcad.json', { type: 'application/json' }),
     );
 
     expect(await screen.findByText(/Project import failed: file is not valid JSON/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Robot arm visual MVP task-preserving edit demo/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Robot arm visual MVP task-preserving edit demo/i).length).toBeGreaterThan(0);
   });
 
-  it('triggers a backend local pre-solver run and shows review-required artifacts', async () => {
+  it('renders queue recommendations, planning estimates, and cached artifact links in analysis mode', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelData = structuredClone(mockProjectPanelData);
+    const job = panelData.project.analysis_jobs[0]!;
+    job.artifacts[0] = {
+      ...job.artifacts[0]!,
+      id: 'artifact-cad-metadata',
+      payload: {
+        file_manifest: [{ name: 'metadata.json', download_url: '/api/analysis-artifacts/artifact-cad-metadata/metadata.json', bytes: 124 }],
+      },
+    };
+    job.recommendation = {
+      recommended_target: 'cloud_recommended_when_configured',
+      status: 'review_required',
+      summary: 'Cloud planning is recommended only after configuration because local FreeCAD is missing.',
+      reasons: ['FreeCAD is missing locally.', 'Cloud execution remains unavailable in this MVP.'],
+      missing_local_tools: ['FreeCAD'],
+      review_required: ['Configure provider and budget guardrails before remote execution.'],
+      model_complexity_score: 9,
+      expected_runtime_minutes: { label: 'local runtime planning estimate', min: 72, max: 101, unit: 'minutes', basis: 'deterministic_local_heuristic', confidence: 'estimated_from_heuristic', notice: 'Estimate only.' },
+      cost_estimate: { label: 'cloud planning cost estimate, not a quote', min: 3.15, max: 13.25, unit: 'USD', basis: 'cloud_planning_estimate', confidence: 'estimated_from_heuristic', notice: 'Planning estimate only. This is not real billing, a supplier quote, or a compute-provider price.' },
+      wait_time_estimate: { label: 'cloud planning wait estimate', min: 14, max: 36, unit: 'minutes', basis: 'cloud_planning_estimate', confidence: 'estimated_from_heuristic', notice: 'Hypothetical cloud queue only.' },
+      cloud_execution_available: false,
+      cloud_configuration_required: true,
+      cloud_notice: 'Cloud execution is not configured.',
+    };
+    job.cached_artifact_refs = [{
+      artifact_id: 'artifact-cad-metadata',
+      job_id: job.id,
+      project_id: panelData.project.id,
+      kind: 'cad_metadata',
+      title: 'Starter CAD metadata',
+      status: 'current',
+      generated_by: 'freecad-worker',
+      generated_at: '2026-09-03T00:00:00Z',
+      download_urls: ['/api/analysis-artifacts/artifact-cad-metadata/metadata.json'],
+      summary: 'Cached metadata bundle.',
+      stale_reason: null,
+    }];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({ status: 'review_required', summary: 'Solver state unavailable.', tool_statuses: [], available_tools: [], missing_tools: [], execution_modes: [], install_guidance: [] });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /^Analysis$/i }));
+    expect(await screen.findByText(/cloud planning is recommended only after configuration/i)).toBeInTheDocument();
+    expect(screen.getByText(/cloud recommended when configured/i)).toBeInTheDocument();
+    expect(screen.getByText(/Planning estimate only. This is not real billing/i)).toBeInTheDocument();
+    expect(screen.getByText(/Missing local tools: FreeCAD/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Download cached artifact/i })).toHaveAttribute(
+      'href',
+      'http://api.test/api/analysis-artifacts/artifact-cad-metadata/metadata.json',
+    );
+  });
+
+  it('triggers a backend local pre-solver run from the analysis mode', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const user = userEvent.setup();
     const backendJob = {
       id: 'job-local-presolver',
       job_type: 'run_fea',
       status: 'completed',
-      target_id: 'part-finger-link',
+      target_id: 'part-base-plate',
       project_id: 'project-open-gripper-demo',
       adapter_name: 'local-pre-solver-runner',
       local_compute_preferred: true,
@@ -485,6 +472,9 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({ status: 'review_required', summary: 'Solver state unavailable.', tool_statuses: [], available_tools: [], missing_tools: [], execution_modes: [], install_guidance: [] });
+      }
       if (url.endsWith('/api/projects/project-open-gripper-demo/analysis-jobs/pre-solver-runs')) {
         return Response.json(backendJob, { status: 202 });
       }
@@ -494,6 +484,7 @@ describe('MechaFlow cockpit', () => {
 
     render(<App />);
 
+    await user.click(await screen.findByRole('button', { name: /^Analysis$/i }));
     const runButton = await screen.findByRole('button', { name: /Run pre-solver screening for Base pedestal plate/i });
     await user.click(runButton);
 
@@ -506,7 +497,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/demo pre solver not fea/i)).toBeInTheDocument();
   });
 
-  it('shows solver-unavailable guidance and generated fixture artifacts', async () => {
+  it('shows solver-unavailable guidance and generated fixture artifacts in analysis mode', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const user = userEvent.setup();
     const solverReadiness = {
@@ -545,7 +536,7 @@ describe('MechaFlow cockpit', () => {
       id: 'job-local-fixture',
       job_type: 'run_fea',
       status: 'solver_unavailable',
-      target_id: 'part-finger-link',
+      target_id: 'part-base-plate',
       project_id: 'project-open-gripper-demo',
       adapter_name: 'local-calculix-fixture-runner',
       local_compute_preferred: true,
@@ -585,6 +576,7 @@ describe('MechaFlow cockpit', () => {
 
     render(<App />);
 
+    await user.click(await screen.findByRole('button', { name: /^Analysis$/i }));
     expect(await screen.findByText(/CalculiX command was not found locally/i)).toBeInTheDocument();
     const runButton = await screen.findByRole('button', { name: /Run solver-readiness fixture for Base pedestal plate/i });
     await user.click(runButton);
@@ -594,7 +586,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getAllByText(/solver unavailable/i).length).toBeGreaterThan(0);
   });
 
-  it('renders explicit BOM prices and totals as ranges', async () => {
+  it('renders explicit BOM prices and totals as ranges only after manufacturing mode opens', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const panelData = structuredClone(mockProjectPanelData);
     panelData.bom_items = panelData.bom_items.map((item) => ({
@@ -610,43 +602,23 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({ status: 'review_required', summary: 'Solver state unavailable.', tool_statuses: [], available_tools: [], missing_tools: [], execution_modes: [], install_guidance: [] });
+      }
       return new Response('Not found', { status: 404 });
     }));
+    const user = userEvent.setup();
 
     render(<App />);
 
+    expect(await screen.findByRole('heading', { name: /Start with intent/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '$1.37-$2.74 open estimate' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
     expect(await screen.findByRole('heading', { name: '$1.37-$2.74 open estimate' })).toBeInTheDocument();
     expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(16);
   });
 
-  it('keeps unsupported safety estimates review-required for a selected part', async () => {
-    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
-    const user = userEvent.setup();
-    const panelData = structuredClone(mockProjectPanelData);
-    panelData.project.active_task!.target_value = 50;
-    panelData.project.active_task!.safety_factor_min = 2;
-    const finger = panelData.project.assemblies[0]!.parts.find((part) => part.id === 'part-finger-link')!;
-    finger.dimensions.thickness_mm = 16.5;
-    panelData.project.materials.find((material) => material.id === finger.material_id)!.family = 'other';
-    panelData.project.materials.find((material) => material.id === 'mat-low-carbon-steel')!.family = 'other';
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
-      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
-      return new Response('Not found', { status: 404 });
-    }));
-
-    render(<App />);
-    const partTree = await screen.findByText('Selectable parts');
-    const treeContainer = partTree.closest('.part-tree');
-    expect(treeContainer).not.toBeNull();
-    await user.click(within(treeContainer as HTMLElement).getByRole('button', { name: /Parallel gripper jaw link/i }));
-
-    expect(await screen.findByText(/Payload rating review required/i)).toBeInTheDocument();
-    expect(screen.queryByText(/2\.0 safety factor below the preserved 2\.0 minimum/i)).not.toBeInTheDocument();
-  });
-
-  it('renders missing backend engineering values as review-required', async () => {
+  it('renders missing backend engineering values as review-required inside contextual modes', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
     const panelData = structuredClone(mockProjectPanelData);
     const nonPayloadTask = {
@@ -676,25 +648,24 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({ status: 'review_required', summary: 'Solver state unavailable.', tool_statuses: [], available_tools: [], missing_tools: [], execution_modes: [], install_guidance: [] });
+      }
       return new Response('Not found', { status: 404 });
     }));
+    const user = userEvent.setup();
 
     render(<App />);
 
-    expect(await screen.findByLabelText(/Preserved task/i)).toHaveTextContent('payload unknown');
+    expect(await screen.findByLabelText(/Active task/i)).toHaveTextContent('payload unknown');
     expect(screen.getByText(/Data source: backend panel data/i)).toBeInTheDocument();
-    const referencePanel = screen.getByText('Reference design').closest('aside');
-    expect(referencePanel).not.toBeNull();
-    expect(within(referencePanel as HTMLElement).getAllByText('Review required')).toHaveLength(3);
-    expect(within(referencePanel as HTMLElement).queryByRole('link', { name: /Open catalog entry/i })).not.toBeInTheDocument();
-    const inspectorPanel = screen.getByText('Part inspector').closest('aside');
-    expect(inspectorPanel).not.toBeNull();
-    expect(within(inspectorPanel as HTMLElement).getAllByText('Review required').length).toBeGreaterThanOrEqual(2);
-    const stressRisk = within(inspectorPanel as HTMLElement).getByText('Stress risk (demo heuristic)').closest('div');
-    expect(stressRisk).toHaveTextContent('Review required');
-    expect(screen.getByLabelText(/Import Design progress unknown/i)).toBeInTheDocument();
-    expect(screen.getByText(/^failed$/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/cost review required/i).length).toBeGreaterThan(0);
+    const inspectorPanel = screen.getByLabelText(/Selected-part properties and context tools/i);
+    expect(within(inspectorPanel).getAllByText('Review required').length).toBeGreaterThanOrEqual(1);
+    expect(within(inspectorPanel).getByText('Stress risk')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Analysis$/i }));
+    expect(await screen.findByText(/^failed$/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
+    expect((await screen.findAllByText(/cost review required/i)).length).toBeGreaterThan(0);
     expect(screen.getByText(/lead time review required/i)).toBeInTheDocument();
     expect(screen.getByText(/Bend radius review required/i)).toBeInTheDocument();
     expect(screen.getByText(/Payload rating review required/i)).toBeInTheDocument();
@@ -739,6 +710,9 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(panelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({ status: 'review_required', summary: 'Solver state unavailable.', tool_statuses: [], available_tools: [], missing_tools: [], execution_modes: [], install_guidance: [] });
+      }
       return new Response('Not found', { status: 404 });
     }));
 

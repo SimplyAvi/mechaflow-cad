@@ -52,3 +52,11 @@ artifact kind together, and the artifact must match the canonical kind for that 
 ## Seed catalog scope
 
 The seed catalog includes only metadata and source links. It does not vendor any third-party design files. This keeps hosting cheap, avoids redistribution mistakes, and lets workers fetch or clone only user-approved, license-cleared assets.
+
+## Ready-example follow-up candidates
+
+The input-first opening flow currently uses only repository-local MIT seed data in `data/ready-examples.seed.json`; no internet-sourced CAD, mesh, or photo asset is included. Future external ready examples should go through the license checklist before any asset import. Candidate upstreams found during this slice:
+
+- BCN3D Moveo: https://github.com/BCN3D/BCN3D-Moveo. The repository exposes CAD files, STL files, BOM, firmware, and a license file. It still needs per-file CAD license confirmation and attribution review before import.
+- Thor robot arm: https://github.com/AngelLM/Thor. The repository exposes FreeCAD, STEP, and STL folders and states CC BY-SA 4.0 licensing in the README. Its reciprocal attribution and share-alike requirements need product review before import.
+- Robonine SO-ARM100/101 parallel gripper: https://github.com/roboninecom/3D-Printed-Parallel-Gripper-for-Robotics-Arms. The repository exposes STEP and STL model files and separates hardware, software, and documentation licenses. Its CERN-OHL-P-2.0 hardware terms need review before import.

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import {
   applyMaterialSubstitution,
   exportProjectFile,
   importProjectFile,
+  importLocalProjectFile,
   loadCockpitDesign,
   loadLocalSolverReadiness,
   previewMaterialSubstitution,
@@ -11,6 +12,9 @@ import {
   type MaterialSubstitutionResult,
 } from './lib/api';
 import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
+import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
+import { mockReferenceDesign } from './data/mockDesign';
+import { extractDesignIntentChips, taskFromDesignIntent, type DesignIntentChip } from './lib/designIntent';
 import './App.css';
 
 const formatCurrency = (value: number): string => {
@@ -171,6 +175,133 @@ const isSuccessfulLocalAnalysisJob = (job: ReferenceDesign['analysisJobs'][numbe
   && (job.artifacts.length > 0 || job.cachedArtifactRefs.length > 0)
 );
 
+type WorkspaceMode = 'design' | 'analysis' | 'manufacturing' | 'reports' | 'backend';
+type SpeechState = 'idle' | 'listening' | 'unsupported' | 'error';
+type ReferenceImageSource = 'upload' | 'drop';
+
+interface ReferenceImageRecord {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  sizeLabel: string;
+  lastModified: number;
+  source: ReferenceImageSource;
+}
+
+interface RecentProjectSnapshot {
+  design: ReferenceDesign;
+  intentText: string;
+  referenceImages: ReferenceImageRecord[];
+  savedAt: number;
+}
+
+const RECENT_PROJECTS_STORAGE_KEY = 'mechaflow.recent-projects.v1';
+
+const readRecentProject = (): RecentProjectSnapshot | null => {
+  try {
+    const raw = window.localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY);
+    if (!raw) return null;
+    const snapshots = JSON.parse(raw) as unknown;
+    if (!Array.isArray(snapshots) || snapshots.length === 0) return null;
+    const snapshot = snapshots[0] as Partial<RecentProjectSnapshot>;
+    const candidate = snapshot.design as Partial<ReferenceDesign> | undefined;
+    if (!candidate || typeof candidate !== 'object' || typeof candidate.id !== 'string'
+      || typeof candidate.name !== 'string' || !Array.isArray(candidate.assemblies)
+      || !candidate.backend || typeof candidate.backend !== 'object') return null;
+    return {
+      design: snapshot.design as ReferenceDesign,
+      intentText: typeof snapshot.intentText === 'string' ? snapshot.intentText : '',
+      referenceImages: Array.isArray(snapshot.referenceImages) ? snapshot.referenceImages as ReferenceImageRecord[] : [],
+      savedAt: typeof snapshot.savedAt === 'number' ? snapshot.savedAt : 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const rememberRecentProject = (
+  design: ReferenceDesign,
+  intentText: string,
+  referenceImages: ReferenceImageRecord[],
+) => {
+  try {
+    const raw = window.localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY);
+    const stored = raw ? JSON.parse(raw) as unknown : [];
+    const snapshots = Array.isArray(stored) ? stored as RecentProjectSnapshot[] : [];
+    const nextSnapshot: RecentProjectSnapshot = {
+      design: JSON.parse(JSON.stringify(design)) as ReferenceDesign,
+      intentText,
+      referenceImages: JSON.parse(JSON.stringify(referenceImages)) as ReferenceImageRecord[],
+      savedAt: Date.now(),
+    };
+    const remaining = snapshots.filter((snapshot) => snapshot.design?.id !== design.id);
+    window.localStorage.setItem(RECENT_PROJECTS_STORAGE_KEY, JSON.stringify([nextSnapshot, ...remaining].slice(0, 6)));
+  } catch {
+    return;
+  }
+};
+
+interface SpeechRecognitionResultEventLike {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  onresult: ((event: SpeechRecognitionResultEventLike) => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
+
+const workspaceModes: { id: WorkspaceMode; label: string; summary: string }[] = [
+  { id: 'design', label: 'Design', summary: '3D canvas, model tree, prompt, and selected-part tools' },
+  { id: 'analysis', label: 'Analysis', summary: 'Readiness, local-safe runners, and job queue' },
+  { id: 'manufacturing', label: 'Manufacturing', summary: 'BOM, make or buy paths, wiring, and electronics' },
+  { id: 'reports', label: 'Reports', summary: 'Advisory reports and project import or export' },
+  { id: 'backend', label: 'Backend', summary: 'API handoff and integration contract' },
+];
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const isImageFile = (file: File): boolean => file.type.startsWith('image/') || /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file.name);
+
+const makeReferenceImageRecords = (files: File[], source: ReferenceImageSource): ReferenceImageRecord[] => files
+  .filter(isImageFile)
+  .map((file, index) => ({
+    id: `reference-${source}-${file.name}-${file.lastModified}-${file.size}-${index}`,
+    name: file.name,
+    type: file.type || 'image file',
+    size: file.size,
+    sizeLabel: formatFileSize(file.size),
+    lastModified: file.lastModified,
+    source,
+  }));
+
+const summarizeTask = (design: ReferenceDesign): string => [
+  design.task.targetPayloadLb == null ? 'payload unknown' : `${design.task.targetPayloadLb} lb payload`,
+  design.task.cycleTimeSeconds == null ? 'cycle unknown' : `${design.task.cycleTimeSeconds} s cycle`,
+  design.task.reachMeters == null ? 'reach unknown' : `${design.task.reachMeters} m reach`,
+].join(', ');
+
+const chipCopy = (chip: DesignIntentChip): string => `${chip.label}: ${chip.detail}`;
+
 function App() {
   const [design, setDesign] = useState<ReferenceDesign | null>(null);
   const [selectedAssemblyId, setSelectedAssemblyId] = useState('');
@@ -194,8 +325,15 @@ function App() {
     wiring: false,
   });
   const [exportedEvidence, setExportedEvidence] = useState<ExportedEvidenceSignature | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('design');
+  const [intentText, setIntentText] = useState('');
+  const [intentMessage, setIntentMessage] = useState<string | null>('Robot arm demo is loaded. Describe a new mechanism or add a reference image to start faster.');
+  const [referenceImages, setReferenceImages] = useState<ReferenceImageRecord[]>([]);
+  const [imageDropActive, setImageDropActive] = useState(false);
+  const [speechState, setSpeechState] = useState<SpeechState>('idle');
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const markDemoStep = (stepId: string) => {
     setDemoStepReviews((current) => new Set(current).add(stepId));
@@ -215,6 +353,7 @@ function App() {
     setAnalysisRunPending(false);
     setDownstreamPanelsReviewed({ bom: false, manufacturing: false, wiring: false });
     setDemoStepReviews(new Set());
+    setExportedEvidence(null);
     setDesign(loadedDesign);
     setSelectedAssemblyId(loadedDesign.assembly.id);
     setSelectedPartId(loadedDesign.assembly.parts[0]?.id ?? '');
@@ -223,13 +362,26 @@ function App() {
   };
 
   useEffect(() => {
+    return () => {
+      speechRecognitionRef.current?.stop();
+    };
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     loadCockpitDesign().then((loadedDesign) => {
       if (!cancelled) {
-        applyLoadedDesign(loadedDesign);
+        const recentProject = readRecentProject();
+        const initialProject = recentProject?.design ?? loadedDesign;
+        applyLoadedDesign(initialProject);
+        setIntentText(recentProject?.intentText ?? '');
+        setReferenceImages(recentProject?.referenceImages ?? []);
+        if (recentProject) {
+          setIntentMessage(`Reopened ${initialProject.name} from local recent-project history.`);
+        }
         const loadedProjectVersion = projectLoadVersion.current;
-        if (loadedDesign.backend.apiBaseUrl) {
-          loadLocalSolverReadiness(loadedDesign.backend.apiBaseUrl)
+        if (initialProject.backend.apiBaseUrl) {
+          loadLocalSolverReadiness(initialProject.backend.apiBaseUrl)
             .then((readiness) => {
               if (!cancelled && projectLoadVersion.current === loadedProjectVersion) setSolverReadiness(readiness);
             })
@@ -271,6 +423,8 @@ function App() {
 
   const selectedOption = materialOptions.find((option) => option.id === selectedOptionId) ?? materialOptions[0];
 
+  const intentChips = useMemo(() => extractDesignIntentChips(intentText), [intentText]);
+
   const selectPart = (partId: string) => {
     setSelectedPartId(partId);
     setSubstitutionPreview(null);
@@ -289,6 +443,143 @@ function App() {
     selectPart(assembly.parts[0]?.id ?? '');
   };
 
+  const createProjectFromIntent = (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    const trimmedIntent = intentText.trim();
+    if (!trimmedIntent) {
+      setIntentMessage('Type a design intent first, for example payload, reach, cycle time, material, and restrictions.');
+      return;
+    }
+    if (!design) return;
+    const conceptDesign = JSON.parse(JSON.stringify(mockReferenceDesign)) as ReferenceDesign;
+    const conceptTask = taskFromDesignIntent(conceptDesign.task, trimmedIntent);
+    const localBackend = { ...conceptDesign.backend };
+    delete localBackend.apiBaseUrl;
+    const nextDesign: ReferenceDesign = isolateOfflineDesign({
+      ...conceptDesign,
+      id: 'local-design-intent-concept',
+      name: 'New mechanism concept from prompt',
+      sourceUrl: null,
+      license: 'Local concept seed, no external CAD asset',
+      formats: ['Prompt intent', 'Reference images metadata', 'Proxy 3D viewport'],
+      task: conceptTask,
+      backend: {
+        ...localBackend,
+        projectId: 'local-design-intent-concept',
+        source: 'bundled-mock',
+        endpoint: 'local prompt concept, proxy geometry reused from bundled mock data',
+        advisoryNotice: 'This project was started from typed design intent. The viewport is an interactive concept proxy until real CAD generation, reconstruction, and FEA workers are connected.',
+      },
+      analysisJobs: [],
+      reports: [],
+      wiringReview: null,
+    }, 'local-design-intent-concept');
+    applyLoadedDesign(nextDesign);
+    rememberRecentProject(nextDesign, trimmedIntent, referenceImages);
+    setWorkspaceMode('design');
+    setSubstitutionPreview(null);
+    setIntentMessage('Started a concept workspace from your prompt. The 3D viewport is a proxy rendering, not generated CAD or photo reconstruction.');
+  };
+
+  const loadReadyExample = async (exampleId: ReadyExampleId) => {
+    const example = readyExamples.find((candidate) => candidate.id === exampleId);
+    const loadedDesign = await loadCockpitDesign();
+    const nextDesign = buildReadyExampleDesign(loadedDesign, exampleId);
+    applyLoadedDesign(nextDesign);
+    setReferenceImages([]);
+    rememberRecentProject(nextDesign, example?.intent ?? '', []);
+    setWorkspaceMode('design');
+    setIntentText(example?.intent ?? '');
+    setIntentMessage(`${example?.title ?? 'Ready example'} loaded. Example data is repository-local and does not import external CAD assets.`);
+  };
+
+  const openRecentProject = () => {
+    const recentProject = readRecentProject();
+    if (!recentProject) {
+      setWorkspaceMode('design');
+      setIntentMessage('No saved recent project is available. Import a local .mfcad.json project or load a ready example to create one.');
+      return;
+    }
+    applyLoadedDesign(recentProject.design);
+    setIntentText(recentProject.intentText);
+    setReferenceImages(recentProject.referenceImages);
+    setWorkspaceMode('design');
+    setIntentMessage(`Reopened ${recentProject.design.name} from local recent-project history.`);
+    const reopenedProjectVersion = projectLoadVersion.current;
+    if (recentProject.design.backend.apiBaseUrl) {
+      loadLocalSolverReadiness(recentProject.design.backend.apiBaseUrl)
+        .then((readiness) => {
+          if (projectLoadVersion.current === reopenedProjectVersion) setSolverReadiness(readiness);
+        })
+        .catch((error) => {
+          console.warn('Local solver readiness endpoint is unavailable after recent-project reopen.', error);
+          if (projectLoadVersion.current === reopenedProjectVersion) setSolverReadiness(null);
+        });
+    }
+  };
+
+  const addReferenceImages = (files: FileList | File[], source: ReferenceImageSource) => {
+    const incomingFiles = Array.from(files);
+    const images = makeReferenceImageRecords(incomingFiles, source);
+    if (images.length === 0) {
+      setIntentMessage('Add image files such as PNG, JPG, WebP, GIF, BMP, SVG, or AVIF. They are stored as local reference metadata only.');
+      return;
+    }
+    const nextReferenceImages = [...images, ...referenceImages].slice(0, 8);
+    setReferenceImages(nextReferenceImages);
+    if (design) rememberRecentProject(design, intentText, nextReferenceImages);
+    setIntentMessage(`${images.length} reference image${images.length === 1 ? '' : 's'} added. Images guide the concept only; no photo-to-CAD reconstruction is running in this MVP.`);
+  };
+
+  const importReferenceImages = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    event.target.value = '';
+    if (files) addReferenceImages(files, 'upload');
+  };
+
+  const handleReferenceDrop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setImageDropActive(false);
+    addReferenceImages(event.dataTransfer.files, 'drop');
+  };
+
+  const startSpeechInput = () => {
+    const SpeechRecognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechState('unsupported');
+      setIntentMessage('Voice input uses browser-native speech recognition when available. It is not available here, so type the design intent instead.');
+      return;
+    }
+    try {
+      const recognition = new SpeechRecognition();
+      speechRecognitionRef.current = recognition;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      recognition.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim();
+        if (transcript) {
+          setIntentText((current) => `${current} ${transcript}`.trim());
+          setIntentMessage('Voice intent captured by the browser. Review the extracted chips before starting.');
+        }
+      };
+      recognition.onerror = () => {
+        setSpeechState('error');
+        setIntentMessage('Speech capture did not complete. Type the design intent or try the browser microphone again.');
+      };
+      recognition.onend = () => {
+        setSpeechState((current) => current === 'listening' ? 'idle' : current);
+      };
+      recognition.start();
+      setSpeechState('listening');
+      setIntentMessage('Listening for design intent through browser-native speech recognition.');
+    } catch (error) {
+      console.warn('Speech input failed to start.', error);
+      setSpeechState('error');
+      setIntentMessage('Speech capture is unavailable in this browser. Type the design intent instead.');
+    }
+  };
+
   const runMaterialSubstitutionAction = async (action: 'preview' | 'apply') => {
     if (!design?.backend.apiBaseUrl || !selectedOption) {
       setSubstitutionMessage('Start the local backend to preview or apply a persisted material substitution. Offline mock data is read-only.');
@@ -304,6 +595,7 @@ function App() {
       if (projectLoadVersion.current !== requestVersion) return;
       if (result.persisted) {
         setDesign(result.design);
+        rememberRecentProject(result.design, intentText, referenceImages);
         setSubstitutionPreview(null);
         setSelectedOptionId('');
         setSubstitutionMessage('Applied substitution to the backend project. BOM, manufacturing, readiness, and reports were reloaded from persisted state.');
@@ -339,10 +631,12 @@ function App() {
         selectedPart.id,
       );
       if (projectLoadVersion.current !== requestVersion) return;
-      setDesign((current) => current && {
-        ...current,
-        analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
-      });
+      const nextDesign = {
+        ...design,
+        analysisJobs: [job, ...design.analysisJobs.filter((candidate) => candidate.id !== job.id)],
+      };
+      setDesign(nextDesign);
+      rememberRecentProject(nextDesign, intentText, referenceImages);
       setAnalysisRunMessage('Local pre-solver job completed. Artifact is review-required and not FEA.');
       if (isSuccessfulLocalAnalysisJob(job)) markDemoStep('local-analysis');
     } catch (error) {
@@ -370,10 +664,12 @@ function App() {
         selectedPart.id,
       );
       if (projectLoadVersion.current !== requestVersion) return;
-      setDesign((current) => current && {
-        ...current,
-        analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
-      });
+      const nextDesign = {
+        ...design,
+        analysisJobs: [job, ...design.analysisJobs.filter((candidate) => candidate.id !== job.id)],
+      };
+      setDesign(nextDesign);
+      rememberRecentProject(nextDesign, intentText, referenceImages);
       const refreshed = await loadLocalSolverReadiness(design.backend.apiBaseUrl);
       if (projectLoadVersion.current !== requestVersion) return;
       setSolverReadiness(refreshed);
@@ -442,10 +738,8 @@ function App() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!design?.backend.apiBaseUrl) {
-      setProjectFileMessage('Start the desktop demo with a local backend or mock API to import a project file.');
-      return;
-    }
+    const currentDesign = design;
+    if (!currentDesign) return;
     const requestVersion = importRequestVersion.current + 1;
     importRequestVersion.current = requestVersion;
     setProjectFilePending(true);
@@ -453,7 +747,9 @@ function App() {
     try {
       const text = await file.text();
       const projectFile = JSON.parse(text) as unknown;
-      const importedDesign = await importProjectFile(design.backend.apiBaseUrl, projectFile);
+      const importedDesign = currentDesign.backend.apiBaseUrl
+        ? await importProjectFile(currentDesign.backend.apiBaseUrl, projectFile)
+        : importLocalProjectFile(projectFile);
       if (importRequestVersion.current !== requestVersion) return;
       const importedJobIds = new Set(importedDesign.analysisJobs.map((job) => job.id));
       const importedArtifacts = importedDesign.analysisJobs.flatMap((job) => job.artifacts);
@@ -466,6 +762,9 @@ function App() {
         && exportedEvidence.artifactIds.every((artifactId) => importedArtifactIds.has(artifactId))
         && exportedEvidence.artifactContent === evidenceArtifactSignature(importedArtifacts);
       applyLoadedDesign(importedDesign);
+      setIntentText('');
+      setReferenceImages([]);
+      rememberRecentProject(importedDesign, '', []);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
       if (roundTripVerified) markDemoStep('export-import');
       const importedProjectVersion = projectLoadVersion.current;
@@ -542,7 +841,7 @@ function App() {
       label: 'Open reference robot',
       status: 'complete',
       summary: `${design.name} is loaded from ${design.backend.source.replaceAll('-', ' ')} with project ${design.backend.projectId}.`,
-      anchor: '#reference-panel',
+      anchor: '#project-browser',
       actionLabel: 'Review project source',
     },
     {
@@ -575,7 +874,7 @@ function App() {
         : hasBomManufacturingWiring ? 'available' : 'review',
       summary: hasBomManufacturingWiring
         ? 'BOM ranges, make or buy options, harness routes, and electronics records are loaded with estimate and heuristic labels.'
-        : 'One or more downstream workflow panels need seed or backend data before the captain demo is complete.',
+        : 'One or more downstream workflow panels need seed or backend data before MVP coverage is complete.',
       anchor: '#bom-panel',
       actionLabel: 'Open downstream panels',
       canMarkReviewed: hasBomManufacturingWiring
@@ -630,180 +929,368 @@ function App() {
       summary: design.backend.apiBaseUrl
         ? 'Export a .mfcad.json evidence package, then import it again to prove the round trip.'
         : 'Project file import and export need a local API connection.',
-      anchor: '#reference-panel',
+      anchor: '#project-file-controls',
       actionLabel: 'Open file controls',
     },
   ];
 
+  const openDemoGuideStep = (step: DemoGuideStep) => {
+    const mode: WorkspaceMode = step.id === 'bom-wiring-manufacturing'
+      ? 'manufacturing'
+      : ['solver-readiness', 'local-analysis'].includes(step.id)
+        ? 'analysis'
+        : ['cached-evidence', 'export-import'].includes(step.id)
+          ? 'reports'
+          : 'design';
+    setWorkspaceMode(mode);
+    window.setTimeout(() => document.querySelector(step.anchor)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  };
+
+  const activeMode = workspaceModes.find((mode) => mode.id === workspaceMode) ?? workspaceModes[0];
+
   return (
-    <main className="app-shell">
-      <header className="hero-card">
-        <div>
-          <p className="eyebrow">Analysis-ready visual MVP</p>
-          <h1>Robot arm CAD review cockpit</h1>
-          <p className="hero-copy">
-            Open the desktop-style demo, orbit a robot arm assembly, explode or collapse the mechanism, select
-            individual parts, and read explicit pre-solver load cases, stiffness guidance, thermal limits, and
-            review-required notes before full FreeCAD, Gmsh, and CalculiX project FEA workers exist.
-          </p>
+    <main className="app-shell input-first-shell">
+      <header className="workspace-topbar">
+        <div className="brand-block">
+          <span className="app-mark" aria-hidden="true">MF</span>
+          <div>
+            <p className="eyebrow">MechaFlow CAD</p>
+            <h1>Start with intent, then refine the model.</h1>
+            <p>
+              A robotics CAD cockpit with the 3D view first. Type a prompt, add reference images, open a project,
+              or load a ready local example before switching into analysis and manufacturing tools.
+            </p>
+          </div>
         </div>
-        <div className="task-card" aria-label="Preserved task">
-          <span>Preserved task</span>
+        <nav className="tool-rail" aria-label="Workspace tool modes">
+          {workspaceModes.map((mode) => (
+            <button
+              aria-pressed={workspaceMode === mode.id}
+              className={workspaceMode === mode.id ? 'active' : ''}
+              key={mode.id}
+              onClick={() => setWorkspaceMode(mode.id)}
+              title={mode.summary}
+              type="button"
+            >
+              <span>{mode.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="task-card cockpit-task-card" aria-label="Active task">
+          <span>Active task</span>
           <strong>{design.task.label}</strong>
-          <small>
-            Target: {design.task.targetPayloadLb == null ? 'payload unknown' : `${design.task.targetPayloadLb} lb`},{' '}
-            {design.task.cycleTimeSeconds == null ? 'cycle unknown' : `${design.task.cycleTimeSeconds}s cycle`},{' '}
-            {design.task.reachMeters == null ? 'reach unknown' : `${design.task.reachMeters}m reach`}
-          </small>
-          <small>
-            Data source: {design.backend.source.replaceAll('-', ' ')} via {design.backend.endpoint}
-          </small>
+          <small>{summarizeTask(design)}</small>
+          <small>Data source: {design.backend.source.replaceAll('-', ' ')} via {design.backend.endpoint}</small>
         </div>
       </header>
 
-      <DemoGuidePanel steps={demoGuideSteps} onMarkReviewed={markDemoStep} />
-
-      <section className="cockpit-grid" aria-label="Assembly cockpit">
-        <aside className="panel reference-panel" id="reference-panel">
-          <p className="eyebrow">Reference design</p>
-          <h2>{design.name}</h2>
-          <dl className="meta-grid">
-            <div>
-              <dt>License</dt>
-              <dd>{design.license}</dd>
-            </div>
-            <div>
-              <dt>Formats</dt>
-              <dd>{design.formats.length > 0 ? design.formats.join(', ') : 'Review required'}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>
-                {design.sourceUrl ? <a href={design.sourceUrl}>Open catalog entry</a> : 'Review required'}
-              </dd>
-            </div>
-          </dl>
-          <div className="backend-summary">
-            <strong>Backend handoff mirrored</strong>
-            <small>Project {design.backend.projectId}</small>
-            <small>{design.backend.concepts.slice(0, 5).join(', ')}</small>
+      <section className="project-cockpit" aria-label="Input-first CAD cockpit">
+        <aside className="panel cad-sidebar project-browser" id="project-browser" aria-label="Project and example browser">
+          <p className="eyebrow">Project browser</p>
+          <h2>Start small</h2>
+          <p className="sidebar-copy">Choose one path. Everything else stays tucked into tool modes until the model needs it.</p>
+          <div className="quick-start-stack">
+            <button className="primary-start" onClick={() => createProjectFromIntent()} type="button">
+              <span>New from prompt</span>
+              <small>Uses the command line below and keeps the first render as a proxy concept.</small>
+            </button>
+            <label className={`open-project-button ${projectFilePending ? 'disabled' : ''}`}>
+              <span>Open local project</span>
+              <small>{design.backend.apiBaseUrl ? '.mfcad JSON through the local API' : '.mfcad JSON opens locally in this browser'}</small>
+              <input
+                accept=".mfcad.json,application/json"
+                aria-label="Open existing MechaFlow project file"
+                disabled={projectFilePending}
+                onChange={importCurrentProjectFile}
+                type="file"
+              />
+            </label>
+            <button className="secondary-start" onClick={openRecentProject} type="button">
+              <span>Recent project</span>
+              <small>{design.name}</small>
+            </button>
           </div>
-          <ProjectFilePanel
-            canUseProjectFiles={Boolean(design.backend.apiBaseUrl)}
-            message={projectFileMessage}
-            onExport={exportCurrentProjectFile}
-            onImport={importCurrentProjectFile}
-            pending={projectFilePending}
-            projectId={design.backend.projectId}
-          />
-          {selectableAssemblies.length > 1 ? (
-            <AssemblySelector
-              assemblies={selectableAssemblies}
-              selectedAssemblyId={activeAssembly.id}
-              onSelect={selectAssembly}
-            />
-          ) : null}
-          <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={selectPart} />
+          {projectFileMessage ? <p className="project-file-message" aria-live="polite">{projectFileMessage}</p> : null}
+
+          <section className="ready-example-list" aria-label="Ready local examples">
+            <div className="section-heading-row">
+              <h3>Ready examples</h3>
+              <small>Local seeds</small>
+            </div>
+            {readyExamples.map((example) => (
+              <article className="example-card" key={example.id}>
+                <div>
+                  <strong>{example.title}</strong>
+                  <p>{example.summary}</p>
+                  <small>{example.license}</small>
+                </div>
+                <button onClick={() => void loadReadyExample(example.id)} type="button">Load</button>
+              </article>
+            ))}
+          </section>
+
+          <details className="model-tree" open>
+            <summary>Model tree</summary>
+            <div className="backend-summary">
+              <strong>{design.name}</strong>
+              <small>Project {design.backend.projectId}</small>
+              <small>{design.backend.concepts.slice(0, 4).join(', ')}</small>
+            </div>
+            {selectableAssemblies.length > 1 ? (
+              <AssemblySelector
+                assemblies={selectableAssemblies}
+                selectedAssemblyId={activeAssembly.id}
+                onSelect={selectAssembly}
+              />
+            ) : null}
+            <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={selectPart} />
+          </details>
         </aside>
 
-        <section className="viewer-card panel" id="assembly-viewer">
-          <div className="viewer-toolbar">
-            <div>
-              <p className="eyebrow">Interactive robot assembly</p>
-              <h2>{activeAssembly.name}</h2>
-              <small>Click any highlighted mechanical or electrical part to update the inspector.</small>
+        <section className="canvas-column" aria-label="3D workspace and command line">
+          <section className="viewer-card panel primary-viewer" id="assembly-viewer" aria-label="Interactive 3D rendering workspace">
+            <div className="viewer-toolbar">
+              <div>
+                <p className="eyebrow">Interactive 3D rendering</p>
+                <h2>{activeAssembly.name}</h2>
+                <small>Orbit the proxy assembly, explode the view, or select a part to update the inspector.</small>
+              </div>
+              <div className="viewer-controls" aria-label="3D view controls">
+                <button type="button" onClick={() => setExplodePercent((value) => (value > 0 ? 0 : 100))}>
+                  {explodePercent > 0 ? 'Collapse' : 'Explode'}
+                </button>
+                <label>
+                  <span>Explode</span>
+                  <input
+                    aria-label="Explode amount"
+                    max="100"
+                    min="0"
+                    onChange={(event) => setExplodePercent(Number(event.target.value))}
+                    type="range"
+                    value={explodePercent}
+                  />
+                </label>
+                <button type="button" onClick={() => setRotationDeg((value) => value - 15)}>Orbit left</button>
+                <label>
+                  <span>Yaw</span>
+                  <input
+                    aria-label="Assembly yaw rotation"
+                    max="180"
+                    min="-180"
+                    onChange={(event) => setRotationDeg(Number(event.target.value))}
+                    type="range"
+                    value={rotationDeg}
+                  />
+                </label>
+                <button type="button" onClick={() => setRotationDeg((value) => value + 15)}>Orbit right</button>
+                <label>
+                  <span>Pitch</span>
+                  <input
+                    aria-label="Assembly orbit pitch"
+                    max="42"
+                    min="-18"
+                    onChange={(event) => setOrbitPitchDeg(Number(event.target.value))}
+                    type="range"
+                    value={orbitPitchDeg}
+                  />
+                </label>
+              </div>
             </div>
-            <div className="viewer-controls" aria-label="Exploded view controls">
-              <button type="button" onClick={() => setExplodePercent((value) => (value > 0 ? 0 : 100))}>
-                {explodePercent > 0 ? 'Collapse assembly' : 'Explode assembly'}
-              </button>
-              <label>
-                <span>Explode</span>
-                <input
-                  aria-label="Explode amount"
-                  max="100"
-                  min="0"
-                  onChange={(event) => setExplodePercent(Number(event.target.value))}
-                  type="range"
-                  value={explodePercent}
-                />
-              </label>
-              <button type="button" onClick={() => setRotationDeg((value) => value - 15)}>Orbit left</button>
-              <label>
-                <span>Yaw</span>
-                <input
-                  aria-label="Assembly yaw rotation"
-                  max="180"
-                  min="-180"
-                  onChange={(event) => setRotationDeg(Number(event.target.value))}
-                  type="range"
-                  value={rotationDeg}
-                />
-              </label>
-              <button type="button" onClick={() => setRotationDeg((value) => value + 15)}>Orbit right</button>
-              <label>
-                <span>Pitch</span>
-                <input
-                  aria-label="Assembly orbit pitch"
-                  max="42"
-                  min="-18"
-                  onChange={(event) => setOrbitPitchDeg(Number(event.target.value))}
-                  type="range"
-                  value={orbitPitchDeg}
-                />
-              </label>
+            <div className="viewer-stage" role="img" aria-label="Interactive exploded view of a robot arm assembly">
+              <div className="reach-envelope" aria-hidden="true" />
+              <div
+                className="assembly-rotor"
+                style={{
+                  '--rotation-deg': `${rotationDeg}deg`,
+                  '--orbit-pitch-deg': `${orbitPitchDeg}deg`,
+                } as CSSProperties}
+              >
+                <div className="wire wire-main" />
+                <div className="wire wire-left" />
+                <div className="wire wire-wrist" />
+                {activeAssembly.parts.map((part) => {
+                  const explodeScale = explodePercent / 100;
+                  return (
+                    <button
+                      aria-pressed={part.id === selectedPart.id}
+                      className={`part-shape shape-${part.visual.shape ?? 'plate'} risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
+                      key={part.id}
+                      onClick={() => selectPart(part.id)}
+                      style={{
+                        '--x': `${part.visual.x}%`,
+                        '--y': `${part.visual.y}%`,
+                        '--w': `${part.visual.width}%`,
+                        '--h': `${part.visual.height}%`,
+                        '--tx': `${part.visual.explodeX * explodeScale}%`,
+                        '--ty': `${part.visual.explodeY * explodeScale}%`,
+                        '--part-color': part.visual.color,
+                        '--part-rotation': `${part.visual.rotationDeg ?? 0}deg`,
+                        '--part-z': part.visual.zIndex ?? 2,
+                      } as CSSProperties}
+                      type="button"
+                    >
+                      <span>{part.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-          <div className="viewer-stage" role="img" aria-label="Interactive exploded view of a robot arm assembly">
-            <div className="reach-envelope" aria-hidden="true" />
-            <div
-              className="assembly-rotor"
-              style={{
-                '--rotation-deg': `${rotationDeg}deg`,
-                '--orbit-pitch-deg': `${orbitPitchDeg}deg`,
-              } as CSSProperties}
-            >
-              <div className="wire wire-main" />
-              <div className="wire wire-left" />
-              <div className="wire wire-wrist" />
-              {activeAssembly.parts.map((part) => {
-                const explodeScale = explodePercent / 100;
-                return (
+            <div className="viewer-footer">
+              <span>
+                Exploded-view data:{' '}
+                {activeAssembly.explodedProgress == null ? 'review required' : `${activeAssembly.explodedProgress}% demo transforms ready`} - explode {explodePercent}%
+              </span>
+              <span>Orbit yaw {rotationDeg} degrees, pitch {orbitPitchDeg} degrees. Harness routes are visual references under review.</span>
+            </div>
+          </section>
+
+          <section className="command-dock panel" aria-label="Design intent command line">
+            <form className="command-form" onSubmit={createProjectFromIntent}>
+              <label htmlFor="design-intent-input">Describe what you want to design</label>
+              <div className="command-row">
+                <input
+                  id="design-intent-input"
+                  name="design-intent"
+                  onChange={(event) => setIntentText(event.target.value)}
+                  placeholder="Describe what you want to design..."
+                  type="text"
+                  value={intentText}
+                />
+                <button
+                  aria-pressed={speechState === 'listening'}
+                  className="voice-button"
+                  onClick={startSpeechInput}
+                  type="button"
+                >
+                  {speechState === 'listening' ? 'Listening' : 'Speak'}
+                </button>
+                <button className="submit-command" type="submit">Start design</button>
+              </div>
+            </form>
+            {intentChips.length > 0 ? (
+              <div className="intent-chip-list" aria-label="Extracted design intent chips">
+                {intentChips.map((chip) => (
+                  <span className={`intent-chip kind-${chip.kind}`} key={chip.id} title={chipCopy(chip)}>{chip.label}</span>
+                ))}
+              </div>
+            ) : (
+              <div className="intent-chip-list examples" aria-label="Prompt examples">
+                {['50 lb payload', '0.65 m reach', '8 s cycle', 'aluminum frame', 'avoid cloud compute', 'serviceable wiring'].map((example) => (
                   <button
-                    aria-pressed={part.id === selectedPart.id}
-                    className={`part-shape shape-${part.visual.shape ?? 'plate'} risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
-                    key={part.id}
-                    onClick={() => selectPart(part.id)}
-                    style={{
-                      '--x': `${part.visual.x}%`,
-                      '--y': `${part.visual.y}%`,
-                      '--w': `${part.visual.width}%`,
-                      '--h': `${part.visual.height}%`,
-                      '--tx': `${part.visual.explodeX * explodeScale}%`,
-                      '--ty': `${part.visual.explodeY * explodeScale}%`,
-                      '--part-color': part.visual.color,
-                      '--part-rotation': `${part.visual.rotationDeg ?? 0}deg`,
-                      '--part-z': part.visual.zIndex ?? 2,
-                    } as CSSProperties}
+                    key={example}
+                    onClick={() => setIntentText((current) => `${current} ${example}`.trim())}
                     type="button"
                   >
-                    <span>{part.name}</span>
+                    {example}
                   </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="viewer-footer">
-            <span>
-              Exploded-view data:{' '}
-              {activeAssembly.explodedProgress == null ? 'review required' : `${activeAssembly.explodedProgress}% demo transforms ready`} - explode {explodePercent}%
-            </span>
-            <span>Orbit yaw {rotationDeg} degrees, pitch {orbitPitchDeg} degrees. Blue lines are harness routes under review.</span>
-          </div>
+                ))}
+              </div>
+            )}
+            <section
+              className={`reference-dropzone ${imageDropActive ? 'active' : ''}`}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setImageDropActive(true);
+              }}
+              onDragLeave={() => setImageDropActive(false)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={handleReferenceDrop}
+              tabIndex={0}
+              aria-label="Reference image intake"
+            >
+              <div>
+                <strong>Add reference photos or images</strong>
+                <small>Reference only. No photo-to-CAD reconstruction, FEA, quotes, or electrical validation run in this MVP.</small>
+              </div>
+              <label className="file-import-button reference-upload">
+                <span>Upload images</span>
+                <input
+                  accept="image/avif,image/bmp,image/gif,image/jpeg,image/png,image/svg+xml,image/webp"
+                  aria-label="Upload reference images"
+                  multiple
+                  onChange={importReferenceImages}
+                  type="file"
+                />
+              </label>
+            </section>
+            {referenceImages.length > 0 ? (
+              <ul className="reference-image-list" aria-label="Imported reference image metadata">
+                {referenceImages.map((image) => (
+                  <li key={image.id}>
+                    <strong>{image.name}</strong>
+                    <small>{image.sizeLabel} - {image.type} - {image.source} reference, session metadata only</small>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {intentMessage ? <p className="intent-message" aria-live="polite">{intentMessage}</p> : null}
+          </section>
+
+          {workspaceMode === 'design' ? (
+            <section className="panel design-overview" aria-label="Design mode summary">
+              <p className="eyebrow">Design mode</p>
+              <h2>Model first, tools when needed</h2>
+              <div className="mode-summary-grid">
+                <div>
+                  <strong>{activeAssembly.parts.length}</strong>
+                  <span>selectable parts</span>
+                </div>
+                <div>
+                  <strong>{materialOptions.length}</strong>
+                  <span>material options for selected part</span>
+                </div>
+                <div>
+                  <strong>{referenceImages.length}</strong>
+                  <span>reference images</span>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="mode-deck" aria-label={`${activeMode.label} tools`}>
+              <div className="panel mode-deck-heading">
+                <p className="eyebrow">{activeMode.label} tools</p>
+                <h2>{activeMode.summary}</h2>
+                <p>Advanced MVP features stay grouped by mode so the opening cockpit remains calm and 3D-first.</p>
+              </div>
+              {workspaceMode === 'analysis' ? (
+                <AnalysisPanel
+                  design={design}
+                  onRunPreSolver={runSelectedPartPreSolver}
+                  onRunSolverReadiness={runSelectedPartSolverReadiness}
+                  runMessage={analysisRunMessage}
+                  runPending={analysisRunPending}
+                  selectedPart={selectedPart}
+                  solverReadiness={solverReadiness}
+                />
+              ) : null}
+              {workspaceMode === 'manufacturing' ? (
+                <>
+                  <BomPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('bom')} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
+                  <ManufacturingPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('manufacturing')} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
+                  <WiringPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('wiring')} selectedPart={selectedPart} />
+                </>
+              ) : null}
+              {workspaceMode === 'reports' ? (
+                <>
+                  <ReportPanel reports={visibleDesign.reports} selectedOption={substitutionPreview?.option ?? selectedOption} />
+                  <ProjectFilePanel
+                    canUseProjectFiles={Boolean(design.backend.apiBaseUrl)}
+                    message={projectFileMessage}
+                    onExport={exportCurrentProjectFile}
+                    onImport={importCurrentProjectFile}
+                    pending={projectFilePending}
+                    projectId={design.backend.projectId}
+                  />
+                  <DemoGuidePanel onOpenStep={openDemoGuideStep} steps={demoGuideSteps} onMarkReviewed={markDemoStep} />
+                </>
+              ) : null}
+              {workspaceMode === 'backend' ? <BackendContractPanel design={design} /> : null}
+            </section>
+          )}
         </section>
 
-        <aside className="panel inspector-panel" id="part-inspector">
-          <p className="eyebrow">Part inspector</p>
+        <aside className="panel inspector-panel context-sidebar" id="part-inspector" aria-label="Selected-part properties and context tools">
+          <p className="eyebrow">Context inspector</p>
           <h2>{selectedPart.name}</h2>
           <p>{selectedPart.purpose}</p>
           <dl className="meta-grid compact">
@@ -829,7 +1316,7 @@ function App() {
               <dd>{selectedPart.costRangeUsd == null ? 'Review required' : formatUsdRange(selectedPart.costRangeUsd)}</dd>
             </div>
             <div>
-              <dt>Stress risk (demo heuristic)</dt>
+              <dt>Stress risk</dt>
               <dd>{riskLabel[selectedPart.stressRisk]}</dd>
             </div>
           </dl>
@@ -838,47 +1325,31 @@ function App() {
             safetyFactorMin={design.task.safetyFactorMin ?? null}
             targetPayloadLb={design.task.targetPayloadLb}
           />
-          <StrengthInfoPanel part={selectedPart} />
-          <PreSolverReadinessPanel readiness={activeAssembly.analysisReadiness} title="Assembly readiness" />
-          <PreSolverReadinessPanel readiness={selectedPart.analysisReadiness} title="Part readiness" />
-          <MaterialSubstitution
-            canUseBackend={Boolean(design.backend.apiBaseUrl)}
-            message={substitutionMessage}
-            onApply={() => runMaterialSubstitutionAction('apply')}
-            onPreview={() => runMaterialSubstitutionAction('preview')}
-            onSelect={selectMaterialOption}
-            options={materialOptions}
-            pending={substitutionPending}
-            previewActive={Boolean(substitutionPreview)}
-            selectedOption={selectedOption}
-          />
-          <ModificationPreview selectedOption={substitutionPreview?.option ?? selectedOption} />
+          <details className="context-details">
+            <summary>Design and material tools</summary>
+            <MaterialSubstitution
+              canUseBackend={Boolean(design.backend.apiBaseUrl)}
+              message={substitutionMessage}
+              onApply={() => runMaterialSubstitutionAction('apply')}
+              onPreview={() => runMaterialSubstitutionAction('preview')}
+              onSelect={selectMaterialOption}
+              options={materialOptions}
+              pending={substitutionPending}
+              previewActive={Boolean(substitutionPreview)}
+              selectedOption={selectedOption}
+            />
+            <ModificationPreview selectedOption={substitutionPreview?.option ?? selectedOption} />
+          </details>
+          <details className="context-details">
+            <summary>Strength notes</summary>
+            <StrengthInfoPanel part={selectedPart} />
+          </details>
+          <details className="context-details" open={workspaceMode === 'analysis'}>
+            <summary>Readiness handoff</summary>
+            <PreSolverReadinessPanel readiness={activeAssembly.analysisReadiness} title="Assembly readiness" />
+            <PreSolverReadinessPanel readiness={selectedPart.analysisReadiness} title="Part readiness" />
+          </details>
         </aside>
-      </section>
-
-      <section className="insight-grid" aria-label="Analysis and delivery panels">
-        <AnalysisPanel
-          design={design}
-          onRunPreSolver={runSelectedPartPreSolver}
-          onRunSolverReadiness={runSelectedPartSolverReadiness}
-          runMessage={analysisRunMessage}
-          runPending={analysisRunPending}
-          selectedPart={selectedPart}
-          solverReadiness={solverReadiness}
-        />
-        <BomPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('bom')} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
-        <ManufacturingPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('manufacturing')} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
-        <WiringPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('wiring')} selectedPart={selectedPart} />
-        <ReportPanel reports={visibleDesign.reports} selectedOption={substitutionPreview?.option ?? selectedOption} />
-        <BackendContractPanel design={design} />
-      </section>
-
-      <section className="panel foundation-note">
-        <p className="eyebrow">Replaceable UI foundation</p>
-        <p>
-          Styling is intentionally local CSS with design tokens at the top of <code>src/App.css</code>. A formal design
-          system can replace these panels, cards, colors, and spacing later without changing the mocked product workflow.
-        </p>
       </section>
     </main>
   );
@@ -895,23 +1366,25 @@ function EmptyPanelNotice({ title, children }: { title: string; children: string
 
 function DemoGuidePanel({
   steps,
+  onOpenStep,
   onMarkReviewed,
 }: {
   steps: DemoGuideStep[];
+  onOpenStep: (step: DemoGuideStep) => void;
   onMarkReviewed: (stepId: string) => void;
 }) {
   const completed = steps.filter((step) => step.status === 'complete').length;
   const progress = Math.round((completed / steps.length) * 100);
 
   return (
-    <section className="panel demo-guide-panel" aria-label="Captain demo checklist">
+    <section className="panel demo-guide-panel" aria-label="MVP coverage guide">
       <div className="demo-guide-heading">
         <div>
-          <p className="eyebrow">Captain demo checklist</p>
-          <h2>Guided end-to-end MVP flow</h2>
+          <p className="eyebrow">MVP coverage guide</p>
+          <h2>Progressive tool coverage</h2>
           <p>
-            Follow these steps from reference robot load through export. The checklist calls out demo estimates,
-            heuristic screens, unavailable tooling, and review-required engineering decisions before they can look complete.
+            Use this after the project is open to verify analysis, evidence, manufacturing, wiring, and export coverage.
+            It stays out of the opening workflow so new users can start from the model and command line.
           </p>
         </div>
         <div className="demo-progress" aria-label={`${completed} of ${steps.length} demo steps complete`}>
@@ -929,7 +1402,7 @@ function DemoGuidePanel({
               <span>{demoGuideStatusLabel[step.status]}</span>
               <p>{step.summary}</p>
               <div className="demo-step-actions">
-                <a href={step.anchor}>{step.actionLabel}</a>
+                <a href={step.anchor} onClick={(event) => { event.preventDefault(); onOpenStep(step); }}>{step.actionLabel}</a>
                 {step.canMarkReviewed && step.status !== 'complete' ? (
                   <button type="button" onClick={() => onMarkReviewed(step.id)}>Mark reviewed</button>
                 ) : null}
@@ -979,7 +1452,7 @@ function ProjectFilePanel({
   projectId: string;
 }) {
   return (
-    <section className="project-file-panel" aria-label="Project file import and export">
+    <section className="project-file-panel" id="project-file-controls" aria-label="Project file import and export">
       <div>
         <strong>Portable project file</strong>
         <small>JSON v1 preserves project {projectId}, assemblies, wiring, materials, analysis readiness, and artifacts.</small>
@@ -1375,17 +1848,20 @@ function AnalysisPanel({
         </div>
       </div>
       {solverReadiness ? (
-        <div className="solver-tools" aria-label="Detected local solver tools">
-          {solverReadiness.tool_statuses.map((tool) => (
-            <div className={`tool-card ${tool.availability}`} key={tool.open_source_tool}>
-              <strong>{tool.open_source_tool}</strong>
-              <span>{tool.availability === 'available' ? 'available' : 'solver unavailable'}</span>
-              <small>{tool.resolved_command ?? tool.binary_candidates.join(', ')}</small>
-              <p>{tool.message}</p>
-              {tool.availability === 'unavailable' && tool.install_guidance ? <small>{tool.install_guidance}</small> : null}
-            </div>
-          ))}
-        </div>
+        <>
+          <p className="runner-note">{solverReadiness.summary}</p>
+          <div className="solver-tools" aria-label="Detected local solver tools">
+            {solverReadiness.tool_statuses.map((tool) => (
+              <div className={`tool-card ${tool.availability}`} key={tool.open_source_tool}>
+                <strong>{tool.open_source_tool}</strong>
+                <span>{tool.availability === 'available' ? 'available' : 'solver unavailable'}</span>
+                <small>{tool.resolved_command ?? tool.binary_candidates.join(', ')}</small>
+                <p>{tool.message}</p>
+                {tool.availability === 'unavailable' && tool.install_guidance ? <small>{tool.install_guidance}</small> : null}
+              </div>
+            ))}
+          </div>
+        </>
       ) : (
         <p className="runner-note">Solver tool detection is unavailable until the cockpit is connected to FastAPI.</p>
       )}

@@ -41,15 +41,17 @@ If either configured port is already in use, startup fails before orchestration 
 Use this path for a fresh captain test with no paid services and no privileged solver install:
 
 1. Run `npm ci`, then `npm start` from the repo root.
-2. In the `MechaFlow CAD` window, start with the `Captain demo checklist`. It shows the full flow, completion count, ready steps, unavailable backend-dependent actions, and review-required engineering states.
-3. Click `Review project source`, confirm the robot reference project, license, backend handoff, and portable project controls are visible.
-4. Click `Open viewer`, collapse or explode the robot arm, orbit with yaw and pitch, then select a highlighted part or a part-list entry. The part inspector should update and show demo estimate, heuristic, provenance, and review-required labels.
-5. Click `Open material controls`, choose a compatible material or process option, and read the projected weight, stiffness, heat, cost, lead time, manufacturing, and wiring impacts. Use `Preview backend impact` before `Apply validated substitution`; preview is non-persisted and apply remains validated and review-required.
-6. Click `Open downstream panels`, then review BOM, manufacturing, wiring, and electronics. Cost and lead time are estimates, wiring checks are deterministic MVP heuristics, and exact electrical or CAD validation remains review-required.
-7. Click `Open analysis queue`, then inspect selected target readiness, local solver tool availability, queued jobs, recommendations, runtime or cost estimates, cached artifacts, and reports. Cloud compute is planning-only. Full project FEA is unavailable until provider approvals and real worker tooling exist.
-8. With the one-command desktop mock API or the FastAPI backend connected, run `Run pre-solver screening for ...`. The new job should say `not FEA` and produce a review-required package. Run the solver-readiness fixture if desired; without CalculiX it should produce input artifacts and a solver-unavailable state.
-9. Click `Open reports`, verify cached report and artifact provenance. Stale or metadata-only artifacts must not appear as current downloadable solver results.
-10. Click `Open file controls`, export `project-open-gripper-demo.mfcad.json`, import it again, and confirm the selected assembly, materials, wiring, analysis queue, cached evidence, and review-required labels survive the round trip.
+2. In the `MechaFlow CAD` window, confirm the opening state is 3D-first: the interactive viewport, one `Describe what you want to design...` command line, compact left project browser, and right context inspector are visible before any advanced panel.
+3. Type a design intent with payload, dimensions, timing, material, and restrictions, then confirm extracted chips appear. Click `Start design` and verify the app labels the result as a local prompt concept with proxy rendering, not generated CAD.
+4. Add one or more reference photos or images by upload or drag/drop. Confirm the UI stores local reference metadata only and does not claim photo-to-CAD reconstruction.
+5. Use the left browser to open an existing `.mfcad.json` project through the offline client path, local desktop mock, or backend, reopen the recent project, or load a repository-local ready example. Ready examples are MIT local seeds and do not import external CAD assets.
+6. In Design mode, collapse or explode the robot arm, orbit with yaw and pitch, then select a highlighted part or a part-list entry. The part inspector should update and show demo estimate, heuristic, provenance, and review-required labels.
+7. Open the right-side `Design and material tools` disclosure, choose a compatible material or process option, and read the projected weight, stiffness, heat, cost, lead time, manufacturing, and wiring impacts. Use `Preview backend impact` before `Apply validated substitution`; preview is non-persisted and apply remains validated and review-required.
+8. Switch to Manufacturing mode to review BOM, make or buy paths, wiring, and electronics. Cost and lead time are estimates, wiring checks are deterministic MVP heuristics, and exact electrical or CAD validation remains review-required.
+9. Switch to Analysis mode to inspect selected target readiness, local solver tool availability, queued jobs, recommendations, runtime or cost estimates, cached artifacts, and reports. Cloud compute is planning-only. Full project FEA is unavailable until provider approvals and real worker tooling exist.
+10. With the one-command desktop mock API or the FastAPI backend connected, run `Run pre-solver screening for ...`. The new job should say `not FEA` and produce a review-required package. Run the solver-readiness fixture if desired; without CalculiX it should produce input artifacts and a solver-unavailable state.
+11. Switch to Reports mode, verify cached report and artifact provenance, export `project-open-gripper-demo.mfcad.json`, import it again, and confirm the selected assembly, materials, wiring, analysis queue, cached evidence, and review-required labels survive the round trip.
+12. Switch to Backend mode only when you need API handoff details.
 
 A bundled import fixture is available at `data/captain-demo-project.mfcad.json`. It exercises the same integrated path: visual selection, material substitution, BOM and manufacturing, wiring and electronics, solver readiness, local job queue, cached artifact metadata, and project-file import/export.
 
@@ -65,23 +67,26 @@ The smoke script launches the Electron desktop smoke path, imports the bundled c
 
 The desktop demo centers on a robot arm visual MVP with a wrist gripper. The legacy local project id is still `project-open-gripper-demo` so the backend and smoke-test contracts stay compatible, but the bundled visual seed now shows a base, shoulder, upper arm, elbow, forearm, wrist plate, gripper jaw, and controller PCB. In the window, verify that you can:
 
-1. Toggle the assembly between collapsed and exploded states, or scrub the explode slider from 0 to 100 percent.
-2. Orbit the assembly with yaw buttons, the yaw slider, and the pitch slider.
-3. Click a part in the visual assembly or the selectable part list.
-4. See selected-part highlighting in the assembly and the same part in the inspector.
-5. Read plain-English design criteria for the selected part, including intended load or lift role, material, stiffness and elasticity, heat or temperature limitation, manufacturing process, known versus estimated versus review-required values, and source confidence.
-6. Open the selected-part and selected-assembly pre-solver readiness panels and confirm they show explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes. Assembly readiness should cover all included parts and omit unsupported aggregate estimates.
-7. Confirm that seeded or heuristic values are labeled as demo estimates or seeded material guidance, and that missing or unsupported engineering values are marked review-required.
-8. Select a compatible material/process option. Confirm the comparison shows current versus substitute material, weight delta, stiffness, yield, heat limit, cost range, lead-time range, and review-required confidence labels.
-9. When connected to the FastAPI backend, click `Preview backend impact`. Confirm the BOM, manufacturing, readiness, and report panels switch into a preview state and the project is not persisted yet.
-10. Click `Apply validated substitution` after a successful preview. Confirm the selected part, BOM range, manufacturing process, readiness material properties, and reports reload from persisted backend state. Incompatible choices should stay blocked with an understandable error instead of silently applying.
-11. Use the `Portable project file` card in the reference panel to export the current project as a `.mfcad.json` file.
-12. Use `Import project` to reopen that file. Confirm the project name, assembly, selected parts, wiring panel, analysis readiness panels, material substitution state, and analysis job artifacts still appear.
-13. When connected to the FastAPI backend, click `Run pre-solver screening for ...` in the analysis panel. Confirm the new job appears with a review-required artifact titled `Local pre-solver screening package, not FEA`. Export and import again to confirm that result artifact reference is preserved.
-14. Inspect the local solver readiness panel. Confirm it distinguishes selected-target pre-solver readiness, solver-unavailable tools, review-required full-stack project FEA, and any completed CalculiX fixture result.
-15. Click `Run solver-readiness fixture for ...`. If CalculiX is absent, confirm the job returns `solver unavailable` with a generated `.inp` artifact manifest and install guidance. If CalculiX is installed, confirm the job says the fixture ran but is not project FEA.
-16. Inspect the analysis job queue panel. Confirm each row shows its current status, local or cloud-planning recommendation, explanation, runtime and wait estimates, and cached report or artifact references where available. Confirm cloud recommendations are labeled planning-only and never offer execution.
-17. Create or import a queued analysis job and confirm missing tools or review-required inputs remain blocked or unavailable in the queue. Confirm a local pre-solver job can expose its retained artifact metadata and that an expired or unavailable file is not presented as a current downloadable result.
+1. Land on a calm 3D-first cockpit with compact CAD sidebars, a mode rail, and a prominent command line rather than a long startup checklist.
+2. Type design intent, see payload, reach, cycle, material, constraint, or restriction chips, and start a prompt concept without any false generated-CAD claim.
+3. Add reference images and confirm they are labeled as reference intake only.
+4. Toggle the assembly between collapsed and exploded states, or scrub the explode slider from 0 to 100 percent.
+5. Orbit the assembly with yaw buttons, the yaw slider, and the pitch slider.
+6. Click a part in the visual assembly or the selectable part list.
+7. See selected-part highlighting in the assembly and the same part in the inspector.
+8. Read plain-English design criteria for the selected part, including intended load or lift role, material, stiffness and elasticity, heat or temperature limitation, manufacturing process, known versus estimated versus review-required values, and source confidence.
+9. Open the selected-part and selected-assembly pre-solver readiness panels and confirm they show explicit load cases, constraints, material provenance, thermal guidance, expected FreeCAD, Gmsh, and CalculiX artifacts, and review-required notes. Assembly readiness should cover all included parts and omit unsupported aggregate estimates.
+10. Confirm that seeded or heuristic values are labeled as demo estimates or seeded material guidance, and that missing or unsupported engineering values are marked review-required.
+11. Select a compatible material/process option. Confirm the comparison shows current versus substitute material, weight delta, stiffness, yield, heat limit, cost range, lead-time range, and review-required confidence labels.
+12. When connected to the FastAPI backend, click `Preview backend impact`. Confirm the BOM, manufacturing, readiness, and report panels switch into a preview state and the project is not persisted yet.
+13. Click `Apply validated substitution` after a successful preview. Confirm the selected part, BOM range, manufacturing process, readiness material properties, and reports reload from persisted backend state. Incompatible choices should stay blocked with an understandable error instead of silently applying.
+14. Use the `Portable project file` card in Reports mode to export the current project as a `.mfcad.json` file.
+15. Use `Import project` to reopen that file. Confirm the project name, assembly, selected parts, wiring panel, analysis readiness panels, material substitution state, and analysis job artifacts still appear.
+16. When connected to the FastAPI backend, click `Run pre-solver screening for ...` in Analysis mode. Confirm the new job appears with a review-required artifact titled `Local pre-solver screening package, not FEA`. Export and import again to confirm that result artifact reference is preserved.
+17. Inspect the local solver readiness panel. Confirm it distinguishes selected-target pre-solver readiness, solver-unavailable tools, review-required full-stack project FEA, and any completed CalculiX fixture result.
+18. Click `Run solver-readiness fixture for ...`. If CalculiX is absent, confirm the job returns `solver unavailable` with a generated `.inp` artifact manifest and install guidance. If CalculiX is installed, confirm the job says the fixture ran but is not project FEA.
+19. Inspect the analysis job queue panel. Confirm each row shows its current status, local or cloud-planning recommendation, explanation, runtime and wait estimates, and cached report or artifact references where available. Confirm cloud recommendations are labeled planning-only and never offer execution.
+20. Create or import a queued analysis job and confirm missing tools or review-required inputs remain blocked or unavailable in the queue. Confirm a local pre-solver job can expose its retained artifact metadata and that an expired or unavailable file is not presented as a current downloadable result.
 
 No project FEA solver is running in this slice. The full FEA row remains review-required until FreeCAD geometry prep, Gmsh meshing, and CalculiX project solving workers are implemented. The readiness panel is pre-solver input only, the local pre-solver runner artifact is a pre-solver package, the CalculiX fixture proves executable solver plumbing only, and visible strength criteria are advisory demo seed data unless a future project solver artifact replaces them. Material substitution cost and lead-time values are ranged estimates from explicit seed manufacturing options, not exact supplier quotes.
 

@@ -134,7 +134,7 @@ To open the local desktop demo after installing npm dependencies:
 npm start
 ```
 
-This starts the mock API, Vite frontend, and an Electron desktop window identified as MechaFlow CAD for the interactive robot arm visual MVP with exploded-view, orbit, part-selection controls, and pre-solver analysis readiness panels. On macOS, `npm run desktop:macos:shortcut` installs a double-clickable Finder launcher. See [Desktop demo](docs/desktop.md).
+This starts the mock API, Vite frontend, and an Electron desktop window identified as MechaFlow CAD. The opening workflow is now input-first: a large interactive 3D robot-arm viewport, one design-intent command line, compact project/example browsing, reference-image intake, and mode switches for analysis, manufacturing, reports, and backend tools. On macOS, `npm run desktop:macos:shortcut` installs a double-clickable Finder launcher. See [Desktop demo](docs/desktop.md).
 
 ```bash
 python3 -m venv .venv
