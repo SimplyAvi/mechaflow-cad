@@ -353,7 +353,7 @@ describe('MechaFlow cockpit', () => {
     await user.click(screen.getByRole('button', { name: /Preview backend impact/i }));
 
     expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('4/8');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('3/8');
     expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
@@ -429,7 +429,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
     expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Prior project solver state/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Prior project solver state/i)).toBeInTheDocument();
   });
 
   it('shows an understandable project-file error for invalid local JSON', async () => {
