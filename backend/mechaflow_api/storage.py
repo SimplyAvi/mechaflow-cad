@@ -407,7 +407,7 @@ class InMemoryProjectStore:
             and isinstance(item.get("download_url"), str)
         ]
         if self._artifact_file_exists is None:
-            return bool(produced_files)
+            return False
         return any(self._artifact_file_exists(artifact, item["name"]) for item in produced_files)
 
     def _ensure_artifact_ids_available(self, project_id: str, project: Project) -> None:

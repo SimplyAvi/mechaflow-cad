@@ -70,7 +70,10 @@ def test_project_store_allows_metadata_artifact_ids_but_protects_downloadable_id
     downloadable_clone.id = "project-downloadable-clone"
     for job in downloadable_clone.analysis_jobs:
         job.id = f"{job.id}-downloadable-clone"
-    downloadable_store = InMemoryProjectStore(seed_projects=[downloadable_sample])
+    downloadable_store = InMemoryProjectStore(
+        seed_projects=[downloadable_sample],
+        artifact_file_exists=lambda _artifact, _name: True,
+    )
 
     with pytest.raises(ValueError, match="analysis artifact ID already belongs to another project"):
         downloadable_store.create_project(downloadable_clone)

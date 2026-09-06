@@ -146,6 +146,7 @@ function App() {
   const [substitutionMessage, setSubstitutionMessage] = useState<string | null>(null);
   const [substitutionPending, setSubstitutionPending] = useState(false);
   const [demoStepReviews, setDemoStepReviews] = useState<Set<string>>(() => new Set());
+  const [downstreamReviewStarted, setDownstreamReviewStarted] = useState(false);
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
 
@@ -161,6 +162,7 @@ function App() {
     setAnalysisRunMessage(null);
     setSubstitutionPending(false);
     setAnalysisRunPending(false);
+    setDownstreamReviewStarted(false);
     setDemoStepReviews(new Set());
     setDesign(loadedDesign);
     setSelectedAssemblyId(loadedDesign.assembly.id);
@@ -493,7 +495,7 @@ function App() {
         : 'One or more downstream workflow panels need seed or backend data before the captain demo is complete.',
       anchor: '#bom-panel',
       actionLabel: 'Open downstream panels',
-      canMarkReviewed: hasBomManufacturingWiring,
+      canMarkReviewed: hasBomManufacturingWiring && downstreamReviewStarted,
     },
     {
       id: 'solver-readiness',
@@ -778,9 +780,11 @@ function App() {
           selectedPart={selectedPart}
           solverReadiness={solverReadiness}
         />
-        <BomPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
-        <ManufacturingPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
-        <WiringPanel design={visibleDesign} selectedPart={selectedPart} />
+        <div onClick={() => setDownstreamReviewStarted(true)} style={{ display: 'contents' }}>
+          <BomPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
+          <ManufacturingPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
+          <WiringPanel design={visibleDesign} selectedPart={selectedPart} />
+        </div>
         <ReportPanel reports={visibleDesign.reports} selectedOption={substitutionPreview?.option ?? selectedOption} />
         <BackendContractPanel design={design} />
       </section>
