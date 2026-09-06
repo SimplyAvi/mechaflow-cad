@@ -37,7 +37,7 @@ Fields:
 
 The project payload preserves the meaningful MVP data: authoring units, project metadata, visual-authoring metadata, assemblies, parts, dimensions, optional primitive diameter, materials, electronics components, wire segments, wiring rule sets, wiring routes, active task, modifications, analysis jobs, job recommendations, cached report references, cached artifact references, reports, and analysis job artifacts. BOM, manufacturing option groupings, wiring/electronics panels, route review evidence, analysis readiness panels, and enriched job queue panels are rebuilt from the imported project through `ProjectPanelData`.
 
-Visual authoring data is stored on each part at `metadata.visual_authoring`. The browser workspace writes fields such as `primitive`, `position_mm`, `rotation_deg`, `color`, `parent_part_id`, `joint_type`, `assigned_to_part_id`, and `connector_id`. These fields drive the MVP canvas and are intentionally review-required hints until real CAD geometry workers produce authoritative artifacts.
+Visual authoring data is stored on each part at `metadata.visual_authoring`. The browser workspace writes fields such as `primitive`, `position_mm`, `rotation_deg`, `color`, `parent_part_id`, `joint_type`, `assigned_to_part_id`, and `connector_id`; the in-place label editor persists its trimmed value as the part's canonical `name`. These fields drive the MVP canvas and are intentionally review-required hints until real CAD geometry workers produce authoritative artifacts.
 
 ## API
 
