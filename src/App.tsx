@@ -12,6 +12,7 @@ import {
 } from './lib/api';
 import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
+import { mockReferenceDesign } from './data/mockDesign';
 import { extractDesignIntentChips, taskFromDesignIntent, type DesignIntentChip } from './lib/designIntent';
 import './App.css';
 
@@ -449,7 +450,7 @@ function App() {
       return;
     }
     if (!design) return;
-    const conceptDesign = JSON.parse(JSON.stringify(design)) as ReferenceDesign;
+    const conceptDesign = JSON.parse(JSON.stringify(mockReferenceDesign)) as ReferenceDesign;
     const conceptTask = taskFromDesignIntent(conceptDesign.task, trimmedIntent);
     const localBackend = { ...conceptDesign.backend };
     delete localBackend.apiBaseUrl;
@@ -839,7 +840,7 @@ function App() {
       label: 'Open reference robot',
       status: 'complete',
       summary: `${design.name} is loaded from ${design.backend.source.replaceAll('-', ' ')} with project ${design.backend.projectId}.`,
-      anchor: '#reference-panel',
+      anchor: '#project-browser',
       actionLabel: 'Review project source',
     },
     {
@@ -927,10 +928,22 @@ function App() {
       summary: design.backend.apiBaseUrl
         ? 'Export a .mfcad.json evidence package, then import it again to prove the round trip.'
         : 'Project file import and export need a local API connection.',
-      anchor: '#reference-panel',
+      anchor: '#project-file-controls',
       actionLabel: 'Open file controls',
     },
   ];
+
+  const openDemoGuideStep = (step: DemoGuideStep) => {
+    const mode: WorkspaceMode = step.id === 'bom-wiring-manufacturing'
+      ? 'manufacturing'
+      : ['solver-readiness', 'local-analysis'].includes(step.id)
+        ? 'analysis'
+        : ['cached-evidence', 'export-import'].includes(step.id)
+          ? 'reports'
+          : 'design';
+    setWorkspaceMode(mode);
+    window.setTimeout(() => document.querySelector(step.anchor)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  };
 
   const activeMode = workspaceModes.find((mode) => mode.id === workspaceMode) ?? workspaceModes[0];
 
@@ -1267,7 +1280,7 @@ function App() {
                     pending={projectFilePending}
                     projectId={design.backend.projectId}
                   />
-                  <DemoGuidePanel steps={demoGuideSteps} onMarkReviewed={markDemoStep} />
+                  <DemoGuidePanel onOpenStep={openDemoGuideStep} steps={demoGuideSteps} onMarkReviewed={markDemoStep} />
                 </>
               ) : null}
               {workspaceMode === 'backend' ? <BackendContractPanel design={design} /> : null}
@@ -1352,9 +1365,11 @@ function EmptyPanelNotice({ title, children }: { title: string; children: string
 
 function DemoGuidePanel({
   steps,
+  onOpenStep,
   onMarkReviewed,
 }: {
   steps: DemoGuideStep[];
+  onOpenStep: (step: DemoGuideStep) => void;
   onMarkReviewed: (stepId: string) => void;
 }) {
   const completed = steps.filter((step) => step.status === 'complete').length;
@@ -1386,7 +1401,7 @@ function DemoGuidePanel({
               <span>{demoGuideStatusLabel[step.status]}</span>
               <p>{step.summary}</p>
               <div className="demo-step-actions">
-                <a href={step.anchor}>{step.actionLabel}</a>
+                <a href={step.anchor} onClick={(event) => { event.preventDefault(); onOpenStep(step); }}>{step.actionLabel}</a>
                 {step.canMarkReviewed && step.status !== 'complete' ? (
                   <button type="button" onClick={() => onMarkReviewed(step.id)}>Mark reviewed</button>
                 ) : null}
@@ -1436,7 +1451,7 @@ function ProjectFilePanel({
   projectId: string;
 }) {
   return (
-    <section className="project-file-panel" aria-label="Project file import and export">
+    <section className="project-file-panel" id="project-file-controls" aria-label="Project file import and export">
       <div>
         <strong>Portable project file</strong>
         <small>JSON v1 preserves project {projectId}, assemblies, wiring, materials, analysis readiness, and artifacts.</small>
