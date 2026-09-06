@@ -73,4 +73,20 @@ describe('visual authoring project helpers', () => {
     expect(visual.parent_part_id).toBeNull();
     expect(visual.joint_type).toBe('unassigned');
   });
+
+  it('rejects parent links and wire routes across assemblies', () => {
+    const first = createAssemblyWithBase(mockReferenceDesign.backendProject);
+    const second = createAssemblyWithBase(first.project);
+    const rejectedParent = connectPartToParent(second.project, first.partId, second.partId, 'fixed');
+    const rejectedRoute = createWireRoute(second.project, first.assemblyId, first.partId, second.partId);
+
+    const firstPart = rejectedParent.assemblies.find((assembly) => assembly.id === first.assemblyId)?.parts
+      .find((part) => part.id === first.partId);
+    const visual = firstPart?.metadata.visual_authoring as Record<string, unknown>;
+    const firstAssembly = rejectedRoute.project.assemblies.find((assembly) => assembly.id === first.assemblyId);
+
+    expect(visual.parent_part_id).toBeNull();
+    expect(rejectedRoute.routeId).toBe('');
+    expect(firstAssembly?.wiring_routes).toHaveLength(0);
+  });
 });

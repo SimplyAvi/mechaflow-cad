@@ -639,6 +639,9 @@ export const connectPartToParent = (
   const part = findPart(next, partId);
   const parent = parentPartId ? findPart(next, parentPartId) : null;
   if (!part || (parentPartId && !parent)) return next;
+  const partAssembly = next.assemblies.find((assembly) => assembly.parts.some((candidate) => candidate.id === partId));
+  const parentAssembly = parent ? next.assemblies.find((assembly) => assembly.parts.some((candidate) => candidate.id === parent.id)) : null;
+  if (parent && partAssembly !== parentAssembly) return next;
   const visited = new Set<string>();
   let current = parent;
   while (current) {
@@ -728,6 +731,9 @@ export const createWireRoute = (
   const fromPart = findPart(next, fromPartId);
   const toPart = findPart(next, toPartId);
   if (!assembly || !fromPart || !toPart) return { project: next, routeId: '' };
+  if (!assembly.parts.some((part) => part.id === fromPartId) || !assembly.parts.some((part) => part.id === toPartId)) {
+    return { project: next, routeId: '' };
+  }
   const existingRouteIds = new Set(next.assemblies.flatMap((candidate) => candidate.wiring_routes.map((route) => route.id)));
   const routeSlug = `${slug(fromPart.name)}-${slug(toPart.name)}`;
   const routeId = uniqueId(existingRouteIds, `route-${routeSlug}`);
