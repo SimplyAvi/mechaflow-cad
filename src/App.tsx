@@ -116,6 +116,12 @@ interface DemoGuideStep {
   canMarkReviewed?: boolean;
 }
 
+interface ExportedEvidenceSignature {
+  projectId: string;
+  jobIds: string[];
+  artifactIds: string[];
+}
+
 const demoGuideStatusLabel: Record<DemoGuideStatus, string> = {
   complete: 'Complete',
   available: 'Ready',
@@ -147,6 +153,7 @@ function App() {
   const [substitutionPending, setSubstitutionPending] = useState(false);
   const [demoStepReviews, setDemoStepReviews] = useState<Set<string>>(() => new Set());
   const [downstreamReviewStarted, setDownstreamReviewStarted] = useState(false);
+  const [exportedEvidence, setExportedEvidence] = useState<ExportedEvidenceSignature | null>(null);
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
 
@@ -367,8 +374,12 @@ function App() {
       link.remove();
       URL.revokeObjectURL(objectUrl);
       if (projectLoadVersion.current === requestVersion) {
-        setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}.`);
-        markDemoStep('export-import');
+        setExportedEvidence({
+          projectId: projectFile.project.id,
+          jobIds: projectFile.project.analysis_jobs.map((job) => job.id),
+          artifactIds: projectFile.project.analysis_jobs.flatMap((job) => job.artifacts.map((artifact) => artifact.id)),
+        });
+        setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}. Re-import it to complete the round trip.`);
       }
     } catch (error) {
       console.warn('Project export failed.', error);
@@ -397,9 +408,17 @@ function App() {
       const projectFile = JSON.parse(text) as unknown;
       const importedDesign = await importProjectFile(design.backend.apiBaseUrl, projectFile);
       if (importRequestVersion.current !== requestVersion) return;
+      const importedJobIds = new Set(importedDesign.analysisJobs.map((job) => job.id));
+      const importedArtifactIds = new Set(importedDesign.analysisJobs.flatMap((job) => job.artifacts.map((artifact) => artifact.id)));
+      const roundTripVerified = exportedEvidence != null
+        && exportedEvidence.projectId === importedDesign.backend.projectId
+        && exportedEvidence.jobIds.length > 0
+        && exportedEvidence.artifactIds.length > 0
+        && exportedEvidence.jobIds.every((jobId) => importedJobIds.has(jobId))
+        && exportedEvidence.artifactIds.every((artifactId) => importedArtifactIds.has(artifactId));
       applyLoadedDesign(importedDesign);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
-      markDemoStep('export-import');
+      if (roundTripVerified) markDemoStep('export-import');
     } catch (error) {
       console.warn('Project import failed.', error);
       const message = error instanceof SyntaxError
