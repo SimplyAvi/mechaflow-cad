@@ -2024,11 +2024,6 @@ small,
   }
 }
 
-/* Keep the command line visible in the first viewport. */
-.input-first-shell .command-dock {
-  order: -1;
-}
-
 .input-first-shell .primary-viewer {
   min-height: clamp(440px, 54vh, 650px);
 }

@@ -187,6 +187,59 @@ interface ReferenceImageRecord {
   source: ReferenceImageSource;
 }
 
+interface RecentProjectSnapshot {
+  design: ReferenceDesign;
+  intentText: string;
+  referenceImages: ReferenceImageRecord[];
+  savedAt: number;
+}
+
+const RECENT_PROJECTS_STORAGE_KEY = 'mechaflow.recent-projects.v1';
+
+const readRecentProject = (): RecentProjectSnapshot | null => {
+  try {
+    const raw = window.localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY);
+    if (!raw) return null;
+    const snapshots = JSON.parse(raw) as unknown;
+    if (!Array.isArray(snapshots) || snapshots.length === 0) return null;
+    const snapshot = snapshots[0] as Partial<RecentProjectSnapshot>;
+    const candidate = snapshot.design as Partial<ReferenceDesign> | undefined;
+    if (!candidate || typeof candidate !== 'object' || typeof candidate.id !== 'string'
+      || typeof candidate.name !== 'string' || !Array.isArray(candidate.assemblies)
+      || !candidate.backend || typeof candidate.backend !== 'object') return null;
+    return {
+      design: snapshot.design as ReferenceDesign,
+      intentText: typeof snapshot.intentText === 'string' ? snapshot.intentText : '',
+      referenceImages: Array.isArray(snapshot.referenceImages) ? snapshot.referenceImages as ReferenceImageRecord[] : [],
+      savedAt: typeof snapshot.savedAt === 'number' ? snapshot.savedAt : 0,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const rememberRecentProject = (
+  design: ReferenceDesign,
+  intentText: string,
+  referenceImages: ReferenceImageRecord[],
+) => {
+  try {
+    const raw = window.localStorage.getItem(RECENT_PROJECTS_STORAGE_KEY);
+    const stored = raw ? JSON.parse(raw) as unknown : [];
+    const snapshots = Array.isArray(stored) ? stored as RecentProjectSnapshot[] : [];
+    const nextSnapshot: RecentProjectSnapshot = {
+      design: JSON.parse(JSON.stringify(design)) as ReferenceDesign,
+      intentText,
+      referenceImages: JSON.parse(JSON.stringify(referenceImages)) as ReferenceImageRecord[],
+      savedAt: Date.now(),
+    };
+    const remaining = snapshots.filter((snapshot) => snapshot.design?.id !== design.id);
+    window.localStorage.setItem(RECENT_PROJECTS_STORAGE_KEY, JSON.stringify([nextSnapshot, ...remaining].slice(0, 6)));
+  } catch {
+    return;
+  }
+};
+
 interface SpeechRecognitionResultEventLike {
   results: ArrayLike<ArrayLike<{ transcript: string }>>;
 }
@@ -315,10 +368,17 @@ function App() {
     let cancelled = false;
     loadCockpitDesign().then((loadedDesign) => {
       if (!cancelled) {
-        applyLoadedDesign(loadedDesign);
+        const recentProject = readRecentProject();
+        const initialProject = recentProject?.design ?? loadedDesign;
+        applyLoadedDesign(initialProject);
+        setIntentText(recentProject?.intentText ?? '');
+        setReferenceImages(recentProject?.referenceImages ?? []);
+        if (recentProject) {
+          setIntentMessage(`Reopened ${initialProject.name} from local recent-project history.`);
+        }
         const loadedProjectVersion = projectLoadVersion.current;
-        if (loadedDesign.backend.apiBaseUrl) {
-          loadLocalSolverReadiness(loadedDesign.backend.apiBaseUrl)
+        if (initialProject.backend.apiBaseUrl) {
+          loadLocalSolverReadiness(initialProject.backend.apiBaseUrl)
             .then((readiness) => {
               if (!cancelled && projectLoadVersion.current === loadedProjectVersion) setSolverReadiness(readiness);
             })
@@ -387,29 +447,29 @@ function App() {
       setIntentMessage('Type a design intent first, for example payload, reach, cycle time, material, and restrictions.');
       return;
     }
-    setDesign((current) => {
-      if (!current) return current;
-      const conceptDesign = JSON.parse(JSON.stringify(current)) as ReferenceDesign;
-      const conceptTask = taskFromDesignIntent(conceptDesign.task, trimmedIntent);
-      const localBackend = { ...conceptDesign.backend };
-      delete localBackend.apiBaseUrl;
-      return {
-        ...conceptDesign,
-        id: 'local-design-intent-concept',
-        name: 'New mechanism concept from prompt',
-        sourceUrl: null,
-        license: 'Local concept seed, no external CAD asset',
-        formats: ['Prompt intent', 'Reference images metadata', 'Proxy 3D viewport'],
-        task: conceptTask,
-        backend: {
-          ...localBackend,
-          projectId: 'local-design-intent-concept',
-          source: 'bundled-mock',
-          endpoint: 'local prompt concept, proxy geometry reused from bundled mock data',
-          advisoryNotice: 'This project was started from typed design intent. The viewport is an interactive concept proxy until real CAD generation, reconstruction, and FEA workers are connected.',
-        },
-      };
-    });
+    if (!design) return;
+    const conceptDesign = JSON.parse(JSON.stringify(design)) as ReferenceDesign;
+    const conceptTask = taskFromDesignIntent(conceptDesign.task, trimmedIntent);
+    const localBackend = { ...conceptDesign.backend };
+    delete localBackend.apiBaseUrl;
+    const nextDesign: ReferenceDesign = {
+      ...conceptDesign,
+      id: 'local-design-intent-concept',
+      name: 'New mechanism concept from prompt',
+      sourceUrl: null,
+      license: 'Local concept seed, no external CAD asset',
+      formats: ['Prompt intent', 'Reference images metadata', 'Proxy 3D viewport'],
+      task: conceptTask,
+      backend: {
+        ...localBackend,
+        projectId: 'local-design-intent-concept',
+        source: 'bundled-mock',
+        endpoint: 'local prompt concept, proxy geometry reused from bundled mock data',
+        advisoryNotice: 'This project was started from typed design intent. The viewport is an interactive concept proxy until real CAD generation, reconstruction, and FEA workers are connected.',
+      },
+    };
+    setDesign(nextDesign);
+    rememberRecentProject(nextDesign, trimmedIntent, referenceImages);
     setWorkspaceMode('design');
     setSubstitutionPreview(null);
     setIntentMessage('Started a concept workspace from your prompt. The 3D viewport is a proxy rendering, not generated CAD or photo reconstruction.');
@@ -418,15 +478,26 @@ function App() {
   const loadReadyExample = async (exampleId: ReadyExampleId) => {
     const example = readyExamples.find((candidate) => candidate.id === exampleId);
     const loadedDesign = await loadCockpitDesign();
-    applyLoadedDesign(buildReadyExampleDesign(loadedDesign, exampleId));
+    const nextDesign = buildReadyExampleDesign(loadedDesign, exampleId);
+    applyLoadedDesign(nextDesign);
+    rememberRecentProject(nextDesign, example?.intent ?? '', referenceImages);
     setWorkspaceMode('design');
     setIntentText(example?.intent ?? '');
     setIntentMessage(`${example?.title ?? 'Ready example'} loaded. Example data is repository-local and does not import external CAD assets.`);
   };
 
   const openRecentProject = () => {
+    const recentProject = readRecentProject();
+    if (!recentProject) {
+      setWorkspaceMode('design');
+      setIntentMessage('No saved recent project is available. Import a local .mfcad.json project or load a ready example to create one.');
+      return;
+    }
+    applyLoadedDesign(recentProject.design);
+    setIntentText(recentProject.intentText);
+    setReferenceImages(recentProject.referenceImages);
     setWorkspaceMode('design');
-    setIntentMessage(`Opened recent project ${design?.name ?? 'current project'}. Continue from the 3D canvas or switch tools when ready.`);
+    setIntentMessage(`Reopened ${recentProject.design.name} from local recent-project history.`);
   };
 
   const addReferenceImages = (files: FileList | File[], source: ReferenceImageSource) => {
@@ -666,6 +737,7 @@ function App() {
         && exportedEvidence.artifactIds.every((artifactId) => importedArtifactIds.has(artifactId))
         && exportedEvidence.artifactContent === evidenceArtifactSignature(importedArtifacts);
       applyLoadedDesign(importedDesign);
+      rememberRecentProject(importedDesign, intentText, referenceImages);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
       if (roundTripVerified) markDemoStep('export-import');
       const importedProjectVersion = projectLoadVersion.current;

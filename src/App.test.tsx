@@ -7,6 +7,7 @@ import { mockBackendMetadata, mockProjectPanelData } from './data/mockDesign';
 describe('MechaFlow input-first cockpit', () => {
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
@@ -90,6 +91,31 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toHaveValue('Design a compact pick-and-place gantry for 8 lb payload, 0.45 m travel, 3 s cycle, aluminum frame, local-only analysis.');
     expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('8 lb payload, 3 s cycle, 0.45 m reach');
     expect(screen.getByText(/repository-local and does not import external CAD assets/i)).toBeInTheDocument();
+  });
+
+  it('reopens the most recently saved local project and reports when history is empty', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByRole('img', { name: /Interactive exploded view/i });
+    const gantryCard = screen.getByText(/Compact pick-and-place gantry concept/i).closest('article');
+    expect(gantryCard).not.toBeNull();
+    await user.click(within(gantryCard as HTMLElement).getByRole('button', { name: /Load/i }));
+    await screen.findByText(/Compact gantry proxy assembly/i);
+
+    await user.click(screen.getByRole('button', { name: /Recent project/i }));
+    expect(await screen.findByText(/Reopened Compact pick-and-place gantry concept from local recent-project history/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toHaveValue(
+      'Design a compact pick-and-place gantry for 8 lb payload, 0.45 m travel, 3 s cycle, aluminum frame, local-only analysis.',
+    );
+
+    cleanup();
+    window.localStorage.clear();
+    render(<App />);
+    await screen.findByRole('img', { name: /Interactive exploded view/i });
+    await user.click(screen.getByRole('button', { name: /Recent project/i }));
+    expect(await screen.findByText(/No saved recent project is available/i)).toBeInTheDocument();
   });
 
   it('keeps advanced MVP tools behind mode switches after launch', async () => {
