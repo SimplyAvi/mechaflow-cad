@@ -152,6 +152,8 @@ function App() {
     setSubstitutionMessage(null);
     setSolverReadiness(null);
     setAnalysisRunMessage(null);
+    setSubstitutionPending(false);
+    setAnalysisRunPending(false);
     setDemoStepReviews(new Set());
     setDesign(loadedDesign);
     setSelectedAssemblyId(loadedDesign.assembly.id);
@@ -232,12 +234,14 @@ function App() {
       setSubstitutionMessage('Start the local backend to preview or apply a persisted material substitution. Offline mock data is read-only.');
       return;
     }
+    const requestVersion = projectLoadVersion.current;
     setSubstitutionPending(true);
     setSubstitutionMessage(action === 'preview' ? 'Requesting non-persisted substitution preview...' : 'Applying validated substitution to the project...');
     try {
       const result = action === 'preview'
         ? await previewMaterialSubstitution(design.backend.apiBaseUrl, design.backend.projectId, selectedOption)
         : await applyMaterialSubstitution(design.backend.apiBaseUrl, design.backend.projectId, selectedOption);
+      if (projectLoadVersion.current !== requestVersion) return;
       if (result.persisted) {
         setDesign(result.design);
         setSubstitutionPreview(null);
@@ -253,10 +257,12 @@ function App() {
       }
     } catch (error) {
       console.warn('Material substitution failed.', error);
-      setSubstitutionPreview(null);
-      setSubstitutionMessage(error instanceof Error ? error.message : 'Material substitution failed compatibility validation.');
+      if (projectLoadVersion.current === requestVersion) {
+        setSubstitutionPreview(null);
+        setSubstitutionMessage(error instanceof Error ? error.message : 'Material substitution failed compatibility validation.');
+      }
     } finally {
-      setSubstitutionPending(false);
+      if (projectLoadVersion.current === requestVersion) setSubstitutionPending(false);
     }
   };
 
@@ -265,6 +271,7 @@ function App() {
       setAnalysisRunMessage('Start the local backend with VITE_API_BASE_URL to run a persisted pre-solver job.');
       return;
     }
+    const requestVersion = projectLoadVersion.current;
     setAnalysisRunPending(true);
     setAnalysisRunMessage('Running local pre-solver screening...');
     try {
@@ -273,6 +280,7 @@ function App() {
         design.backend.projectId,
         selectedPart.id,
       );
+      if (projectLoadVersion.current !== requestVersion) return;
       setDesign((current) => current && {
         ...current,
         analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
@@ -281,9 +289,11 @@ function App() {
       markDemoStep('local-analysis');
     } catch (error) {
       console.warn('Local pre-solver run failed.', error);
-      setAnalysisRunMessage('Local pre-solver job failed. Check the backend status and review-required details.');
+      if (projectLoadVersion.current === requestVersion) {
+        setAnalysisRunMessage('Local pre-solver job failed. Check the backend status and review-required details.');
+      }
     } finally {
-      setAnalysisRunPending(false);
+      if (projectLoadVersion.current === requestVersion) setAnalysisRunPending(false);
     }
   };
 
@@ -292,6 +302,7 @@ function App() {
       setAnalysisRunMessage('Start the local backend with VITE_API_BASE_URL to run the solver-readiness fixture.');
       return;
     }
+    const requestVersion = projectLoadVersion.current;
     setAnalysisRunPending(true);
     setAnalysisRunMessage('Running local solver-readiness fixture or preparing unavailable-tool artifacts...');
     try {
@@ -300,11 +311,13 @@ function App() {
         design.backend.projectId,
         selectedPart.id,
       );
+      if (projectLoadVersion.current !== requestVersion) return;
       setDesign((current) => current && {
         ...current,
         analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
       });
       const refreshed = await loadLocalSolverReadiness(design.backend.apiBaseUrl);
+      if (projectLoadVersion.current !== requestVersion) return;
       setSolverReadiness(refreshed);
       setAnalysisRunMessage(
         job.status === 'solver-unavailable'
@@ -317,9 +330,11 @@ function App() {
       markDemoStep('local-analysis');
     } catch (error) {
       console.warn('Local solver-readiness fixture failed.', error);
-      setAnalysisRunMessage('Local solver-readiness fixture failed. Check logs and review-required details.');
+      if (projectLoadVersion.current === requestVersion) {
+        setAnalysisRunMessage('Local solver-readiness fixture failed. Check logs and review-required details.');
+      }
     } finally {
-      setAnalysisRunPending(false);
+      if (projectLoadVersion.current === requestVersion) setAnalysisRunPending(false);
     }
   };
 
@@ -328,6 +343,7 @@ function App() {
       setProjectFileMessage('Start the desktop demo with a local backend or mock API to export a portable project file.');
       return;
     }
+    const requestVersion = projectLoadVersion.current;
     setProjectFilePending(true);
     setProjectFileMessage('Preparing portable MechaFlow project file...');
     try {
@@ -341,13 +357,17 @@ function App() {
       link.click();
       link.remove();
       URL.revokeObjectURL(objectUrl);
-      setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}.`);
-      markDemoStep('export-import');
+      if (projectLoadVersion.current === requestVersion) {
+        setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}.`);
+        markDemoStep('export-import');
+      }
     } catch (error) {
       console.warn('Project export failed.', error);
-      setProjectFileMessage('Project export failed. Check that the backend supports MechaFlow project files.');
+      if (projectLoadVersion.current === requestVersion) {
+        setProjectFileMessage('Project export failed. Check that the backend supports MechaFlow project files.');
+      }
     } finally {
-      setProjectFilePending(false);
+      if (projectLoadVersion.current === requestVersion) setProjectFilePending(false);
     }
   };
 
