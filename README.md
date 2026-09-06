@@ -26,7 +26,7 @@ The repository now contains a working local MVP foundation plus planning docs:
 - A FastAPI backend in `backend/mechaflow_api/` with project, catalog, panel-data, material substitution, wiring/electronics, report, analysis-readiness, analysis job queue, project-file import/export, local pre-solver, and CalculiX solver-readiness fixture contracts.
 - Portable `.mfcad.json` project files that round-trip the MVP project state and cached evidence metadata.
 - Seed catalog, material, manufacturing, integration, ready-example, task, and handoff data in `catalog/` and `data/`.
-- CI-backed validation for Python, catalog, frontend, smoke, desktop smoke, and captain smoke paths.
+- CI-backed validation for Python, catalog, frontend, smoke, and captain desktop smoke paths.
 
 ## Honest limitations
 
