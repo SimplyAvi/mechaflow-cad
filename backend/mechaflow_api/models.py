@@ -396,6 +396,7 @@ class PartDimensions(StrictModel):
     length_mm: PositiveFiniteFloat | None = None
     width_mm: PositiveFiniteFloat | None = None
     height_mm: PositiveFiniteFloat | None = None
+    diameter_mm: PositiveFiniteFloat | None = None
     thickness_mm: PositiveFiniteFloat | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -855,6 +856,8 @@ class Project(StrictModel):
     description: str | None = None
     reference_design_id: str | None = None
     active_task: TaskRequirement | None = None
+    units: Literal["mm", "cm", "m", "in"] = "mm"
+    metadata: dict[str, Any] = Field(default_factory=dict)
     assemblies: list[Assembly] = Field(default_factory=list)
     materials: list[Material] = Field(default_factory=list)
     electronics_components: list[ElectronicsComponent] = Field(default_factory=list)

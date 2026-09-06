@@ -31,7 +31,7 @@ npm run smoke
 xvfb-run -a npm run captain:smoke
 ```
 
-These commands cover TypeScript compilation, Vite production build, React unit and component tests, frontend lint, the mock API plus built frontend smoke, and the captain demo smoke. `captain:smoke` includes the Electron desktop launcher smoke, fixture import, material substitution preview, local-safe analysis endpoints, solver-unavailable boundary, and project-file export round trip.
+These commands cover TypeScript compilation, Vite production build, React unit and component tests, frontend lint, the mock API plus built frontend smoke, and the captain demo smoke. React tests include visual authoring coverage for unit selection, primitive creation, dimension editing, parent and joint metadata, and visible wire routing. `captain:smoke` includes the Electron desktop launcher smoke, fixture import, material substitution preview, local-safe analysis endpoints, solver-unavailable boundary, and project-file export round trip.
 
 ## Local validation before handoff
 
@@ -58,7 +58,7 @@ npm run captain:smoke
 
 CI uses `xvfb-run` to provide a headless display for the Electron smoke path and disables Electron's Linux setuid sandbox only for the GitHub-hosted runner, where the downloaded helper cannot retain its required ownership and mode. That proves the one-command desktop launcher can start the mock API, Vite frontend, and Electron shell noninteractively without claiming a full desktop security environment.
 
-CI does not replace a human visual review of the desktop cockpit. Before release handoff, run the manual checklist in `docs/desktop.md` with `npm start` and inspect the actual window for layout, part selection, material controls, downstream panels, analysis queue labels, reports, and project-file import/export behavior.
+CI does not replace a human visual review of the desktop cockpit. Before release handoff, run the manual checklist in `docs/desktop.md` with `npm start` and inspect the actual window for layout, XYZ grid clarity, orbit/pan/zoom feel, part creation, geometry selection, dimension controls, motor and connector placement, visible wire routing, material controls, downstream panels, analysis queue labels, reports, and project-file import/export behavior.
 
 ## Unsuitable checks for CI
 

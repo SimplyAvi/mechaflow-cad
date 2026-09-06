@@ -17,6 +17,7 @@ from mechaflow_api.models import (
     Material,
     MoneyRange,
     Part,
+    Project,
     RecommendationConfidence,
     TaskKind,
     TaskRequirement,
@@ -93,6 +94,44 @@ def test_task_and_part_schema_model_task_preserving_edits() -> None:
 
     assert task.target_value == 120
     assert part.dimensions.length_mm == 100
+
+
+def test_project_schema_preserves_visual_authoring_metadata() -> None:
+    project = Project(
+        id="project-visual-authoring",
+        name="Visual authoring test",
+        units="in",
+        metadata={"visual_authoring": {"reach_mm": 650}},
+        assemblies=[{
+            "id": "assembly-visual",
+            "name": "Visual assembly",
+            "root_node_id": "node-root",
+            "nodes": [{"id": "node-root", "name": "Root", "part_ids": ["part-visual-link"]}],
+            "parts": [{
+                "id": "part-visual-link",
+                "name": "Visual link",
+                "category": "beam",
+                "dimensions": {"length_mm": 152.4, "width_mm": 25.4, "height_mm": 12.7, "diameter_mm": 6.35},
+                "metadata": {
+                    "visual_authoring": {
+                        "primitive": "beam",
+                        "position_mm": {"x": 100, "y": 25, "z": 40},
+                        "rotation_deg": {"x": 0, "y": 0, "z": 15},
+                        "joint_type": "revolute",
+                    },
+                },
+            }],
+        }],
+    )
+
+    visual_part = project.assemblies[0].parts[0]
+    assert project.units == "in"
+    assert project.metadata["visual_authoring"]["reach_mm"] == 650
+    assert visual_part.dimensions.diameter_mm == 6.35
+    assert visual_part.metadata["visual_authoring"]["primitive"] == "beam"
+
+    with pytest.raises(ValidationError):
+        Project(id="project-invalid-units", name="Invalid units", units="ft")
 
 
 def test_analysis_job_request_defaults_to_local_compute() -> None:

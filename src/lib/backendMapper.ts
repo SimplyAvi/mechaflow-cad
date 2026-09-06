@@ -2,6 +2,7 @@ import type {
   AdvisoryReport,
   AnalysisJob,
   AnalysisReadinessPreview,
+  AuthoringUnit,
   BackendApiMetadata,
   BackendAnalysisJob,
   BackendAnalysisReport,
@@ -24,6 +25,8 @@ import type {
   JobStatus,
   ManufacturingOption,
   MaterialOption,
+  CADJointType,
+  CADPrimitiveShape,
   ElectronicsComponent,
   WireSegment,
   Part,
@@ -153,7 +156,17 @@ const replacementRisk = (part: BackendPart): RiskLevel => {
 };
 
 const visualShape = (value: unknown): PartVisual['shape'] | undefined => {
-  if (value === 'base' || value === 'joint' || value === 'link' || value === 'plate' || value === 'tool' || value === 'pcb') {
+  if (
+    value === 'base'
+    || value === 'joint'
+    || value === 'link'
+    || value === 'plate'
+    || value === 'tool'
+    || value === 'pcb'
+    || value === 'motor'
+    || value === 'connector'
+    || value === 'bracket'
+  ) {
     return value;
   }
   return undefined;
@@ -256,6 +269,101 @@ const numberMetadata = (value: unknown): number | null =>
 
 const stringMetadata = (value: unknown): string | undefined =>
   typeof value === 'string' && value.trim() !== '' ? value : undefined;
+
+const authoringUnits = new Set(['mm', 'cm', 'm', 'in']);
+
+const projectUnit = (project: { units?: unknown; metadata?: Record<string, unknown> }): AuthoringUnit => {
+  if (typeof project.units === 'string' && authoringUnits.has(project.units)) return project.units as AuthoringUnit;
+  const projectMetadata = metadataRecord(project.metadata);
+  const visualAuthoring = metadataRecord(projectMetadata.visual_authoring);
+  const metadataUnits = visualAuthoring.units;
+  return typeof metadataUnits === 'string' && authoringUnits.has(metadataUnits) ? metadataUnits as AuthoringUnit : 'mm';
+};
+
+const primitiveFrom = (value: unknown, part: BackendPart): CADPrimitiveShape => {
+  if (
+    value === 'base_plate'
+    || value === 'beam'
+    || value === 'cylinder_joint'
+    || value === 'bracket'
+    || value === 'motor_block'
+    || value === 'connector'
+    || value === 'electronics'
+    || value === 'tool'
+  ) return value;
+  const category = `${part.category} ${part.name}`.toLowerCase();
+  if (category.includes('motor') || category.includes('actuator')) return 'motor_block';
+  if (category.includes('connector')) return 'connector';
+  if (category.includes('pcb') || category.includes('electronics')) return 'electronics';
+  if (category.includes('joint') || category.includes('hub') || category.includes('yoke')) return 'cylinder_joint';
+  if (category.includes('bracket')) return 'bracket';
+  if (category.includes('link') || category.includes('beam') || category.includes('arm')) return 'beam';
+  if (category.includes('tool') || category.includes('gripper')) return 'tool';
+  return 'base_plate';
+};
+
+const jointTypeFrom = (value: unknown): CADJointType => {
+  if (
+    value === 'fixed'
+    || value === 'revolute'
+    || value === 'prismatic'
+    || value === 'linear'
+    || value === 'tool_mount'
+    || value === 'unassigned'
+  ) return value;
+  return 'unassigned';
+};
+
+const vectorFrom = (value: unknown, fallback: { x: number; y: number; z: number }) => {
+  const record = metadataRecord(value);
+  return {
+    x: numberMetadata(record.x) ?? fallback.x,
+    y: numberMetadata(record.y) ?? fallback.y,
+    z: numberMetadata(record.z) ?? fallback.z,
+  };
+};
+
+const defaultPositionFromVisual = (visual: PartVisual, index: number) => ({
+  x: Math.round((visual.x - 50) * 10),
+  y: Math.round((50 - visual.y) * 8),
+  z: Math.max(4, Math.round((visual.zIndex ?? index + 1) * 8)),
+});
+
+const partDimensionsMm = (part: BackendPart) => {
+  const dimensionMetadata = metadataRecord(part.dimensions.metadata);
+  return {
+    lengthMm: part.dimensions.length_mm ?? null,
+    widthMm: part.dimensions.width_mm ?? null,
+    heightMm: part.dimensions.height_mm ?? null,
+    diameterMm: part.dimensions.diameter_mm ?? numberMetadata(dimensionMetadata.diameter_mm) ?? numberMetadata(dimensionMetadata.bearing_bore_mm) ?? numberMetadata(dimensionMetadata.pin_hole_diameter_mm),
+    thicknessMm: part.dimensions.thickness_mm ?? null,
+  };
+};
+
+const authoringFor = (part: BackendPart, index: number, visual: PartVisual) => {
+  const visualAuthoring = metadataRecord(part.metadata.visual_authoring);
+  const positionFallback = defaultPositionFromVisual(visual, index);
+  const rotationFallback = { x: 0, y: 0, z: visual.rotationDeg ?? 0 };
+  return {
+    primitive: primitiveFrom(visualAuthoring.primitive, part),
+    positionMm: vectorFrom(visualAuthoring.position_mm, positionFallback),
+    rotationDeg: vectorFrom(visualAuthoring.rotation_deg, rotationFallback),
+    dimensionsMm: partDimensionsMm(part),
+    color: stringMetadata(visualAuthoring.color) ?? visual.color,
+    materialId: part.material_id ?? null,
+    parentPartId: stringMetadata(visualAuthoring.parent_part_id) ?? null,
+    jointType: jointTypeFrom(visualAuthoring.joint_type),
+    assignedToPartId: stringMetadata(visualAuthoring.assigned_to_part_id) ?? null,
+    connectorId: stringMetadata(visualAuthoring.connector_id) ?? null,
+    authored: Boolean(visualAuthoring.authored ?? part.metadata.created_by_visual_authoring),
+  };
+};
+
+const visualReachMeters = (project: { metadata?: Record<string, unknown> }): number | null => {
+  const visualAuthoring = metadataRecord(metadataRecord(project.metadata).visual_authoring);
+  const reachMm = numberMetadata(visualAuthoring.reach_mm);
+  return reachMm == null ? null : reachMm / 1000;
+};
 
 const materialValue = (
   value: number | null | undefined,
@@ -547,6 +655,7 @@ const mapPart = (
   const material = part.material_id ? materialsById.get(part.material_id) : undefined;
   const node = assembly.nodes.find((candidate) => candidate.part_ids.includes(part.id));
   const manufacturingOption = activeManufacturingOption(part);
+  const visual = visualFor(part, index, node?.exploded_transform.translation_mm);
   return {
     id: part.id,
     name: part.name,
@@ -569,7 +678,8 @@ const mapPart = (
     },
     designCriteria: buildDesignCriteria(part, material, manufacturingOption),
     analysisReadiness: readinessPreview ?? buildFallbackAnalysisReadiness(part, material, task, projectId),
-    visual: visualFor(part, index, node?.exploded_transform.translation_mm),
+    visual,
+    authoring: authoringFor(part, index, visual),
   };
 };
 
@@ -1006,6 +1116,14 @@ export function mapProjectPanelDataToReferenceDesign(
   const queueJobs = panelData.analysis_job_queue?.jobs;
   const analysisJobs = (queueJobs && queueJobs.length > 0 ? queueJobs : project.analysis_jobs).map(mapBackendAnalysisJob);
   const isDemoReference = project.reference_design_id === 'ref-open-gripper-demo';
+  const manufacturingPanelOptions = panelData.manufacturing_options.length > 0
+    ? panelData.manufacturing_options
+    : backendAssemblies.flatMap((backendAssembly) => backendAssembly.parts.map((part) => ({
+      part_id: part.id,
+      part_name: part.name,
+      material_id: part.material_id,
+      options: part.manufacturing_options,
+    })));
 
   return {
     id: project.reference_design_id ?? project.id,
@@ -1017,7 +1135,7 @@ export function mapProjectPanelDataToReferenceDesign(
       label: task.description,
       targetPayloadLb: taskPayload,
       cycleTimeSeconds: taskValue(panelData.task_requirements, 'cycle_time', 's'),
-      reachMeters: taskValue(panelData.task_requirements, 'reach', 'm'),
+      reachMeters: taskValue(panelData.task_requirements, 'reach', 'm') ?? visualReachMeters(project),
       serviceGoal: 'Preserve serviceability and wiring clearance while editing parts.',
       safetyFactorMin: task.safety_factor_min ?? undefined,
       validationMethod: task.validation_method,
@@ -1030,7 +1148,7 @@ export function mapProjectPanelDataToReferenceDesign(
       project.id,
     ),
     bom: mapBOM(panelData.bom_items, allParts),
-    manufacturingOptions: mapManufacturing(panelData.manufacturing_options),
+    manufacturingOptions: mapManufacturing(manufacturingPanelOptions),
     electronicsComponents: mapElectronicsComponents(panelData.electronics_components ?? project.electronics_components ?? []),
     wireSegments: mapWireSegments(panelData.wire_segments ?? project.wire_segments ?? []),
     analysisJobs,
@@ -1046,6 +1164,9 @@ export function mapProjectPanelDataToReferenceDesign(
     ),
     wiringReview: mapWiringReview(panelData.wiring_review),
     reports,
+    units: projectUnit(project),
+    backendProject: project,
+    analysisReadinessPreviews: panelData.analysis_readiness_previews ?? [],
     backend: {
       source: apiBaseUrl ? 'backend-panel-data' : 'bundled-mock',
       apiBaseUrl,

@@ -1,6 +1,6 @@
 # MechaFlow CAD
 
-MechaFlow CAD is an open-source robotics CAD orchestration cockpit. It helps a builder start from an existing design or design intent, keep the target task visible, inspect an assembly in 3D, compare part and material changes, and package the evidence a future CAD, FEA, electronics, or manufacturing worker needs.
+MechaFlow CAD is an open-source robotics CAD orchestration cockpit. It helps a builder start from an existing design or design intent, choose units, author visual 3D assemblies on an XYZ grid, keep the target task visible, compare part and material changes, route wiring, and package the evidence a future CAD, FEA, electronics, or manufacturing worker needs.
 
 This README is the canonical entry point for product and implementation planning. Treat it as the map for future work, not as a thin product overview.
 
@@ -20,11 +20,11 @@ The business direction is cloud-assisted, not cloud-dependent. Local-first CAD p
 
 The repository now contains a working local MVP foundation plus planning docs:
 
-- A Vite, React, and TypeScript cockpit in `src/` with an input-first opening, immediate 3D robot-arm workspace, compact CAD-style sidebars, design intent command line, reference-image intake, project/example paths, and mode buttons for Design, Analysis, Manufacturing, Reports, and Backend surfaces.
+- A Vite, React, and TypeScript cockpit in `src/` with a visual-authoring-first opening, SVG XYZ grid, orbit/pan/zoom/explode controls, selectable and editable primitives, unit selection, motor and connector placement, visible wire routing, compact CAD-style sidebars, design intent command line, reference-image intake, project/example paths, and mode buttons for Design, Analysis, Manufacturing, Reports, and Backend surfaces.
 - A Node mock backend in `scripts/mock-backend.mjs` for one-command desktop and frontend work.
 - An Electron desktop-openable path in `desktop/` and `scripts/desktop-dev.mjs`, launched with `npm start`.
 - A FastAPI backend in `backend/mechaflow_api/` with project, catalog, panel-data, material substitution, wiring/electronics, report, analysis-readiness, analysis job queue, project-file import/export, local pre-solver, and CalculiX solver-readiness fixture contracts.
-- Portable `.mfcad.json` project files that round-trip the MVP project state and cached evidence metadata.
+- Portable `.mfcad.json` project files that round-trip units, authored visual geometry metadata, assemblies, wiring, MVP project state, and cached evidence metadata.
 - Seed catalog, material, manufacturing, integration, ready-example, task, and handoff data in `catalog/` and `data/`.
 - CI-backed validation for Python, catalog, frontend, smoke, and captain desktop smoke paths.
 
@@ -32,7 +32,7 @@ The repository now contains a working local MVP foundation plus planning docs:
 
 Do not claim these capabilities exist until code and validation prove them:
 
-- No photo-to-3D or prompt-to-CAD generation exists. Reference images and design prompts are local intake metadata and concept guidance only.
+- No photo-to-3D, prompt-to-CAD, or parametric CAD generation exists. Reference images and design prompts are local intake metadata and concept guidance only. The current 3D workspace authors SVG visual primitives and persists their project metadata.
 - No full project FEA exists. The pre-solver runner creates review-required packages and optional nominal demo screening. The CalculiX fixture can prove local executable plumbing for a generated tiny deck, but it does not analyze the selected project geometry.
 - No cloud compute is configured. Queue recommendations may say cloud would be useful when configured, but remote execution, credentials, billing, budget guardrails, and provider approvals are absent.
 - No exact supplier quote, purchase flow, or paid API dependency exists. Cost and lead time are ranged seed estimates.
@@ -43,22 +43,26 @@ Do not claim these capabilities exist until code and validation prove them:
 
 ### Opening workflow
 
-The product direction is input-first and 3D-first:
+The product direction is visual-authoring first, input-first, and 3D-first:
 
-1. Land directly in the 3D workspace, not a long setup checklist.
-2. Type a design intent in one command line and receive extracted chips when possible.
-3. Add reference photos or images as local metadata without any reconstruction claim.
-4. Choose one project path from the left sidebar: new prompt concept, open/import `.mfcad.json`, recent project, reference catalog, or repository-local ready example.
-5. Use contextual sidebars instead of modal-heavy setup screens.
+1. Land directly in the visual CAD workspace, not a long setup checklist.
+2. Choose millimeters, centimeters, meters, or inches as working units.
+3. Create base plates, beams, joints, brackets, motors, connectors, electronics blocks, or tool plates on the XYZ grid.
+4. Select geometry, edit dimensions and position, connect parent and joint metadata, and route visible wire polylines between parts.
+5. Type a design intent in one command line and receive extracted chips when possible.
+6. Add reference photos or images as local metadata without any reconstruction claim.
+7. Choose one project path from the left sidebar: new prompt concept, open/import `.mfcad.json`, recent project, reference catalog, or repository-local ready example.
+8. Use contextual sidebars instead of modal-heavy setup screens.
 
 ### In-cockpit workflow
 
-1. Orbit, explode, and inspect the robot arm assembly.
+1. Orbit, pan, zoom, explode, and inspect the robot arm assembly.
 2. Select a part from the visual model or model tree.
-3. Review task criteria, material, manufacturing, stiffness, heat, source confidence, review-required values, and linked wiring data.
-4. Preview compatible material and process substitutions before applying them.
-5. Check downstream panels for BOM, manufacturing, wiring/electronics, pre-solver readiness, queue recommendations, and reports.
-6. Export and import a `.mfcad.json` file so the desktop workflow can be saved, reopened, and shared.
+3. Create or edit visual primitives, place motors and connectors, and route visible wiring as persisted review-required project data.
+4. Review task criteria, material, manufacturing, stiffness, heat, source confidence, review-required values, and linked wiring data.
+5. Preview compatible material and process substitutions before applying them.
+6. Check downstream panels for BOM, manufacturing, wiring/electronics, pre-solver readiness, queue recommendations, and reports.
+7. Export and import a `.mfcad.json` file so the desktop workflow can be saved, reopened, and shared.
 
 Read [User experience](docs/user-experience.md), [Frontend development](docs/frontend.md), and [Desktop demo](docs/desktop.md) before changing these flows.
 
@@ -172,7 +176,7 @@ Docs-only changes should still run the available documentation/link check, catal
 
 ## Repository status
 
-PR #1 through PR #12 have landed through `main`, including the input-first 3D cockpit redesign and real CI checks. The current MVP is a local, desktop-openable, seed-backed orchestration demo with honest integration boundaries. Future work should tighten real FreeCAD import, Gmsh meshing, CalculiX project solving, cloud execution policy, supplier integrations, and licensed standards only after the relevant product and safety requirements are explicit.
+PR #1 through PR #12 have landed through `main`; this branch adds the visual CAD authoring MVP on top of that foundation. The current MVP is a local, desktop-openable, seed-backed orchestration demo with honest integration boundaries. Future work should tighten real FreeCAD import, parametric CAD generation, Gmsh meshing, CalculiX project solving, cloud execution policy, supplier integrations, and licensed standards only after the relevant product and safety requirements are explicit.
 
 ## License
 

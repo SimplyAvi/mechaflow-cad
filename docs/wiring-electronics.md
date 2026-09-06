@@ -1,6 +1,6 @@
 # Wiring and electronics MVP
 
-The desktop MVP now includes a wiring and electronics pass for the robot design cockpit. It is intended to make harness impacts visible while users explore the same assembly, BOM, manufacturing, import/export, and solver-readiness workflows.
+The desktop MVP now includes a wiring and electronics pass for the robot design cockpit. It is intended to make harness impacts visible while users author the same assembly, BOM, manufacturing, import/export, and solver-readiness workflows.
 
 ## What is modeled
 
@@ -10,6 +10,7 @@ The backend project schema includes:
 - Connectors with pin count, part linkage, component linkage, pin labels, and basic voltage/current rating fields when known.
 - Wire segments with conductor count, AWG, estimated length, endpoint references, and harness BOM item links.
 - Wiring routes with endpoint connectors, route points, linked wire segments, linked electronics components, minimum clearance, bend radius, service-loop slack, and optional WireViz diagram references.
+- Visual authoring metadata for locally created connector placeholders and route polylines. Browser-created routes are persisted as normal project wiring data and remain review-required until real electrical and CAD workers validate them.
 - Wiring rule sets with explicit clearance, bend-radius, and service-loop thresholds.
 
 ## API surface
@@ -51,9 +52,10 @@ npm run desktop:open
 
 In the cockpit:
 
-1. Select a mechanical or electronics-linked part from the part tree.
-2. Open the "Wiring and electronics" panel.
-3. Review the simple route diagram, route summary, connectors, linked electronics, wire segments, harness BOM additions, and evidence list.
-4. Use import/export to confirm the project file carries wiring/electronics data.
+1. Select a mechanical or electronics-linked part from the canvas or part tree.
+2. In Design mode, choose another part in `Wire to` and click `Route visible wire` to create a cyan route polyline.
+3. Open the "Wiring and electronics" panel.
+4. Review the simple route diagram, route summary, connectors, linked electronics, wire segments, harness BOM additions, and evidence list.
+5. Use import/export to confirm the project file carries wiring/electronics data.
 
 WireViz remains an integration boundary. The MVP records `wireviz://` diagram references and normalized harness data, but it does not require WireViz to be installed or generate diagrams during local checks.

@@ -139,7 +139,7 @@ The project and job stores are intentionally in-memory for the local MVP. Restar
 
 ## Project file persistence
 
-The MVP project file contract is documented in [Project files](project-files.md). The authoritative payload is the backend `Project` schema, so assemblies, parts, materials, electronics components, wire segments, wiring rule sets, wiring routes, active task requirements, modifications, analysis jobs, job recommendations, cached report references, cached artifact references, reports, and analysis job artifacts round-trip through the same validation used by normal project writes. Non-empty wiring route lists are validated against known parts, connectors, wire segments, electronics components, and rule sets so incomplete imports fail clearly instead of silently dropping harness data.
+The MVP project file contract is documented in [Project files](project-files.md). The authoritative payload is the backend `Project` schema, so authoring units, project metadata, visual-authoring part metadata, assemblies, part dimensions, optional primitive diameters, materials, electronics components, wire segments, wiring rule sets, wiring routes, active task requirements, modifications, analysis jobs, job recommendations, cached report references, cached artifact references, reports, and analysis job artifacts round-trip through the same validation used by normal project writes. Non-empty wiring route lists are validated against known parts, connectors, wire segments, electronics components, and rule sets so incomplete imports fail clearly instead of silently dropping harness data.
 
 Export example:
 

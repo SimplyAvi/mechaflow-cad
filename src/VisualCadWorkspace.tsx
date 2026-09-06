@@ -1,0 +1,443 @@
+import { useMemo, useRef, type CSSProperties, type PointerEvent, type WheelEvent } from 'react';
+import type { AuthoringUnit, Part, PartAuthoringData, PartAuthoringDimensions, WiringRoute } from './types';
+import { formatLength, lengthFromMm } from './lib/visualAuthoring';
+
+interface ViewState {
+  yawDeg: number;
+  pitchDeg: number;
+  zoom: number;
+  panX: number;
+  panY: number;
+}
+
+interface VisualCadWorkspaceProps {
+  parts: Part[];
+  wiringRoutes: WiringRoute[];
+  selectedPartId: string;
+  units: AuthoringUnit;
+  explodePercent: number;
+  view: ViewState;
+  onViewChange: (view: ViewState) => void;
+  onSelectPart: (partId: string) => void;
+  onNudgeSelected: (delta: { x: number; y: number; z: number }) => void;
+}
+
+interface ProjectedPoint {
+  x: number;
+  y: number;
+  depth: number;
+}
+
+interface Point3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+interface BoxFace {
+  points: ProjectedPoint[];
+  className: string;
+}
+
+const SVG_WIDTH = 1080;
+const SVG_HEIGHT = 640;
+const GRID_EXTENT_MM = 500;
+const GRID_STEP_MM = 50;
+
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+const toRadians = (deg: number): number => (deg * Math.PI) / 180;
+
+const pointString = (points: ProjectedPoint[]): string => points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+
+const dimensionValue = (dimensions: PartAuthoringDimensions, primitive: PartAuthoringData['primitive']): number | null => {
+  if (primitive === 'cylinder_joint') return dimensions.diameterMm ?? dimensions.widthMm ?? dimensions.lengthMm;
+  return dimensions.lengthMm ?? dimensions.widthMm ?? dimensions.diameterMm ?? dimensions.thicknessMm;
+};
+
+const partHeight = (part: Part): number => {
+  const dimensions = part.authoring.dimensionsMm;
+  return dimensions.heightMm ?? dimensions.thicknessMm ?? dimensions.diameterMm ?? 24;
+};
+
+const partLabelDimension = (part: Part, units: AuthoringUnit): string => {
+  const dimensions = part.authoring.dimensionsMm;
+  const primary = dimensionValue(dimensions, part.authoring.primitive);
+  const width = dimensions.widthMm ?? dimensions.diameterMm;
+  const height = dimensions.heightMm ?? dimensions.thicknessMm ?? dimensions.diameterMm;
+  const bits = [
+    primary == null ? null : `L ${formatLength(primary, units)}`,
+    width == null ? null : `W ${formatLength(width, units)}`,
+    height == null ? null : `H ${formatLength(height, units)}`,
+  ].filter((item): item is string => item != null);
+  return bits.join(' / ') || 'dimensions review required';
+};
+
+const rotatePoint = (point: Point3D, rotationDeg: Point3D): Point3D => {
+  const rz = toRadians(rotationDeg.z);
+  const cosZ = Math.cos(rz);
+  const sinZ = Math.sin(rz);
+  return {
+    x: point.x * cosZ - point.y * sinZ,
+    y: point.x * sinZ + point.y * cosZ,
+    z: point.z,
+  };
+};
+
+const primitiveDimensions = (part: Part): { length: number; width: number; height: number } => {
+  const dimensions = part.authoring.dimensionsMm;
+  const diameter = dimensions.diameterMm ?? dimensions.widthMm ?? dimensions.lengthMm ?? 50;
+  if (part.authoring.primitive === 'cylinder_joint') {
+    return {
+      length: diameter,
+      width: diameter,
+      height: dimensions.heightMm ?? dimensions.lengthMm ?? diameter,
+    };
+  }
+  return {
+    length: dimensions.lengthMm ?? diameter,
+    width: dimensions.widthMm ?? diameter,
+    height: dimensions.heightMm ?? dimensions.thicknessMm ?? Math.max(12, (dimensions.widthMm ?? 36) * 0.55),
+  };
+};
+
+const connectorCenter = (part: Part): Point3D => ({
+  x: part.authoring.positionMm.x,
+  y: part.authoring.positionMm.y,
+  z: part.authoring.positionMm.z + partHeight(part) + 18,
+});
+
+const routePolyline = (route: WiringRoute, partsById: Map<string, Part>): Point3D[] => {
+  const connectedParts = route.connectedParts.map((partId) => partsById.get(partId)).filter((part): part is Part => part != null);
+  if (connectedParts.length >= 2) {
+    const start = connectorCenter(connectedParts[0]!);
+    const end = connectorCenter(connectedParts.at(-1)!);
+    const lift = Math.max(42, Math.abs(end.x - start.x) * 0.08 + Math.abs(end.y - start.y) * 0.05);
+    return [
+      start,
+      { x: start.x + (end.x - start.x) * 0.34, y: start.y + 34, z: start.z + lift },
+      { x: start.x + (end.x - start.x) * 0.68, y: end.y + 24, z: end.z + lift * 0.8 },
+      end,
+    ];
+  }
+  return [];
+};
+
+function useProjection(view: ViewState) {
+  return (point: Point3D): ProjectedPoint => {
+    const yaw = toRadians(view.yawDeg);
+    const pitch = toRadians(view.pitchDeg);
+    const cosYaw = Math.cos(yaw);
+    const sinYaw = Math.sin(yaw);
+    const xYaw = point.x * cosYaw - point.y * sinYaw;
+    const yYaw = point.x * sinYaw + point.y * cosYaw;
+    const zPitch = point.z * Math.cos(pitch) - yYaw * Math.sin(pitch);
+    const yPitch = point.z * Math.sin(pitch) + yYaw * Math.cos(pitch);
+    const scale = 0.62 * view.zoom;
+    return {
+      x: SVG_WIDTH / 2 + view.panX + xYaw * scale,
+      y: SVG_HEIGHT * 0.72 + view.panY - zPitch * scale + yPitch * scale * 0.24,
+      depth: yYaw - point.z * 0.25,
+    };
+  };
+}
+
+function boxFaces(part: Part, explodePercent: number, project: (point: Point3D) => ProjectedPoint): BoxFace[] {
+  const dims = primitiveDimensions(part);
+  const explode = explodePercent / 100;
+  const center = {
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode,
+    y: part.authoring.positionMm.y,
+    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode,
+  };
+  const half = { x: dims.length / 2, y: dims.width / 2, z: dims.height / 2 };
+  const corners = {
+    lbf: { x: -half.x, y: -half.y, z: -half.z },
+    rbf: { x: half.x, y: -half.y, z: -half.z },
+    rbb: { x: half.x, y: half.y, z: -half.z },
+    lbb: { x: -half.x, y: half.y, z: -half.z },
+    ltf: { x: -half.x, y: -half.y, z: half.z },
+    rtf: { x: half.x, y: -half.y, z: half.z },
+    rtb: { x: half.x, y: half.y, z: half.z },
+    ltb: { x: -half.x, y: half.y, z: half.z },
+  } satisfies Record<string, Point3D>;
+  const world = Object.fromEntries(Object.entries(corners).map(([key, point]) => {
+    const rotated = rotatePoint(point, part.authoring.rotationDeg);
+    return [key, project({ x: center.x + rotated.x, y: center.y + rotated.y, z: center.z + rotated.z })];
+  })) as Record<keyof typeof corners, ProjectedPoint>;
+  return [
+    { points: [world.ltf, world.rtf, world.rtb, world.ltb], className: 'face-top' },
+    { points: [world.rtf, world.rbf, world.rbb, world.rtb], className: 'face-side' },
+    { points: [world.ltf, world.lbf, world.rbf, world.rtf], className: 'face-front' },
+  ];
+}
+
+function VisualBox({ part, selected, explodePercent, project, onSelect }: {
+  part: Part;
+  selected: boolean;
+  explodePercent: number;
+  project: (point: Point3D) => ProjectedPoint;
+  onSelect: () => void;
+}) {
+  const faces = boxFaces(part, explodePercent, project);
+  const labelPoint = project({
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * (explodePercent / 100),
+    y: part.authoring.positionMm.y,
+    z: part.authoring.positionMm.z + partHeight(part) + 18 + (part.visual.explodeY ?? 0) * 1.5 * (explodePercent / 100),
+  });
+  const style = { '--cad-color': part.authoring.color } as CSSProperties;
+  return (
+    <g
+      aria-label={`Select ${part.name} geometry`}
+      className={`cad-primitive primitive-${part.authoring.primitive} ${selected ? 'selected' : ''}`}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+      role="button"
+      style={style}
+      tabIndex={0}
+    >
+      {faces.map((face) => <polygon className={face.className} key={face.className} points={pointString(face.points)} />)}
+      <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text>
+    </g>
+  );
+}
+
+function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
+  part: Part;
+  selected: boolean;
+  explodePercent: number;
+  project: (point: Point3D) => ProjectedPoint;
+  onSelect: () => void;
+}) {
+  const dims = primitiveDimensions(part);
+  const explode = explodePercent / 100;
+  const center = {
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode,
+    y: part.authoring.positionMm.y,
+    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode,
+  };
+  const top = project({ x: center.x, y: center.y, z: center.z + dims.height / 2 });
+  const bottom = project({ x: center.x, y: center.y, z: center.z - dims.height / 2 });
+  const rimA = project({ x: center.x + dims.width / 2, y: center.y, z: center.z + dims.height / 2 });
+  const rimB = project({ x: center.x, y: center.y + dims.width / 2, z: center.z + dims.height / 2 });
+  const rx = Math.max(16, Math.abs(rimA.x - top.x));
+  const ry = Math.max(8, Math.abs(rimB.y - top.y) * 0.65);
+  const style = { '--cad-color': part.authoring.color } as CSSProperties;
+  return (
+    <g
+      aria-label={`Select ${part.name} geometry`}
+      className={`cad-primitive primitive-cylinder_joint ${selected ? 'selected' : ''}`}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+      role="button"
+      style={style}
+      tabIndex={0}
+    >
+      <path className="cylinder-wall" d={`M ${top.x - rx} ${top.y} L ${bottom.x - rx} ${bottom.y} Q ${bottom.x} ${bottom.y + ry} ${bottom.x + rx} ${bottom.y} L ${top.x + rx} ${top.y}`} />
+      <ellipse className="face-side" cx={bottom.x} cy={bottom.y} rx={rx} ry={ry} />
+      <ellipse className="face-top" cx={top.x} cy={top.y} rx={rx} ry={ry} />
+      <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />
+      <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text>
+    </g>
+  );
+}
+
+function DimensionOverlay({ part, units, project }: { part: Part; units: AuthoringUnit; project: (point: Point3D) => ProjectedPoint }) {
+  const dims = primitiveDimensions(part);
+  const center = part.authoring.positionMm;
+  const half = dims.length / 2;
+  const start = project({ x: center.x - half, y: center.y - dims.width / 2 - 28, z: center.z + dims.height / 2 + 10 });
+  const end = project({ x: center.x + half, y: center.y - dims.width / 2 - 28, z: center.z + dims.height / 2 + 10 });
+  const heightStart = project({ x: center.x + half + 20, y: center.y + dims.width / 2, z: center.z - dims.height / 2 });
+  const heightEnd = project({ x: center.x + half + 20, y: center.y + dims.width / 2, z: center.z + dims.height / 2 });
+  const label = part.authoring.primitive === 'cylinder_joint'
+    ? `Diameter ${formatLength(part.authoring.dimensionsMm.diameterMm ?? dims.width, units)}`
+    : `Length ${formatLength(dims.length, units)}`;
+  return (
+    <g className="dimension-overlay" aria-hidden="true">
+      <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
+      <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{label}</text>
+      <line x1={heightStart.x} y1={heightStart.y} x2={heightEnd.x} y2={heightEnd.y} />
+      <text x={heightEnd.x + 8} y={heightEnd.y}>Height {formatLength(dims.height, units)}</text>
+    </g>
+  );
+}
+
+export function VisualCadWorkspace({
+  parts,
+  wiringRoutes,
+  selectedPartId,
+  units,
+  explodePercent,
+  view,
+  onViewChange,
+  onSelectPart,
+  onNudgeSelected,
+}: VisualCadWorkspaceProps) {
+  const dragRef = useRef<{ x: number; y: number; view: ViewState; mode: 'orbit' | 'pan' } | null>(null);
+  const project = useProjection(view);
+  const partsById = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts]);
+  const selectedPart = partsById.get(selectedPartId) ?? parts[0];
+  const sortedParts = useMemo(() => [...parts].sort((left, right) => {
+    const leftDepth = project(left.authoring.positionMm).depth + (left.visual.zIndex ?? 0);
+    const rightDepth = project(right.authoring.positionMm).depth + (right.visual.zIndex ?? 0);
+    return leftDepth - rightDepth;
+  }), [parts, project]);
+
+  const gridLines = [];
+  for (let value = -GRID_EXTENT_MM; value <= GRID_EXTENT_MM; value += GRID_STEP_MM) {
+    const xStart = project({ x: -GRID_EXTENT_MM, y: value, z: 0 });
+    const xEnd = project({ x: GRID_EXTENT_MM, y: value, z: 0 });
+    const yStart = project({ x: value, y: -GRID_EXTENT_MM, z: 0 });
+    const yEnd = project({ x: value, y: GRID_EXTENT_MM, z: 0 });
+    gridLines.push(<line className="cad-grid-line" key={`x-${value}`} x1={xStart.x} y1={xStart.y} x2={xEnd.x} y2={xEnd.y} />);
+    gridLines.push(<line className="cad-grid-line" key={`y-${value}`} x1={yStart.x} y1={yStart.y} x2={yEnd.x} y2={yEnd.y} />);
+  }
+
+  const axis = {
+    x: [project({ x: 0, y: 0, z: 0 }), project({ x: 420, y: 0, z: 0 })],
+    y: [project({ x: 0, y: 0, z: 0 }), project({ x: 0, y: 360, z: 0 })],
+    z: [project({ x: 0, y: 0, z: 0 }), project({ x: 0, y: 0, z: 260 })],
+  };
+
+  const onPointerDown = (event: PointerEvent<SVGSVGElement>) => {
+    if (event.button !== 0) return;
+    const mode = event.shiftKey ? 'pan' : 'orbit';
+    dragRef.current = { x: event.clientX, y: event.clientY, view, mode };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current) return;
+    const dx = event.clientX - dragRef.current.x;
+    const dy = event.clientY - dragRef.current.y;
+    if (dragRef.current.mode === 'pan') {
+      onViewChange({ ...dragRef.current.view, panX: dragRef.current.view.panX + dx, panY: dragRef.current.view.panY + dy });
+      return;
+    }
+    onViewChange({
+      ...dragRef.current.view,
+      yawDeg: clamp(dragRef.current.view.yawDeg + dx * 0.35, -180, 180),
+      pitchDeg: clamp(dragRef.current.view.pitchDeg - dy * 0.22, 8, 68),
+    });
+  };
+  const onPointerUp = (event: PointerEvent<SVGSVGElement>) => {
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const onWheel = (event: WheelEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    const nextZoom = clamp(view.zoom + (event.deltaY > 0 ? -0.08 : 0.08), 0.55, 1.9);
+    onViewChange({ ...view, zoom: nextZoom });
+  };
+
+  return (
+    <div className="cad-workspace-frame" aria-label="Visual CAD authoring canvas with XYZ grid">
+      <div className="canvas-hint-strip">
+        <span>XYZ grid</span>
+        <span>Drag to orbit</span>
+        <span>Shift-drag to pan</span>
+        <span>Wheel or slider to zoom</span>
+      </div>
+      <svg
+        aria-label="Visual CAD authoring canvas"
+        className="visual-cad-canvas"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onWheel={onWheel}
+        role="img"
+        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+      >
+        <defs>
+          <filter id="cad-soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="8" floodColor="#000000" floodOpacity="0.28" stdDeviation="8" />
+          </filter>
+        </defs>
+        <rect className="canvas-backplate" x="0" y="0" width={SVG_WIDTH} height={SVG_HEIGHT} rx="24" />
+        <g className="cad-grid">{gridLines}</g>
+        <g className="cad-axis-lines" aria-hidden="true">
+          <line className="axis-x" x1={axis.x[0].x} y1={axis.x[0].y} x2={axis.x[1].x} y2={axis.x[1].y} />
+          <line className="axis-y" x1={axis.y[0].x} y1={axis.y[0].y} x2={axis.y[1].x} y2={axis.y[1].y} />
+          <line className="axis-z" x1={axis.z[0].x} y1={axis.z[0].y} x2={axis.z[1].x} y2={axis.z[1].y} />
+          <text className="axis-label axis-x-label" x={axis.x[1].x + 10} y={axis.x[1].y}>X</text>
+          <text className="axis-label axis-y-label" x={axis.y[1].x + 10} y={axis.y[1].y}>Y</text>
+          <text className="axis-label axis-z-label" x={axis.z[1].x + 10} y={axis.z[1].y}>Z</text>
+        </g>
+        <g className="connection-lines" aria-label="Assembly joints and pivots">
+          {parts.map((part) => {
+            const parent = part.authoring.parentPartId ? partsById.get(part.authoring.parentPartId) : null;
+            if (!parent) return null;
+            const start = project(connectorCenter(parent));
+            const end = project(connectorCenter(part));
+            return (
+              <g className={`joint-connection joint-${part.authoring.jointType}`} key={`${part.id}-joint`}>
+                <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
+                <circle cx={end.x} cy={end.y} r="6" />
+                <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{part.authoring.jointType}</text>
+              </g>
+            );
+          })}
+        </g>
+        <g className="wire-routes" aria-label="Visible wiring harness routes">
+          {wiringRoutes.map((route, index) => {
+            const points = routePolyline(route, partsById).map(project);
+            if (points.length < 2) return null;
+            return (
+              <g className={`wire-route status-${route.reviewStatus}`} key={route.id}>
+                <polyline points={pointString(points)} />
+                {points.map((point, pointIndex) => <circle key={`${route.id}-${pointIndex}`} cx={point.x} cy={point.y} r={pointIndex === 0 || pointIndex === points.length - 1 ? 5 : 3} />)}
+                <text x={points[Math.min(1, points.length - 1)]!.x + 8} y={points[Math.min(1, points.length - 1)]!.y - 8}>{index + 1}. {route.name}</text>
+              </g>
+            );
+          })}
+        </g>
+        <g className="cad-primitives" filter="url(#cad-soft-shadow)">
+          {sortedParts.map((part) => part.authoring.primitive === 'cylinder_joint'
+            ? (
+              <VisualCylinder
+                explodePercent={explodePercent}
+                key={part.id}
+                onSelect={() => onSelectPart(part.id)}
+                part={part}
+                project={project}
+                selected={part.id === selectedPartId}
+              />
+            )
+            : (
+              <VisualBox
+                explodePercent={explodePercent}
+                key={part.id}
+                onSelect={() => onSelectPart(part.id)}
+                part={part}
+                project={project}
+                selected={part.id === selectedPartId}
+              />
+            ))}
+        </g>
+        {selectedPart ? <DimensionOverlay part={selectedPart} project={project} units={units} /> : null}
+      </svg>
+      <div className="canvas-status-row" aria-live="polite">
+        <strong>{selectedPart?.name ?? 'No part selected'}</strong>
+        <span>{selectedPart ? partLabelDimension(selectedPart, units) : 'Select or create a part to edit geometry.'}</span>
+        <span>{parts.length} primitives, {wiringRoutes.length} wire route{wiringRoutes.length === 1 ? '' : 's'}, units {units}</span>
+        <div className="canvas-nudge-controls" aria-label="Move selected geometry">
+          <button type="button" onClick={() => onNudgeSelected({ x: -10, y: 0, z: 0 })}>X -</button>
+          <button type="button" onClick={() => onNudgeSelected({ x: 10, y: 0, z: 0 })}>X +</button>
+          <button type="button" onClick={() => onNudgeSelected({ x: 0, y: -10, z: 0 })}>Y -</button>
+          <button type="button" onClick={() => onNudgeSelected({ x: 0, y: 10, z: 0 })}>Y +</button>
+          <button type="button" onClick={() => onNudgeSelected({ x: 0, y: 0, z: 10 })}>Z +{formatLength(lengthFromMm(10, 'mm'), 'mm')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}

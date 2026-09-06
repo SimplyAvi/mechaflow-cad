@@ -1,6 +1,6 @@
 # MVP project file format
 
-MechaFlow CAD project files are portable JSON documents for the desktop MVP. They are meant for save, load, and share workflows before real STEP or FreeCAD import workers are wired.
+MechaFlow CAD project files are portable JSON documents for the desktop and browser MVP. They are meant for save, load, and share workflows for the visual authoring workspace before real STEP or FreeCAD import workers are wired.
 
 ## File name and media type
 
@@ -35,7 +35,9 @@ Fields:
 - `analysis_readiness_previews`: portable preview records for desktop display and review. The backend can regenerate these from `project` after import.
 - `extensions`: reserved object for future importer hints. MVP import validates the envelope and stores the project, but it does not invoke real CAD tools.
 
-The project payload preserves the meaningful MVP data: assemblies, parts, materials, electronics components, wire segments, wiring rule sets, wiring routes, active task, modifications, analysis jobs, job recommendations, cached report references, cached artifact references, reports, and analysis job artifacts. BOM, manufacturing option groupings, wiring/electronics panels, route review evidence, analysis readiness panels, and enriched job queue panels are rebuilt from the imported project through `ProjectPanelData`.
+The project payload preserves the meaningful MVP data: authoring units, project metadata, visual-authoring metadata, assemblies, parts, dimensions, optional primitive diameter, materials, electronics components, wire segments, wiring rule sets, wiring routes, active task, modifications, analysis jobs, job recommendations, cached report references, cached artifact references, reports, and analysis job artifacts. BOM, manufacturing option groupings, wiring/electronics panels, route review evidence, analysis readiness panels, and enriched job queue panels are rebuilt from the imported project through `ProjectPanelData`.
+
+Visual authoring data is stored on each part at `metadata.visual_authoring`. The browser workspace writes fields such as `primitive`, `position_mm`, `rotation_deg`, `color`, `parent_part_id`, `joint_type`, `assigned_to_part_id`, and `connector_id`. These fields drive the MVP canvas and are intentionally review-required hints until real CAD geometry workers produce authoritative artifacts.
 
 ## API
 
@@ -70,7 +72,7 @@ Malformed JSON returns `422` with a JSON parse detail from FastAPI.
 
 Unsupported envelopes return `422`, for example when `format` is not `mechaflow-cad.project` or `schema_version` is not `1.0`.
 
-Schema errors inside `project` also return `422` and do not overwrite the current in-memory project. Examples include unknown fields, duplicate part ids, unknown material references, invalid wiring endpoints, routes that reference missing wire segments or electronics components, non-finite numbers, unsupported analysis artifacts, cached artifact references that do not belong to the current job, and stale or impossible artifact download URLs.
+Schema errors inside `project` also return `422` and do not overwrite the current in-memory project. Examples include duplicate part ids, unknown material references, invalid wiring endpoints, routes that reference missing wire segments or electronics components, non-finite numbers, unsupported units, unsupported analysis artifacts, cached artifact references that do not belong to the current job, and stale or impossible artifact download URLs.
 
 ## Future import hooks
 

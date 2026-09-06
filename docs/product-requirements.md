@@ -38,9 +38,9 @@ Later users:
 
 ## Primary user story
 
-A user opens MechaFlow CAD and lands in a 3D-first cockpit. They can type a design intent, add reference images as local context, open or import a project file, reopen a recent project, browse ready examples, or inspect a reference design.
+A user opens MechaFlow CAD and lands in a visual CAD cockpit. They can choose units, orbit and pan an XYZ grid, create editable 3D primitives, assemble a robot arm or machine, place motors and connectors, route visible wiring, type a design intent, add reference images as local context, open or import a project file, reopen a recent project, browse ready examples, or inspect a reference design.
 
-Inside the cockpit, the user selects a part, sees what it does, sees material and manufacturing options, previews a compatible part/material/process change, and checks how the change affects active task context, BOM, cost range, lead-time range, wiring, analysis readiness, queued jobs, and reports.
+Inside the cockpit, the user selects a part on the canvas or model tree, sees what it does, edits dimensions and position, connects it to parent geometry, sees material and manufacturing options, previews a compatible part/material/process change, and checks how the change affects active task context, BOM, cost range, lead-time range, wiring, analysis readiness, queued jobs, and reports.
 
 The MVP must keep the original task visible and must label unsupported outputs as review-required. For example, if the task is lifting 50 lb, current code may preserve that task and package pre-solver evidence, but it must not claim a real payload rating unless a future solver and engineering review produce one.
 
@@ -50,7 +50,11 @@ The MVP must keep the original task visible and must label unsupported outputs a
 
 The opening experience should support:
 
-- Immediate 3D workspace with compact contextual sidebars.
+- Immediate visual CAD workspace with XYZ grid, orbit, pan, zoom, selection, and compact contextual sidebars.
+- Unit selection for millimeters, centimeters, meters, and inches, with backend geometry persisted in millimeters.
+- Primitive authoring for base plates, beams, cylinder joints, brackets, motors, connectors, electronics blocks, and tool plates.
+- Selected-geometry editing for dimensions, XYZ position, rotation, material, process, parent, and joint type.
+- Visible wiring-route authoring between placed parts, with connector, wire segment, route, and harness BOM data persisted as review-required project data.
 - One design-intent command line with extracted prompt chips where possible.
 - Reference image upload or drag/drop as local metadata only.
 - New prompt concept path with proxy rendering, not generated CAD.
@@ -80,20 +84,22 @@ Each entry should include:
 
 No external design asset should become a product asset until the exact asset and license have been reviewed.
 
-### Animated exploded views and 3D inspection
+### Visual CAD authoring and 3D inspection
 
-The platform should create exploded views for assemblies.
+The platform should let users author simple visual assemblies before a full CAD kernel is connected.
 
-The exploded view should:
+The visual CAD workspace should:
 
-- Separate parts and subassemblies visually.
-- Animate or scrub the separation.
+- Show an XYZ grid and axis labels.
+- Support orbit, pan, zoom, and exploded separation.
+- Allow users to create base plates, beams, joints, brackets, motors, connectors, electronics blocks, and tool plates.
+- Persist dimensions, positions, rotations, material choices, manufacturing process choices, parent links, joint types, and visual wiring routes.
 - Keep labels or inspectors attached to selected parts.
-- Allow selecting any part.
+- Allow selecting any part from the canvas or model tree.
 - Allow drilling into subassemblies.
 - Show part purpose, material, cost range, weight estimate or review-required mass, related fasteners, and related wiring when known.
 
-The current MVP uses a repository-local visual seed for the robot arm and wrist gripper. Future FreeCAD work should replace manual seed geometry with imported or generated viewable geometry only after license and CAD pipeline checks pass.
+The current MVP uses SVG primitives and repository-local seed data for the robot arm and wrist gripper. Future FreeCAD work should replace manual seed geometry with imported or generated viewable geometry only after license and CAD pipeline checks pass.
 
 ### Task-preserving design edits
 
@@ -190,6 +196,7 @@ Required workflows:
 Current MVP boundary:
 
 - Backend schemas and seed data model electronics components, connectors, wire segments, wiring routes, rule sets, route review evidence, and harness BOM linkages.
+- The visual authoring workspace can create visible route polylines between parts and persist connector, wire segment, route, and harness BOM placeholders.
 - The wiring review returns `pass`, `warning`, or `review_required` using deterministic heuristics.
 - Exact electrical behavior, EMI, voltage drop, current-rating validation, flex life, moving-joint sweeps, real CAD clearances, and standards compliance remain review-required.
 
