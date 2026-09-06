@@ -385,7 +385,9 @@ function App() {
             : 'Solver-readiness fixture needs review. Inspect logs and artifact manifests below.',
       );
       if (isSuccessfulLocalAnalysisJob(job)) {
-        markDemoStep('solver-readiness');
+        if (job.status === 'complete' && refreshed.status === 'ready_to_execute_fixture') {
+          markDemoStep('solver-readiness');
+        }
         markDemoStep('local-analysis');
       }
     } catch (error) {
@@ -466,6 +468,21 @@ function App() {
       applyLoadedDesign(importedDesign);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
       if (roundTripVerified) markDemoStep('export-import');
+      const importedProjectVersion = projectLoadVersion.current;
+      if (importedDesign.backend.apiBaseUrl) {
+        loadLocalSolverReadiness(importedDesign.backend.apiBaseUrl)
+          .then((readiness) => {
+            if (importRequestVersion.current === requestVersion && projectLoadVersion.current === importedProjectVersion) {
+              setSolverReadiness(readiness);
+            }
+          })
+          .catch((error) => {
+            console.warn('Local solver readiness endpoint is unavailable after import.', error);
+            if (importRequestVersion.current === requestVersion && projectLoadVersion.current === importedProjectVersion) {
+              setSolverReadiness(null);
+            }
+          });
+      }
     } catch (error) {
       console.warn('Project import failed.', error);
       const message = error instanceof SyntaxError
@@ -1525,7 +1542,20 @@ function BomPanel({
   total: UsdRange | null;
 }) {
   return (
-    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="bom-panel" onClick={onInteract}>
+    <article
+      className={`panel ${previewActive ? 'preview-panel' : ''}`}
+      id="bom-panel"
+      role="region"
+      tabIndex={0}
+      aria-label="BOM and cost review"
+      onClick={onInteract}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onInteract();
+        }
+      }}
+    >
       <p className="eyebrow">BOM and cost {previewActive ? 'preview' : ''}</p>
       <h2>{total == null ? 'Cost review required' : `${formatUsdRange(total)} open estimate`}</h2>
       <p className="muted">
@@ -1563,7 +1593,20 @@ function ManufacturingPanel({
 }) {
   const selectedPartName = design.assemblies.flatMap((assembly) => assembly.parts).find((part) => part.id === selectedPartId)?.name;
   return (
-    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="manufacturing-panel" onClick={onInteract}>
+    <article
+      className={`panel ${previewActive ? 'preview-panel' : ''}`}
+      id="manufacturing-panel"
+      role="region"
+      tabIndex={0}
+      aria-label="Manufacturing review"
+      onClick={onInteract}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onInteract();
+        }
+      }}
+    >
       <p className="eyebrow">Manufacturing panel {previewActive ? 'preview' : ''}</p>
       <h2>Make or buy paths</h2>
       <p className="muted">
@@ -1693,7 +1736,20 @@ function WiringPanel({ design, onInteract, selectedPart }: { design: ReferenceDe
   const selectedRoute = relatedRoutes[0] ?? design.wiringRoutes[0];
 
   return (
-    <article className="panel wiring-workflow-panel" id="wiring-panel" aria-label="Wiring and electronics workflow" onClick={onInteract}>
+    <article
+      className="panel wiring-workflow-panel"
+      id="wiring-panel"
+      role="region"
+      tabIndex={0}
+      aria-label="Wiring and electronics workflow"
+      onClick={onInteract}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onInteract();
+        }
+      }}
+    >
       <p className="eyebrow">Wiring and electronics</p>
       <h2>{design.wiringReview ? wiringStatusCopy[design.wiringReview.status] : 'Harness review required'}</h2>
       <p className="muted">
