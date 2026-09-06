@@ -2,47 +2,79 @@
 
 ## MVP thesis
 
-The first MVP should prove that MechaFlow CAD can make an existing open robot design understandable, editable, analyzable, and manufacturable.
+The first MVP should prove that MechaFlow CAD can make an existing robotics design understandable, editable, analyzable enough for planning, manufacturable enough for comparison, and portable enough for a desktop-openable workflow.
 
-## Recommended first demo
+The MVP is successful only if it remains honest about what is implemented. Seeded guidance, heuristic checks, pre-solver packages, and solver fixtures are useful planning evidence, but they are not full CAD import, project FEA, certified electrical validation, cloud execution, or exact supplier quoting.
 
-Build an open reference design explorer with animated exploded views.
+## Current status after PR #12
 
-The user should be able to:
+The current `main` includes:
 
-1. Open an existing open-source robot design.
-2. Watch the assembly explode into selectable parts.
-3. Select a part.
-4. Understand what that part does.
-5. Change material or simple dimensions.
-6. Keep the original task active.
-7. See whether the changed design still satisfies the task.
-8. Get cost, manufacturing, and wiring implications.
+- Root planning docs and validation policy.
+- Reference design catalog schema and seed data.
+- FastAPI backend with schemas, in-memory project store, project-file import/export, panel-data, material substitution, wiring/electronics, reports, analysis readiness, job queue, local pre-solver runner, and CalculiX solver-readiness fixture boundary.
+- Vite React cockpit with an input-first opening, immediate 3D workspace, compact CAD sidebars, new/open/recent/example/reference paths, reference-image intake, material tools, progressive modes, and backend/mock connectivity.
+- Electron desktop-openable workflow with `npm start`, macOS command launcher, desktop smoke, and captain smoke.
+- Local and GitHub Actions checks for Python, catalog, frontend, smoke, desktop, and captain paths.
 
-## Milestone 1: documentation and repository setup
+## Recommended demo narrative
+
+The captain demo should show a user who:
+
+1. Opens the desktop cockpit directly into the robot arm 3D workspace.
+2. Types design intent and sees extracted chips.
+3. Adds reference images that are clearly labeled as local context only.
+4. Opens or imports a `.mfcad.json` project, reopens a recent project, or loads a local ready example.
+5. Explodes, orbits, and selects parts in the assembly.
+6. Previews a compatible material/process substitution.
+7. Applies the validated substitution and sees downstream panels update.
+8. Reviews BOM, manufacturing, wiring/electronics, analysis readiness, queue recommendations, reports, and project file export/import.
+9. Runs local-safe pre-solver and solver-readiness fixture paths while seeing not-FEA and solver-unavailable labels where appropriate.
+
+## Milestone status
+
+### Milestone 1: documentation and repository setup
+
+Status: complete, with ongoing alignment required.
 
 Deliverables:
 
-- README.
+- Root README as canonical onboarding map.
 - Product requirements.
 - Technical architecture.
 - UX documentation.
 - Open-source integration list.
 - Hosting plan.
 - Business model.
+- Validation policy.
 
-## Milestone 2: reference design catalog schema
+Acceptance criteria:
+
+- Future workers can find product thesis, business rules, implementation surfaces, current boundaries, and validation commands from the README.
+- Docs do not invent capabilities beyond code.
+
+### Milestone 2: reference design catalog schema
+
+Status: complete for seed metadata.
 
 Deliverables:
 
-- JSON or YAML schema for open reference designs.
+- JSON schema for open reference designs.
 - Example catalog entries.
 - License field.
 - File format field.
 - BOM field.
 - Source URL field.
+- Review status.
 
-## Milestone 3: static visual prototype
+Acceptance criteria:
+
+- Catalog changes pass `python scripts/validate_catalog.py`.
+- External assets remain links and metadata until license-cleared import work exists.
+
+### Milestone 3: static visual prototype
+
+Status: complete and superseded by the interactive cockpit.
 
 Deliverables:
 
@@ -51,77 +83,204 @@ Deliverables:
 - Clickable part callouts.
 - Part inspector panel.
 - Material option cards.
-- Capability re-rating mock output.
+- Capability or readiness output that is clearly labeled as seed, heuristic, or review-required.
 
-## Milestone 4: real 3D viewer
+Acceptance criteria:
 
-Deliverables:
+- Visual and copy avoid fake payload, FEA, quote, electrical, or CAD-generation claims.
 
-- Load a real glTF, STEP-converted, or mesh-based assembly preview.
-- Show parts in a tree.
-- Select parts in the viewer.
-- Display metadata.
+### Milestone 4: interactive 3D cockpit
 
-## Milestone 5: FreeCAD worker proof of concept
+Status: complete for the local seed MVP.
 
 Deliverables:
 
-- Import a CAD assembly with FreeCAD.
+- Input-first opening with immediate 3D workspace.
+- Robot arm and wrist gripper visual seed.
+- Explode toggle, scrubber, yaw, pitch, part selection, and inspector.
+- CAD-style sidebars and progressive mode deck.
+- New prompt concept, open/import, recent, ready example, and reference paths.
+- Reference image intake as local metadata.
+
+Acceptance criteria:
+
+- `npm test`, `npm run build`, `npm run smoke`, `npm run desktop:smoke`, and `npm run captain:smoke` cover the automated path.
+- Manual desktop review follows [Desktop demo](desktop.md).
+
+### Milestone 5: backend orchestration scaffold
+
+Status: complete for local MVP contracts.
+
+Deliverables:
+
+- FastAPI API with project, catalog, schemas, task, panel-data, BOM, manufacturing, wiring/electronics, reports, readiness, job queue, project files, and local-analysis endpoints.
+- In-memory store with explicit future persistence seam.
+- Seed loading and backend/frontend handoff contracts.
+- Validation tests for endpoints, schemas, services, storage, catalog, and smoke path.
+
+Acceptance criteria:
+
+- `pytest`, `python scripts/validate_catalog.py`, unit seed validation, and `PYTHONPATH=src python3 tests/smoke_test.py` pass.
+- Restart-clears-local-state behavior is documented.
+
+### Milestone 6: task-preserving material substitution
+
+Status: complete for compatible seed-backed options.
+
+Deliverables:
+
+- Active task context remains visible.
+- Selected part material/process options derive from explicit compatibility intersections.
+- Preview endpoint returns projected panel data without persisting.
+- Apply endpoint validates and persists.
+- Frontend comparison cards show weight, stiffness, yield, heat, cost range, lead-time range, warnings, and review labels.
+
+Acceptance criteria:
+
+- Incompatible or invalid substitutions fail clearly.
+- Persisted changes update project, BOM, manufacturing, readiness, and reports.
+- Mass, payload, and solver labels remain review-required when no worker artifact exists.
+
+### Milestone 7: portable desktop project files
+
+Status: complete for MVP JSON project envelopes.
+
+Deliverables:
+
+- `.mfcad.json` export.
+- `.mfcad.json` import or reopen.
+- Backend schema validation.
+- Frontend and desktop controls.
+- Captain fixture at `data/captain-demo-project.mfcad.json`.
+
+Acceptance criteria:
+
+- Project files preserve assemblies, parts, materials, task requirements, modifications, analysis jobs, job recommendations, cached references, reports, wiring/electronics, and analysis artifacts.
+- Invalid envelopes fail without erasing current state.
+
+### Milestone 8: wiring and electronics pass
+
+Status: complete for deterministic MVP heuristics.
+
+Deliverables:
+
+- Electronics components, connectors, wire segments, wiring routes, and wiring rule sets.
+- Harness BOM links.
+- Wiring/electronics panel.
+- Deterministic route review endpoint.
+- Import/export validation for wiring references.
+
+Acceptance criteria:
+
+- Route evidence returns pass, warning, or review-required.
+- Copy states that exact electrical validation, EMI, voltage drop, flex life, moving-joint sweeps, standards compliance, and real CAD clearance checks remain future work.
+
+### Milestone 9: local pre-solver and solver-readiness boundary
+
+Status: complete for safe local MVP boundary.
+
+Deliverables:
+
+- Selected-part and assembly pre-solver readiness previews.
+- Local tool detection for FreeCAD, Gmsh, and CalculiX.
+- Local pre-solver screening run that persists a not-FEA artifact.
+- CalculiX fixture deck generation and optional `ccx` execution.
+- Artifact retention and project-file metadata handling.
+- Queue recommendations that distinguish local-ready, solver-unavailable, review-required, and cloud-planning-only states.
+
+Acceptance criteria:
+
+- Missing solvers produce understandable unavailable states.
+- Fixture results are labeled fixture only.
+- Full project FEA stays review-required until FreeCAD geometry prep, Gmsh meshing, and CalculiX project solving exist.
+
+### Milestone 10: manufacturing and quote packet planning
+
+Status: partial.
+
+Complete today:
+
+- BOM and manufacturing option panels.
+- Seeded process options.
+- Cost and lead-time ranges.
+- Material substitution impact on manufacturing and BOM summaries.
+
+Still future:
+
+- Supplier-neutral quote packet export with attached drawings or CAD artifacts.
+- Provider-specific quote API integration.
+- Exact supplier pricing or purchase workflow.
+
+Acceptance criteria for future completion:
+
+- Exact quote claims appear only after a provider response is present and labeled.
+- Purchase or order actions require explicit user confirmation.
+
+### Milestone 11: real FreeCAD import and geometry handoff
+
+Status: future.
+
+Deliverables:
+
+- Import one license-cleared STEP or FreeCAD assembly.
 - Extract part metadata where possible.
-- Export viewable geometry.
-- Generate simple exploded transforms.
+- Generate viewable geometry.
+- Generate real exploded transforms.
+- Preserve source, license, and CAD provenance.
 
-## Milestone 6: task-preserving material substitution
+Acceptance criteria:
 
-Deliverables:
+- No third-party asset is imported without license review.
+- Geometry mapping survives project file export/import or has clear artifact references.
 
-- Define a task, such as lift 50 lb.
-- Change material for a selected part.
-- Recompute mass and simple strength estimates.
-- Show pass/fail or new payload rating.
+### Milestone 12: first project FEA-backed report
 
-## Milestone 7: first FEA-backed report
-
-Deliverables:
-
-- Mesh one selected part.
-- Apply a load case.
-- Run CalculiX.
-- Extract stress and displacement.
-- Generate a plain-language report.
-
-## Milestone 8: manufacturing and BOM report
+Status: future.
 
 Deliverables:
 
-- Generate part list.
-- Add simple process recommendations.
-- Add rough cost ranges.
-- Export quote packet.
+- Prepare one selected part or assembly from project geometry.
+- Generate a Gmsh mesh.
+- Run CalculiX against project geometry.
+- Capture solver logs and artifacts.
+- Extract stress, displacement, and factor-of-safety values.
+- Generate a plain-language report with engineering-review status.
 
-## Milestone 9: wiring and electronics pass (complete)
+Acceptance criteria:
 
-Deliverables:
+- Solver evidence is tied to selected project geometry, not the fixture deck.
+- Reports clearly separate solver output, assumptions, mesh quality, and review status.
+- Payload or capability re-rating is not shown as real until the evidence supports it.
 
-- Add a simple wire route model.
-- Generate a wiring diagram or WireViz output.
-- Check bend-radius or clearance rules.
-- Link harness items into the BOM.
+### Milestone 13: cloud-assisted jobs
 
-## Milestone 10: cloud-assisted jobs
+Status: planning-only.
 
-Status: complete for the safe local MVP boundary. Cloud execution remains intentionally unconfigured.
+Complete today:
 
-Deliverables:
+- Deterministic local versus cloud recommendation metadata.
+- Planning estimates for runtime, wait, and cost when cloud would be useful.
+- Disabled `cloud_execution_available` state.
 
-- Job queue.
-- Local versus cloud recommendation.
-- Job status UI.
-- Cached reports.
-- Cost and wait-time estimate before paid compute.
+Still future:
 
-The current slice provides deterministic local recommendations, cloud-planning estimates, queue status, and retained local report or artifact references. It does not add a cloud provider, billing, credentials, or remote execution.
+- Provider selection.
+- Credentials through vault-backed runtime config.
+- Budget guardrails.
+- Remote worker sandboxing.
+- Artifact transfer and retention.
+- User approval flows.
 
-## Recommended immediate next task
+Acceptance criteria for future completion:
 
-Define and explicitly approve the future cloud execution boundary, including provider configuration, credentials, budget guardrails, and remote-worker safety requirements.
+- Cloud execution cannot run without explicit provider, credentials, budget, safety, and user-confirmation policy.
+- No secrets are committed.
+
+## Recommended immediate next tasks
+
+1. Keep README and planning docs synchronized as implementation changes land.
+2. Add durable local persistence behind the existing project repository boundary.
+3. Add a license-cleared FreeCAD import proof for one design asset.
+4. Replace seed geometry with generated viewable geometry and real exploded transforms.
+5. Implement project Gmsh and CalculiX flow only after the geometry handoff is validated.
+6. Define and explicitly approve future cloud execution policy before adding remote workers.

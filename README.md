@@ -1,140 +1,114 @@
 # MechaFlow CAD
 
-MechaFlow CAD is an open-source product concept for a robotics-focused CAD orchestration platform.
+MechaFlow CAD is an open-source robotics CAD orchestration cockpit. It helps a builder start from an existing design or design intent, keep the target task visible, inspect an assembly in 3D, compare part and material changes, and package the evidence a future CAD, FEA, electronics, or manufacturing worker needs.
 
-The goal is to help people start from free and open reference designs, inspect animated exploded views, select individual parts, modify dimensions or materials, and automatically re-check whether the design still satisfies the original task.
+This README is the canonical entry point for product and implementation planning. Treat it as the map for future work, not as a thin product overview.
 
-Example: open a robot hand or gripper design, set the task to "pick and place a 50 lb object", select a finger link, swap aluminum for a carbon-fiber nylon or steel option, and get updated payload capability, weight, cost, manufacturability, wiring, and maintenance guidance.
+## Product thesis and business logic
 
-## What this repository contains
+Robotics teams often begin with open mechanical designs, supplier parts, and shop knowledge, then lose time stitching together CAD edits, load assumptions, wiring changes, BOM updates, and quote packets. MechaFlow CAD should make that workflow explicit:
 
-This repository contains product and technical documentation plus an integrated local MVP foundation: a FastAPI backend, a Vite React TypeScript frontend cockpit, and catalog/integration fixtures and validation.
+1. Start with a known project, a ready example, a user import, or a concise design intent.
+2. Keep the engineering task active, such as payload, reach, cycle time, envelope, material, serviceability, or wiring constraints.
+3. Let users inspect and change individual parts in context instead of treating geometry edits as isolated operations.
+4. Show downstream consequences across analysis readiness, manufacturing, BOM, cost range, lead-time range, wiring, reports, and project files.
+5. Preserve honest boundaries so advisory seed data, heuristics, pre-solver packages, solver fixtures, cloud plans, and future real solver outputs are never confused.
 
-- [Frontend development](docs/frontend.md)
-- [Product requirements](docs/product-requirements.md)
-- [Technical architecture](docs/technical-architecture.md)
-- [User experience](docs/user-experience.md)
-- [Reference design catalog](docs/reference-design-catalog.md)
-- [Open-source integration candidates](docs/open-source-integrations.md)
-- [Integration adapter plan](docs/integrations/README.md)
-- [Dependency license verification](docs/dependency-license-verification.md)
-- [Local development](docs/local-development.md)
-- [Desktop demo](docs/desktop.md)
-- [Business model](docs/business-model.md)
-- [Cheap hosting plan](docs/hosting-plan.md)
-- [MVP roadmap](docs/mvp-roadmap.md)
-- [Data and standards strategy](docs/data-and-standards.md)
-- [Backend development](docs/backend.md)
-- [Local solver execution](docs/local-solver-execution.md)
+The business direction is cloud-assisted, not cloud-dependent. Local-first CAD previews, project files, and safe analysis packaging keep hosting cost low and protect user data. Cloud compute, paid supplier integrations, licensed standards packs, collaboration, and quote automation remain future optional layers that must be explicitly configured and approved. See [Business model](docs/business-model.md), [Cheap hosting plan](docs/hosting-plan.md), and [Data and standards strategy](docs/data-and-standards.md).
+
+## Current MVP capabilities
+
+The repository now contains a working local MVP foundation plus planning docs:
+
+- A Vite, React, and TypeScript cockpit in `src/` with an input-first opening, immediate 3D robot-arm workspace, compact CAD-style sidebars, design intent command line, reference-image intake, project/example paths, and mode buttons for Design, Analysis, Manufacturing, Reports, and Backend surfaces.
+- A Node mock backend in `scripts/mock-backend.mjs` for one-command desktop and frontend work.
+- An Electron desktop-openable path in `desktop/` and `scripts/desktop-dev.mjs`, launched with `npm start`.
+- A FastAPI backend in `backend/mechaflow_api/` with project, catalog, panel-data, material substitution, wiring/electronics, report, analysis-readiness, analysis job queue, project-file import/export, local pre-solver, and CalculiX solver-readiness fixture contracts.
+- Portable `.mfcad.json` project files that round-trip the MVP project state and cached evidence metadata.
+- Seed catalog, material, manufacturing, integration, ready-example, task, and handoff data in `catalog/` and `data/`.
+- CI-backed validation for Python, catalog, frontend, smoke, desktop smoke, and captain smoke paths.
+
+## Honest limitations
+
+Do not claim these capabilities exist until code and validation prove them:
+
+- No photo-to-3D or prompt-to-CAD generation exists. Reference images and design prompts are local intake metadata and concept guidance only.
+- No full project FEA exists. The pre-solver runner creates review-required packages and optional nominal demo screening. The CalculiX fixture can prove local executable plumbing for a generated tiny deck, but it does not analyze the selected project geometry.
+- No cloud compute is configured. Queue recommendations may say cloud would be useful when configured, but remote execution, credentials, billing, budget guardrails, and provider approvals are absent.
+- No exact supplier quote, purchase flow, or paid API dependency exists. Cost and lead time are ranged seed estimates.
+- No exact electrical validation exists. Wiring review is deterministic MVP heuristics for recorded route data, not voltage drop, EMI, flex-life, current-rating, standards, or CAD clearance certification.
+- No external CAD assets are vendored. Ready examples are repository-local seed data unless a future task imports license-cleared assets.
+
+## Target user workflows
+
+### Opening workflow
+
+The product direction is input-first and 3D-first:
+
+1. Land directly in the 3D workspace, not a long setup checklist.
+2. Type a design intent in one command line and receive extracted chips when possible.
+3. Add reference photos or images as local metadata without any reconstruction claim.
+4. Choose one project path from the left sidebar: new prompt concept, open/import `.mfcad.json`, recent project, reference catalog, or repository-local ready example.
+5. Use contextual sidebars instead of modal-heavy setup screens.
+
+### In-cockpit workflow
+
+1. Orbit, explode, and inspect the robot arm assembly.
+2. Select a part from the visual model or model tree.
+3. Review task criteria, material, manufacturing, stiffness, heat, source confidence, review-required values, and linked wiring data.
+4. Preview compatible material and process substitutions before applying them.
+5. Check downstream panels for BOM, manufacturing, wiring/electronics, pre-solver readiness, queue recommendations, and reports.
+6. Export and import a `.mfcad.json` file so the desktop workflow can be saved, reopened, and shared.
+
+Read [User experience](docs/user-experience.md), [Frontend development](docs/frontend.md), and [Desktop demo](docs/desktop.md) before changing these flows.
+
+## Code architecture and implementation surfaces
+
+Use [Technical architecture](docs/technical-architecture.md) as the architectural source, then verify details against code.
+
+- `src/App.tsx`, `src/App.css`, `src/lib/`, and `src/data/` implement the React cockpit, API client, backend mapping, design-intent parsing, local mocks, ready examples, and component tests.
+- `scripts/mock-backend.mjs` and `scripts/mock-backend-data.mjs` provide backend-shaped data and mutation paths for `npm run dev:full`, `npm start`, smoke tests, and desktop demo work.
+- `desktop/main.cjs` plus `scripts/desktop-dev.mjs`, `scripts/desktop-smoke.mjs`, and `scripts/captain-demo-smoke.mjs` provide the Electron shell and captain-friendly desktop validation path.
+- `backend/mechaflow_api/models.py` is the authoritative backend schema surface for projects, assemblies, parts, materials, tasks, manufacturing, wiring, reports, readiness, job queues, project files, and integration metadata.
+- `backend/mechaflow_api/main.py` exposes FastAPI endpoints. `services.py`, `storage.py`, `job_queue.py`, `runners.py`, `solver_execution.py`, `adapters.py`, and `catalog.py` hold business rules, in-memory persistence boundaries, queue recommendations, local-safe analysis packaging, fixture execution, integration stubs, and seed loading.
+- `frontend/` is a tiny static integration shell used by the Python local app and smoke path. Product cockpit work belongs in `src/` unless the backend/static smoke surface itself is in scope.
+- `src/mechaflow_cad/app.py` is the standard-library catalog API and static shell for the local seed app.
+- `catalog/`, `data/`, and `catalog/schemas/` are machine-readable planning and demo inputs. Validate catalog changes with `python scripts/validate_catalog.py`.
+
+## Authoritative planning docs
+
+Read these before scoping significant work:
+
+1. [Product requirements](docs/product-requirements.md) - mission, business rules, MVP requirements, deliverables, non-goals, and acceptance criteria.
+2. [User experience](docs/user-experience.md) - input-first cockpit direction, target workflows, interaction style, and honest analysis copy.
+3. [Technical architecture](docs/technical-architecture.md) - current code architecture, target worker architecture, contracts, data model, and boundaries.
+4. [MVP roadmap](docs/mvp-roadmap.md) - what is complete, what is only a safe MVP boundary, and what future milestones require.
+5. [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Desktop demo](docs/desktop.md) - implementation details and local workflows.
+6. [Project files](docs/project-files.md), [Wiring and electronics MVP](docs/wiring-electronics.md), and [Local solver execution and readiness](docs/local-solver-execution.md) - current boundary docs for major product surfaces.
+7. [Validation policy](docs/validation.md) - local and CI validation requirements.
+8. [Reference design catalog](docs/reference-design-catalog.md), [Integration adapter plan](docs/integrations/README.md), [Dependency license verification](docs/dependency-license-verification.md), and [Open-source integration candidates](docs/open-source-integrations.md) - source, license, and future adapter constraints.
 
 Machine-readable seeds:
 
 - `catalog/reference-designs/reference-designs.seed.json`
 - `catalog/schemas/reference-design.schema.json`
-- `data/*.seed.json`, including adapter and backend/frontend handoff projections
+- `data/*.seed.json`, including integration adapters, backend/frontend handoff projections, materials, manufacturing methods, ready examples, and task records
 
-## Core product idea
+## Worker planning map
 
-MechaFlow CAD should become an engineering cockpit that connects:
+Before implementing a task:
 
-1. Mechanical CAD
-2. Open reference design catalogs
-3. Animated exploded views
-4. Part-level editing
-5. Material substitution
-6. Standards-aware design suggestions
-7. Finite element analysis and other simulations
-8. Electronics and wire harness planning
-9. Manufacturing and supplier recommendations
-10. Cost, lead-time, and serviceability analysis
+1. Read this README and the linked planning doc that owns the product surface you will touch.
+2. Inspect the current code path and tests for that surface. Do not rely on docs alone.
+3. Preserve the business rule behind the feature. For example, a material substitution is not just UI state; it affects active task context, part metadata, BOM, manufacturing, readiness, reports, import/export, and validation labels.
+4. Keep implementation claims synchronized across root README, owner docs, code, seed data, and tests when the scope changes.
+5. Avoid duplicating large blocks. Link to the owner doc, then summarize only the decision a future worker needs.
+6. Keep limitations explicit. Do not remove review-required, planning-only, not-FEA, estimate, or heuristic labels unless a real implementation and validation path replaced them.
+7. Run the validation commands from [Validation policy](docs/validation.md) that match the changed surfaces, plus the full local policy before handoff when practical.
 
-## MVP recommendation
+## Local quick start
 
-The first useful demo should not start with a blank CAD canvas.
-
-It should start with an existing open-source robot hand, gripper, arm, drone, fixture, or automation design.
-
-The MVP should:
-
-1. Import an open reference design.
-2. Parse the assembly into selectable parts and subassemblies.
-3. Show an animated exploded view.
-4. Let the user select one part and understand what it does.
-5. Let the user change material, length, thickness, or manufacturing process.
-6. Keep the original task active, such as lifting 50 lb.
-7. Re-rate the design after the change, such as "still supports 50 lb", "now supports 100 lb", or "reduced to 25 lb".
-8. Queue background checks for FEA, fit, wiring, mass, cost, and manufacturing.
-9. Generate a report with pros, cons, risks, and next actions.
-
-## Open-source first
-
-The intended foundation should use open-source components wherever possible. Required runtime dependencies must not be closed-source or paid-only, and every GitHub project or design asset must pass the license checklist before adoption.
-
-Candidate foundations include:
-
-- FreeCAD for parametric CAD and geometry automation.
-- OpenCascade through FreeCAD for solid modeling.
-- CalculiX and Gmsh for structural simulation and meshing.
-- KiCad and KiCadStepUp for electronics and ECAD/MCAD exchange.
-- WireViz for wiring harness documentation.
-- ROS 2, URDF, and related tools for robot motion models.
-- Open standard-part libraries where licensing permits reuse.
-
-Some engineering standards are not freely redistributable.
-
-The platform should clearly separate open advisory rules from licensed authoritative standards packs.
-
-## Local seed app
-
-Run the frontend and backend catalog API together with no required third-party runtime dependencies:
-
-```bash
-PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
-```
-
-The process prints the selected URL. Use `python3 scripts/find-free-port.py` when you need an explicit unused port.
-
-The local API exposes reference designs at `/api/catalog/reference-designs` and each dataset at `/api/data/{dataset}`, including `integration-adapters` and `backend-frontend-handoff`.
-
-Exercise the standard-library app path:
-
-```bash
-PYTHONPATH=src python3 tests/smoke_test.py
-```
-
-After installing the development dependencies, validate catalog data and its focused regression coverage:
-
-```bash
-python3 scripts/validate_catalog.py
-python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'
-```
-
-The smoke test additionally needs Node.js matching `^22.22.2 || ^24.15.0 || >=26.0.0`, an open-source
-test-only dependency: it runs the frontend
-module's page bootstrap against the live backend API and asserts what the page renders.
-
-## Hosting philosophy
-
-Keep hosting cheap by making the platform cloud-assisted rather than cloud-dependent.
-
-- Run CAD editing, local previews, and simple checks on the user's computer when possible.
-- Use cheap static hosting for the frontend.
-- Use a small API server for accounts, project metadata, and job coordination.
-- Use cloud compute only for heavy simulation jobs or collaboration.
-- Support bring-your-own AI keys during early prototypes to control cost.
-
-## Integrated local MVP quick start
-
-Backend dependencies are managed by Python packaging, while frontend dependencies are managed by npm.
-Use Node.js matching the `engines.node` requirement in `package.json`.
-
-To open the local desktop demo after installing npm dependencies:
-
-```bash
-npm start
-```
-
-This starts the mock API, Vite frontend, and an Electron desktop window identified as MechaFlow CAD. The opening workflow is now input-first: a large interactive 3D robot-arm viewport, one design-intent command line, compact project/example browsing, reference-image intake, and mode switches for analysis, manufacturing, reports, and backend tools. On macOS, `npm run desktop:macos:shortcut` installs a double-clickable Finder launcher. See [Desktop demo](docs/desktop.md).
+Use Node.js matching `package.json` and Python 3.11 or newer.
 
 ```bash
 python3 -m venv .venv
@@ -144,7 +118,43 @@ python -m pip install -e '.[dev]'
 npm ci
 ```
 
-Run backend, catalog, frontend, smoke, and desktop/captain checks:
+Open the desktop MVP:
+
+```bash
+npm start
+```
+
+Run the local FastAPI backend on a known port:
+
+```bash
+export MECHAFLOW_API_PORT=8123
+mechaflow-api
+```
+
+Run the Vite cockpit against that backend:
+
+```bash
+export VITE_API_BASE_URL=http://127.0.0.1:8123
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Run backend and static shell together, or frontend and mock backend together:
+
+```bash
+python scripts/run-dev.py
+npm run dev:full
+```
+
+Run the standard-library local app path:
+
+```bash
+PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
+PYTHONPATH=src python3 tests/smoke_test.py
+```
+
+## Validation expectations
+
+For a full local handoff after dependencies are installed, run:
 
 ```bash
 pytest
@@ -158,43 +168,12 @@ npm run smoke
 npm run captain:smoke
 ```
 
-GitHub Actions runs the CI-safe subset of these checks on pull requests and pushes to `main`. See [Validation policy](docs/validation.md) for the CI workflow, local commands, and the manual desktop demo check that remains release-readiness evidence.
-
-Run the backend on an explicit local port:
-
-```bash
-export MECHAFLOW_API_PORT=8123
-mechaflow-api
-```
-
-Run the Vite product cockpit on an explicit local port and point it at the FastAPI backend:
-
-```bash
-export VITE_API_BASE_URL=http://127.0.0.1:8123
-npm run dev -- --host 127.0.0.1 --port 5173
-```
-
-Or run local helpers that choose available ports:
-
-```bash
-python scripts/run-dev.py
-npm run dev:full
-```
-
-`python scripts/run-dev.py` serves the static integration shell in `frontend/` against the FastAPI backend. `npm run dev:full` serves the React cockpit in `src/` against the Node mock backend used for frontend work. The catalog seed app can also serve `frontend/` and the catalog API together:
-
-```bash
-PYTHONPATH=src MECHAFLOW_PORT=0 python3 -m mechaflow_cad.app
-```
-
-Use `python scripts/find-free-port.py` for one unused port or `node scripts/find-ports.mjs` for one or more before setting `MECHAFLOW_API_PORT`, `MECHAFLOW_FRONTEND_PORT`, `MECHAFLOW_PORT`, or the Vite dev server port. See [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Local development](docs/local-development.md) for details.
+Docs-only changes should still run the available documentation/link check, catalog validation, backend tests, and frontend checks needed to prove links, examples, scripts, and changed claims remain accurate. GitHub Actions runs the CI-safe subset on pull requests and pushes to `main`. See [Validation policy](docs/validation.md).
 
 ## Repository status
 
-This repository now contains planning documents and an integrated local MVP foundation. The backend exposes CAD orchestration, analysis-readiness, report, worker, and catalog-shaped contracts, including a local pre-solver runner and a CalculiX solver-readiness fixture boundary; see [Backend development](docs/backend.md) and [Local solver execution](docs/local-solver-execution.md). The frontend cockpit can use backend-shaped mock data or a running API. The desktop-friendly visual seed shows a robot arm assembly with honest demo criteria, explicit pre-solver load cases, material and thermal provenance, expected FreeCAD, Gmsh, and CalculiX artifacts, local solver tool availability, and no fake FEA claims. Full project FEA still requires FreeCAD geometry prep, Gmsh meshing, CalculiX solving, and engineering review before stress, displacement, safety factor, or payload ratings can be treated as real solver outputs.
+PR #1 through PR #12 have landed through `main`, including the input-first 3D cockpit redesign and real CI checks. The current MVP is a local, desktop-openable, seed-backed orchestration demo with honest integration boundaries. Future work should tighten real FreeCAD import, Gmsh meshing, CalculiX project solving, cloud execution policy, supplier integrations, and licensed standards only after the relevant product and safety requirements are explicit.
 
 ## License
 
-The documentation and future source code are intended to be open source.
-
-The initial license is MIT unless changed before implementation begins.
+The documentation and source code are MIT licensed unless changed by project maintainers.

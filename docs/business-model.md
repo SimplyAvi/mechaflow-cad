@@ -2,11 +2,11 @@
 
 ## Product positioning
 
-MechaFlow CAD can become a bridge between open-source CAD, robotics design, engineering analysis, and manufacturing logistics.
+MechaFlow CAD can become a bridge between open-source CAD, robotics design, engineering analysis, electronics planning, and manufacturing logistics.
 
 The initial value is not replacing every professional CAD feature.
 
-The initial value is helping users understand and modify robot assemblies faster and more safely.
+The initial value is helping users understand and modify robot assemblies faster and more safely while preserving the evidence boundary behind every recommendation. Seed estimates, heuristic checks, pre-solver packages, solver fixtures, and future real solver outputs must be labeled differently because user trust is part of the product value.
 
 ## Customer segments
 
@@ -199,8 +199,8 @@ Mitigation:
 
 ## First commercial wedge
 
-The best first wedge is an open reference design explorer for robotics.
+The best first wedge is a local-first robotics design cockpit built around open reference designs and portable project files.
 
-Users can import a robot hand, arm, gripper, or fixture, see an exploded view, modify a part, and get a capability/cost/manufacturing report.
+Users should be able to open a robot hand, arm, gripper, or fixture, see an exploded view, modify a part, and get a reviewable task, readiness, wiring, BOM, cost-range, lead-time-range, and manufacturing package. The current MVP demonstrates this with local seed data and honest review-required boundaries. Future commercial claims about imported CAD assets, real project FEA, exact quotes, cloud execution, or electrical validation require the corresponding workers, provider approvals, and evidence.
 
 This is easier to explain than a general CAD replacement and proves the core value quickly.
