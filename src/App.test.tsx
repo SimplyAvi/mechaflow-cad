@@ -387,6 +387,17 @@ describe('MechaFlow cockpit', () => {
       const url = String(input);
       if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
       if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) return Response.json(mockProjectPanelData);
+      if (url.endsWith('/api/local-analysis/solver-readiness')) {
+        return Response.json({
+          status: 'ready',
+          summary: 'Prior project solver state.',
+          tool_statuses: [],
+          available_tools: [],
+          missing_tools: [],
+          execution_modes: [],
+          install_guidance: [],
+        });
+      }
       if (url.endsWith('/api/projects/import-file')) {
         expect(init?.method).toBe('POST');
         expect(init?.body).toBe(JSON.stringify(projectFile));
@@ -406,6 +417,7 @@ describe('MechaFlow cockpit', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Robot arm CAD review cockpit/i })).toBeInTheDocument();
+    expect(await screen.findByText(/Prior project solver state/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Project file import and export/i)).toHaveTextContent(/Portable project file/i);
     await user.upload(
       screen.getByLabelText(/Import MechaFlow project file/i),
@@ -417,6 +429,7 @@ describe('MechaFlow cockpit', () => {
     expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
     expect(screen.getByLabelText(/^Part readiness pre-solver analysis readiness$/i)).toHaveTextContent(/Explicit load cases/i);
     expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Prior project solver state/i)).not.toBeInTheDocument();
   });
 
   it('shows an understandable project-file error for invalid local JSON', async () => {

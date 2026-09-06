@@ -146,6 +146,11 @@ function App() {
   };
 
   const applyLoadedDesign = (loadedDesign: ReferenceDesign) => {
+    setSubstitutionPreview(null);
+    setSubstitutionMessage(null);
+    setSolverReadiness(null);
+    setAnalysisRunMessage(null);
+    setDemoStepReviews(new Set());
     setDesign(loadedDesign);
     setSelectedAssemblyId(loadedDesign.assembly.id);
     setSelectedPartId(loadedDesign.assembly.parts[0]?.id ?? '');
