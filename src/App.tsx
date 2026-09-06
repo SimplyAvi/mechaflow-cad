@@ -210,7 +210,6 @@ function App() {
   const selectMaterialOption = (optionId: string) => {
     setSelectedOptionId(optionId);
     setSubstitutionPreview(null);
-    markDemoStep('material-substitution');
   };
 
   const selectAssembly = (assemblyId: string) => {
@@ -403,6 +402,7 @@ function App() {
   const visibleBomTotal = totalBomCost(visibleDesign.bom);
   const hasBomManufacturingWiring = visibleDesign.bom.length > 0
     && visibleDesign.manufacturingOptions.length > 0
+    && visibleDesign.electronicsComponents.length > 0
     && (visibleDesign.wiringRoutes.length > 0 || visibleDesign.wiringReview != null);
   const hasCachedEvidence = visibleDesign.analysisJobs.some((job) => (
     job.cachedArtifactRefs.length > 0

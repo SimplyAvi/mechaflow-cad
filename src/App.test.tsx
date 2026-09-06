@@ -81,6 +81,34 @@ describe('MechaFlow cockpit', () => {
     );
     expect(screen.getByLabelText(/Backend modification preview/i)).toHaveTextContent('"dimension_changes": {}');
     expect(screen.getByText(/mat-carbon-fiber-nylon/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('2/8');
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('Try material substitutionReady');
+  });
+
+  it('does not mark downstream workflow available without electronics records', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', 'http://api.test');
+    const panelDataWithoutElectronics = structuredClone(mockProjectPanelData);
+    panelDataWithoutElectronics.electronics_components = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/metadata')) return Response.json(mockBackendMetadata);
+      if (url.endsWith('/api/projects/project-open-gripper-demo/panel-data')) {
+        return Response.json(panelDataWithoutElectronics);
+      }
+      if (url.endsWith('/api/projects/project-open-gripper-demo/analysis-readiness')) {
+        return new Response('Not found', { status: 404 });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    const checklist = await screen.findByLabelText(/Captain demo checklist/i);
+    const downstreamStep = within(checklist).getByText('Review BOM, manufacturing, and wiring').parentElement;
+    expect(downstreamStep).not.toBeNull();
+    expect(downstreamStep).toHaveTextContent('Review required');
+    expect(within(checklist).getByText('One or more downstream workflow panels need seed or backend data before the captain demo is complete.')).toBeInTheDocument();
   });
 
   it('selects a different part from the assembly and shows its wiring context', async () => {
@@ -325,6 +353,7 @@ describe('MechaFlow cockpit', () => {
     await user.click(screen.getByRole('button', { name: /Preview backend impact/i }));
 
     expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Captain demo checklist/i)).toHaveTextContent('4/8');
     expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
