@@ -319,6 +319,30 @@ const summarizeTask = (design: ReferenceDesign): string => [
   design.task.reachMeters == null ? 'reach unknown' : `${design.task.reachMeters} m reach`,
 ].join(', ');
 
+const primitiveLabel = (primitive: CADPrimitiveShape): string => primitive.replaceAll('_', ' ');
+
+const dimensionSummary = (part: Part, units: AuthoringUnit): string => {
+  const dims = part.authoring.dimensionsMm;
+  const rows = [
+    dims.lengthMm == null ? null : `L ${formatLength(dims.lengthMm, units)}`,
+    dims.widthMm == null ? null : `W ${formatLength(dims.widthMm, units)}`,
+    dims.heightMm == null ? null : `H ${formatLength(dims.heightMm, units)}`,
+    dims.diameterMm == null ? null : `Dia ${formatLength(dims.diameterMm, units)}`,
+    dims.thicknessMm == null ? null : `Thk ${formatLength(dims.thicknessMm, units)}`,
+  ].filter((row): row is string => row != null);
+  return rows.length ? rows.join(' / ') : 'dimensions review required';
+};
+
+const reviewWarningsForPart = (part: Part, selectedOption?: MaterialOption): string[] => {
+  const warnings = [
+    part.rating.warning,
+    ...part.analysisReadiness.review_required,
+    ...part.designCriteria.filter((criterion) => criterion.status === 'review-required').map((criterion) => `${criterion.label}: ${criterion.value}`),
+    ...(selectedOption?.warnings ?? []),
+  ].filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+  return [...new Set(warnings)].slice(0, 6);
+};
+
 const chipCopy = (chip: DesignIntentChip): string => `${chip.label}: ${chip.detail}`;
 
 const inferUnitsFromIntent = (intent: string, fallback: AuthoringUnit): AuthoringUnit => {
@@ -364,6 +388,7 @@ function App() {
   const [imageDropActive, setImageDropActive] = useState(false);
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
   const [dimensionDrafts, setDimensionDrafts] = useState<Record<string, string>>({});
+  const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -532,6 +557,22 @@ function App() {
         ? { widthMm: valueMm }
         : { heightMm: valueMm };
     updateSelectedPartGeometry({ dimensions }, `${selectedPart.name} ${key} set to ${rawValue} ${design.units}.`);
+  };
+
+  const commitSelectedPartLabel = (rawLabel: string) => {
+    if (!design || !selectedPart) return;
+    const label = rawLabel.trim();
+    setLabelDrafts((current) => {
+      const next = { ...current };
+      delete next[selectedPart.id];
+      return next;
+    });
+    if (!label) {
+      setAuthoringMessage('Add a part label before saving it to the visual model tree and project file.');
+      return;
+    }
+    if (label === selectedPart.name) return;
+    updateSelectedPartGeometry({ label }, `${selectedPart.name} label changed to ${label}. The label is stored in the portable project file.`);
   };
 
   const createPartFromPalette = (kind: CADPrimitiveShape) => {
@@ -1287,6 +1328,11 @@ function App() {
                 <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); }}>Reset view</button>
               </div>
             </div>
+            <CanvasToolPalette
+              onCreatePart={createPartFromPalette}
+              onCreateAssembly={createAssemblyFromPalette}
+              selectedPartName={selectedPart.name}
+            />
             <VisualCadWorkspace
               explodePercent={explodePercent}
               onNudgeSelected={(delta) => updateSelectedPartGeometry({
@@ -1308,6 +1354,12 @@ function App() {
               units={design.units}
               view={{ yawDeg: rotationDeg, pitchDeg: orbitPitchDeg, zoom: viewZoom, panX: viewPan.x, panY: viewPan.y }}
               wiringRoutes={visibleDesign.wiringRoutes}
+            />
+            <SelectedPartCanvasCard
+              activeTask={design.task}
+              part={selectedPart}
+              selectedOption={selectedOption}
+              units={design.units}
             />
             <div className="viewer-footer">
               <span>
@@ -1421,7 +1473,7 @@ function App() {
                 </div>
               </section>
 
-              <section className="panel authoring-panel units-panel" aria-label="Project units and targets">
+              <section className="panel authoring-panel units-panel" id="units-targets-editor" aria-label="Project units and targets">
                 <div className="section-heading-row">
                   <div>
                     <p className="eyebrow">Units and targets</p>
@@ -1500,7 +1552,7 @@ function App() {
                 </div>
               </section>
 
-              <section className="panel authoring-panel part-inspector" aria-label="Selected geometry inspector">
+              <section className="panel authoring-panel part-inspector" id="selected-geometry-editor" aria-label="Selected geometry inspector">
                 <div className="section-heading-row">
                   <div>
                     <p className="eyebrow">Selected geometry</p>
@@ -1508,6 +1560,22 @@ function App() {
                   </div>
                   <span className={`status-pill status-${selectedPart.analysisReadiness.state.replace(/_/g, '-')}`}>{selectedPart.analysisReadiness.state.replaceAll('_', ' ')}</span>
                 </div>
+                <label className="field-row compact-field selected-label-field">
+                  <span>Label</span>
+                  <input
+                    aria-label="Selected part label"
+                    onBlur={(event) => commitSelectedPartLabel(event.target.value)}
+                    onChange={(event) => setLabelDrafts((current) => ({ ...current, [selectedPart.id]: event.target.value }))}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        commitSelectedPartLabel(event.currentTarget.value);
+                      }
+                    }}
+                    type="text"
+                    value={labelDrafts[selectedPart.id] ?? selectedPart.name}
+                  />
+                </label>
                 <div className="authoring-grid three-col">
                   {[
                     ['length', selectedPart.authoring.dimensionsMm.lengthMm ?? 0],
@@ -1599,7 +1667,7 @@ function App() {
                 <p className="microcopy">Live dimensions and XYZ coordinates update authored project metadata immediately. Strength, tolerance, mass, and manufacturability remain review-required until real CAD and solver integrations run.</p>
               </section>
 
-              <section className="panel authoring-panel assembly-authoring-panel" aria-label="Assembly and wiring authoring">
+              <section className="panel authoring-panel assembly-authoring-panel" id="assembly-authoring-editor" aria-label="Assembly and wiring authoring">
                 <div className="section-heading-row">
                   <div>
                     <p className="eyebrow">Assembly and wiring</p>
@@ -1756,6 +1824,144 @@ function App() {
         </aside>
       </section>
     </main>
+  );
+}
+
+function CanvasToolPalette({
+  onCreatePart,
+  onCreateAssembly,
+  selectedPartName,
+}: {
+  onCreatePart: (kind: CADPrimitiveShape) => void;
+  onCreateAssembly: () => void;
+  selectedPartName: string;
+}) {
+  const jumpTo = (selector: string) => {
+    document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const creationTools: Array<[CADPrimitiveShape, string, string]> = [
+    ['base_plate', 'Base shape', 'flat base plate'],
+    ['beam', 'Beam', 'arm link or rail'],
+    ['cylinder_joint', 'Joint', 'revolute or bearing proxy'],
+    ['bracket', 'Bracket', 'mounting support'],
+    ['motor_block', 'Motor', 'actuator block proxy'],
+    ['connector', 'Connector', 'harness connector'],
+    ['electronics', 'Electronics', 'PCB or module block'],
+    ['tool', 'Tool plate', 'end-effector mount'],
+  ];
+  return (
+    <section className="canvas-tool-palette" aria-label="Canvas CAD tool palette">
+      <div>
+        <p className="eyebrow">CAD tools</p>
+        <strong>Pick a tool, place a proxy primitive, then label and dimension it.</strong>
+        <small>MVP authoring primitives only, not imported manufacturing CAD.</small>
+      </div>
+      <div className="canvas-tool-grid">
+        {creationTools.map(([kind, label, title]) => (
+          <button key={kind} onClick={() => onCreatePart(kind)} title={`Add ${title}`} type="button">
+            <span className={`primitive-icon primitive-${kind}`} aria-hidden="true" />
+            {label}
+          </button>
+        ))}
+        <button onClick={onCreateAssembly} type="button">New assembly</button>
+        <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Label {selectedPartName}</button>
+        <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Dimensions</button>
+        <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Move/nudge</button>
+        <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Rotate</button>
+        <button onClick={() => jumpTo('#units-targets-editor')} type="button">Units</button>
+        <button onClick={() => jumpTo('#assembly-authoring-editor')} type="button">Joint link</button>
+        <button onClick={() => jumpTo('#assembly-authoring-editor')} type="button">Wire route</button>
+      </div>
+    </section>
+  );
+}
+
+function SelectedPartCanvasCard({
+  activeTask,
+  part,
+  selectedOption,
+  units,
+}: {
+  activeTask: ReferenceDesign['task'];
+  part: Part;
+  selectedOption?: MaterialOption;
+  units: AuthoringUnit;
+}) {
+  const materialCriterion = part.designCriteria.find((criterion) => criterion.id === 'elasticity-stiffness');
+  const processCriterion = part.designCriteria.find((criterion) => criterion.id === 'manufacturing-process');
+  const loadCriterion = part.designCriteria.find((criterion) => criterion.id === 'load-capacity');
+  const thermalCriterion = part.designCriteria.find((criterion) => criterion.id === 'temperature-limit');
+  const materialStrengthCriterion = part.designCriteria.find((criterion) => criterion.id === 'material-strength');
+  const warnings = reviewWarningsForPart(part, selectedOption);
+  const thermalLimit = part.analysisReadiness.thermal_guidance?.heat_deflection_temp_c
+    ?? part.analysisReadiness.thermal_guidance?.max_service_temp_c
+    ?? null;
+  return (
+    <section className="selected-part-canvas-card" aria-label="Selected part detail card">
+      <div className="selected-part-hero">
+        <p className="eyebrow">Selected actual part</p>
+        <h3>Selected: {part.name}</h3>
+        <p>{part.purpose}</p>
+        <small>Primitive proxy: {primitiveLabel(part.authoring.primitive)} in {part.subassembly}. This is authored visual geometry and project metadata, not a full parametric CAD kernel.</small>
+      </div>
+      <dl className="selected-part-stat-grid">
+        <div>
+          <dt>Dimensions</dt>
+          <dd>{dimensionSummary(part, units)}</dd>
+        </div>
+        <div>
+          <dt>Material</dt>
+          <dd>{part.material}<small>{materialCriterion?.sourceConfidence ?? 'review-required source'}</small></dd>
+        </div>
+        <div>
+          <dt>Process</dt>
+          <dd>{part.manufacturingProcess}<small>{processCriterion?.sourceConfidence ?? 'process review required'}</small></dd>
+        </div>
+        <div>
+          <dt>Weight</dt>
+          <dd>{part.weightLb == null ? 'Review required mass' : `${part.weightLb.toFixed(2)} lb demo estimate`}</dd>
+        </div>
+        <div>
+          <dt>Cost</dt>
+          <dd>{part.costRangeUsd == null ? 'Review required cost' : `${formatUsdRange(part.costRangeUsd)} seed range`}</dd>
+        </div>
+        <div>
+          <dt>Stress or capability</dt>
+          <dd>{riskLabel[part.stressRisk]} stress risk<small>{part.rating.payloadLb == null ? 'payload and safety factor review required' : part.rating.summary}</small></dd>
+        </div>
+      </dl>
+      <div className="selected-part-rationale-grid">
+        <article>
+          <strong>Why this material or process is here</strong>
+          <p>{materialCriterion?.plainEnglish ?? 'Material rationale needs review.'}</p>
+          <p>{processCriterion?.plainEnglish ?? 'Manufacturing rationale needs process review.'}</p>
+          <small>Source confidence: {materialCriterion?.sourceConfidence ?? 'review required'}.</small>
+        </article>
+        <article>
+          <strong>Task criteria and thresholds</strong>
+          <ul>
+            <li>Payload: {activeTask.targetPayloadLb == null ? 'review required' : `${activeTask.targetPayloadLb} lb preserved task`}.</li>
+            <li>Reach: {activeTask.reachMeters == null ? 'review required' : `${activeTask.reachMeters} m target`}.</li>
+            <li>Safety factor: {activeTask.safetyFactorMin == null ? 'review required' : `${activeTask.safetyFactorMin} minimum guidance`}.</li>
+            <li>Stiffness or yield: {materialCriterion?.value ?? 'stiffness review required'}; {materialStrengthCriterion?.value ?? 'yield review required'}.</li>
+            <li>Heat: {thermalLimit == null ? thermalCriterion?.value ?? 'temperature review required' : `${formatMeasurement(thermalLimit)} C screening limit`}.</li>
+          </ul>
+        </article>
+        <article>
+          <strong>Load cases, constraints, and serviceability</strong>
+          <ul>
+            <li>{part.analysisReadiness.load_cases[0]?.name ?? loadCriterion?.label ?? 'Load case review required'}: {part.analysisReadiness.load_cases[0]?.magnitude == null ? loadCriterion?.value ?? 'review required' : `${formatMeasurement(part.analysisReadiness.load_cases[0].magnitude)} ${part.analysisReadiness.load_cases[0].unit ?? ''}`}.</li>
+            <li>{part.analysisReadiness.constraints[0]?.name ?? 'Constraints review required'}: {part.analysisReadiness.constraints[0]?.region ?? 'fixture, joint, and contact regions need CAD naming'}.</li>
+            <li>Manufacturing: {processCriterion?.plainEnglish ?? 'process and tolerance review required'}.</li>
+            <li>Wiring or serviceability: {part.relatedWires.length ? `${part.relatedWires.length} linked route(s) need clearance and service-loop review` : activeTask.serviceGoal}.</li>
+          </ul>
+        </article>
+        <article className="selected-review-card">
+          <strong>Review-required warnings</strong>
+          {warnings.length > 0 ? <ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : <p>No additional warnings in the seed card, but engineering review is still required before release.</p>}
+        </article>
+      </div>
+    </section>
   );
 }
 

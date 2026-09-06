@@ -15,13 +15,15 @@ import {
 describe('visual authoring project helpers', () => {
   it('exports seeded and edited canvas metadata into portable project files', () => {
     const unitProject = updateProjectUnits(mockReferenceDesign.backendProject, 'in');
-    const design = remapDesignFromProject(mockReferenceDesign, unitProject);
+    const labeledProject = updatePartGeometry(unitProject, 'part-palm-plate', { label: 'Bench-mounted base proxy' });
+    const design = remapDesignFromProject(mockReferenceDesign, labeledProject);
 
     const projectFile = buildLocalProjectFile(design);
     const firstPart = projectFile.project.assemblies[0]!.parts[0]!;
     const visual = firstPart.metadata.visual_authoring as Record<string, unknown>;
 
     expect(projectFile.project.units).toBe('in');
+    expect(firstPart.name).toBe('Bench-mounted base proxy');
     expect(projectFile.project.metadata?.visual_authoring).toEqual(expect.objectContaining({ units: 'in' }));
     expect(visual).toEqual(expect.objectContaining({
       primitive: 'base_plate',

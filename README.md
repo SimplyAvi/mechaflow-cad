@@ -64,7 +64,7 @@ The product direction is visual-authoring first, input-first, and 3D-first:
 6. Check downstream panels for BOM, manufacturing, wiring/electronics, pre-solver readiness, queue recommendations, and reports.
 7. Export and import a `.mfcad.json` file so the desktop workflow can be saved, reopened, and shared.
 
-Read [User experience](docs/user-experience.md), [Frontend development](docs/frontend.md), and [Desktop demo](docs/desktop.md) before changing these flows.
+Read [User experience](docs/user-experience.md), [Frontend development](docs/frontend.md), [Desktop demo](docs/desktop.md), and [Captain demo](docs/captain-demo.md) before changing these flows.
 
 ## Code architecture and implementation surfaces
 
@@ -87,7 +87,7 @@ Read these before scoping significant work:
 2. [User experience](docs/user-experience.md) - visual-authoring cockpit direction, target workflows, interaction style, and honest analysis copy.
 3. [Technical architecture](docs/technical-architecture.md) - current code architecture, target worker architecture, contracts, data model, and boundaries.
 4. [MVP roadmap](docs/mvp-roadmap.md) - what is complete, what is only a safe MVP boundary, and what future milestones require.
-5. [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Desktop demo](docs/desktop.md) - implementation details and local workflows.
+5. [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), [Desktop demo](docs/desktop.md), and [Captain demo](docs/captain-demo.md) - implementation details and local workflows.
 6. [Project files](docs/project-files.md), [Wiring and electronics MVP](docs/wiring-electronics.md), and [Local solver execution and readiness](docs/local-solver-execution.md) - current boundary docs for major product surfaces.
 7. [Validation policy](docs/validation.md) - local and CI validation requirements.
 8. [Reference design catalog](docs/reference-design-catalog.md), [Integration adapter plan](docs/integrations/README.md), [Dependency license verification](docs/dependency-license-verification.md), and [Open-source integration candidates](docs/open-source-integrations.md) - source, license, and future adapter constraints.

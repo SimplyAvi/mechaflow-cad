@@ -14,7 +14,7 @@ The current product direction is visual-authoring first, input-first, and 3D-fir
 - Users can choose units, create editable primitives, select canvas geometry, orbit, pan, zoom, and explode before opening advanced panels.
 - The Design mode inspector edits dimensions, XYZ position, rotation, material, process, parent, joint type, motors, connectors, and visible wire routes.
 - One command line captures design intent before forcing detailed setup.
-- CAD-style contextual sidebars keep project paths and selected-part details nearby.
+- CAD-style contextual sidebars and a selected-part detail card keep part name, statistics, criteria, and material rationale near the canvas.
 - New, open/import, recent, reference catalog, and ready-example paths are visible but compact.
 - Reference images are accepted as local context only.
 - Advanced Analysis, Manufacturing, Reports, and Backend surfaces are progressively disclosed through mode buttons.
@@ -84,29 +84,27 @@ The user can:
 - Route visible wire harness polylines between parts and persist the route as connector, wire segment, route, and harness BOM data.
 - Play, toggle, or scrub exploded-view state.
 - Orbit with yaw and pitch controls, shift-drag to pan, and wheel or slider to zoom.
-- Select a part in the visual model.
-- Select a part from the model tree.
-- See selected-part highlighting.
+- Select a concrete part in the visual model.
+- Select a part from the model tree or by keyboard focus on canvas geometry.
+- See selected-part highlighting in the canvas, model tree, near-canvas detail card, and inspector.
 - Inspect linked wiring, electronics, fasteners, and dependent parts when known.
 
 The MVP visual seed is a robot arm with a wrist gripper. The legacy project id remains `project-open-gripper-demo` for backend and smoke-test compatibility.
 
 ### 6. Inspect a part
 
-The part panel should show:
+The near-canvas selected-part card and inspector should show:
 
-- Purpose.
-- Active task role.
-- Material.
+- Purpose and why the part or material is in the design.
+- Active task role and available thresholds for payload, reach, safety factor, stiffness or yield guidance, heat or temperature limit, load cases, constraints, manufacturing criteria, and wiring or serviceability criteria.
+- Primitive or role, material, manufacturing process, and dimensions.
 - Weight or review-required mass.
-- Estimated cost range.
+- Estimated cost range or review-required cost.
 - Lead-time range where seeded.
-- Manufacturing process.
 - Related fasteners.
 - Related wires and electronics.
 - Stress or stiffness risk where seeded.
-- Heat or temperature guidance where seeded.
-- Replacement difficulty.
+- Review-required unknowns.
 - Source confidence and review status.
 
 ### 7. Modify the part
