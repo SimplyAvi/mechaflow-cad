@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from 'react';
 import {
   applyMaterialSubstitution,
   exportProjectFile,
@@ -140,12 +140,14 @@ function App() {
   const [substitutionMessage, setSubstitutionMessage] = useState<string | null>(null);
   const [substitutionPending, setSubstitutionPending] = useState(false);
   const [demoStepReviews, setDemoStepReviews] = useState<Set<string>>(() => new Set());
+  const projectLoadVersion = useRef(0);
 
   const markDemoStep = (stepId: string) => {
     setDemoStepReviews((current) => new Set(current).add(stepId));
   };
 
   const applyLoadedDesign = (loadedDesign: ReferenceDesign) => {
+    projectLoadVersion.current += 1;
     setSubstitutionPreview(null);
     setSubstitutionMessage(null);
     setSolverReadiness(null);
@@ -163,14 +165,15 @@ function App() {
     loadCockpitDesign().then((loadedDesign) => {
       if (!cancelled) {
         applyLoadedDesign(loadedDesign);
+        const loadedProjectVersion = projectLoadVersion.current;
         if (loadedDesign.backend.apiBaseUrl) {
           loadLocalSolverReadiness(loadedDesign.backend.apiBaseUrl)
             .then((readiness) => {
-              if (!cancelled) setSolverReadiness(readiness);
+              if (!cancelled && projectLoadVersion.current === loadedProjectVersion) setSolverReadiness(readiness);
             })
             .catch((error) => {
               console.warn('Local solver readiness endpoint is unavailable.', error);
-              if (!cancelled) setSolverReadiness(null);
+              if (!cancelled && projectLoadVersion.current === loadedProjectVersion) setSolverReadiness(null);
             });
         } else {
           setSolverReadiness(null);
@@ -415,9 +418,9 @@ function App() {
     || job.artifacts.length > 0
   )) || visibleDesign.reports.length > 0;
   const hasLocalAnalysisRun = design.analysisJobs.some((job) => (
-    job.worker === 'local-pre-solver-runner'
-    || job.worker === 'local-calculix-fixture-runner'
-    || job.id.startsWith('job-local-')
+    (job.worker === 'local-pre-solver-runner' || job.worker === 'local-calculix-fixture-runner')
+    && (job.status === 'complete' || job.status === 'solver-unavailable')
+    && (job.artifacts.length > 0 || job.cachedArtifactRefs.length > 0 || job.cachedReportRefs.length > 0)
   ));
   const hasExportOrImport = projectFileMessage != null && /Exported|Opened/.test(projectFileMessage);
   const demoGuideSteps: DemoGuideStep[] = [
