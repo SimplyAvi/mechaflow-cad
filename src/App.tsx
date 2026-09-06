@@ -131,6 +131,17 @@ type EvidenceArtifact = {
   confidence?: string;
   generated_by?: string;
   generatedBy?: string;
+  payload?: unknown;
+};
+
+const canonicalizeEvidence = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalizeEvidence);
+  if (value != null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, canonicalizeEvidence(item)]),
+    );
+  }
+  return value;
 };
 
 const evidenceArtifactSignature = (artifacts: EvidenceArtifact[]): string => JSON.stringify(
@@ -142,6 +153,7 @@ const evidenceArtifactSignature = (artifacts: EvidenceArtifact[]): string => JSO
       summary: artifact.summary ?? null,
       confidence: artifact.confidence ?? null,
       generatedBy: artifact.generated_by ?? artifact.generatedBy ?? null,
+      payload: canonicalizeEvidence(artifact.payload ?? null),
     }))
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
 );
@@ -826,11 +838,9 @@ function App() {
           selectedPart={selectedPart}
           solverReadiness={solverReadiness}
         />
-        <div onClick={() => setDownstreamReviewStarted(true)} style={{ display: 'contents' }}>
-          <BomPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
-          <ManufacturingPanel design={visibleDesign} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
-          <WiringPanel design={visibleDesign} selectedPart={selectedPart} />
-        </div>
+        <BomPanel design={visibleDesign} onInteract={() => setDownstreamReviewStarted(true)} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
+        <ManufacturingPanel design={visibleDesign} onInteract={() => setDownstreamReviewStarted(true)} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
+        <WiringPanel design={visibleDesign} onInteract={() => setDownstreamReviewStarted(true)} selectedPart={selectedPart} />
         <ReportPanel reports={visibleDesign.reports} selectedOption={substitutionPreview?.option ?? selectedOption} />
         <BackendContractPanel design={design} />
       </section>
@@ -1494,15 +1504,17 @@ function AnalysisPanel({
 
 function BomPanel({
   design,
+  onInteract,
   previewActive,
   total,
 }: {
   design: ReferenceDesign;
+  onInteract: () => void;
   previewActive: boolean;
   total: UsdRange | null;
 }) {
   return (
-    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="bom-panel">
+    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="bom-panel" onClick={onInteract}>
       <p className="eyebrow">BOM and cost {previewActive ? 'preview' : ''}</p>
       <h2>{total == null ? 'Cost review required' : `${formatUsdRange(total)} open estimate`}</h2>
       <p className="muted">
@@ -1529,16 +1541,18 @@ function BomPanel({
 
 function ManufacturingPanel({
   design,
+  onInteract,
   previewActive,
   selectedPartId,
 }: {
   design: ReferenceDesign;
+  onInteract: () => void;
   previewActive: boolean;
   selectedPartId: string;
 }) {
   const selectedPartName = design.assemblies.flatMap((assembly) => assembly.parts).find((part) => part.id === selectedPartId)?.name;
   return (
-    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="manufacturing-panel">
+    <article className={`panel ${previewActive ? 'preview-panel' : ''}`} id="manufacturing-panel" onClick={onInteract}>
       <p className="eyebrow">Manufacturing panel {previewActive ? 'preview' : ''}</p>
       <h2>Make or buy paths</h2>
       <p className="muted">
@@ -1649,7 +1663,7 @@ const wiringStatusCopy: Record<NonNullable<ReferenceDesign['wiringReview']>['sta
   review_required: 'Review required',
 };
 
-function WiringPanel({ design, selectedPart }: { design: ReferenceDesign; selectedPart: Part }) {
+function WiringPanel({ design, onInteract, selectedPart }: { design: ReferenceDesign; onInteract: () => void; selectedPart: Part }) {
   const relatedRoutes = design.wiringRoutes.filter((route) =>
     route.connectedParts.includes(selectedPart.id) || selectedPart.relatedWires.includes(route.id),
   );
@@ -1668,7 +1682,7 @@ function WiringPanel({ design, selectedPart }: { design: ReferenceDesign; select
   const selectedRoute = relatedRoutes[0] ?? design.wiringRoutes[0];
 
   return (
-    <article className="panel wiring-workflow-panel" id="wiring-panel" aria-label="Wiring and electronics workflow">
+    <article className="panel wiring-workflow-panel" id="wiring-panel" aria-label="Wiring and electronics workflow" onClick={onInteract}>
       <p className="eyebrow">Wiring and electronics</p>
       <h2>{design.wiringReview ? wiringStatusCopy[design.wiringReview.status] : 'Harness review required'}</h2>
       <p className="muted">
