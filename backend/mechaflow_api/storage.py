@@ -394,14 +394,23 @@ class InMemoryProjectStore:
             if conflict:
                 raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
-    @staticmethod
-    def _artifact_has_downloadable_file(artifact: AnalysisArtifact) -> bool:
+    def _artifact_has_downloadable_file(self, artifact: AnalysisArtifact) -> bool:
         if isinstance(artifact.payload.get("storage_bundle_id"), str):
             return True
         file_manifest = artifact.payload.get("file_manifest")
         if not isinstance(file_manifest, list):
             return False
-        return any(isinstance(item, dict) and isinstance(item.get("download_url"), str) for item in file_manifest)
+        produced_files = [
+            item
+            for item in file_manifest
+            if isinstance(item, dict)
+            and not item.get("missing")
+            and isinstance(item.get("name"), str)
+            and isinstance(item.get("download_url"), str)
+        ]
+        if self._artifact_file_exists is None:
+            return bool(produced_files)
+        return any(self._artifact_file_exists(artifact, item["name"]) for item in produced_files)
 
     def _ensure_artifact_ids_available(self, project_id: str, project: Project) -> None:
         incoming_artifacts = [artifact for job in project.analysis_jobs for artifact in job.artifacts]
