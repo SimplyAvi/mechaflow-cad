@@ -8,6 +8,7 @@ import {
   createWireRoute,
   deleteVisualPart,
   remapDesignFromProject,
+  updatePartGeometry,
   updateProjectUnits,
 } from './visualAuthoring';
 
@@ -101,5 +102,22 @@ describe('visual authoring project helpers', () => {
     expect(crossAssembly.partId).toBe('');
     expect(invalidAssembly.partId).toBe('');
     expect(invalidAssembly.project.assemblies).toHaveLength(second.project.assemblies.length);
+  });
+
+  it('preserves valid dimensions when geometry updates are nonpositive or nonfinite', () => {
+    const partId = mockReferenceDesign.assembly.parts[0]!.id;
+    const original = mockReferenceDesign.assembly.parts[0]!.dimensions;
+    const updated = updatePartGeometry(mockReferenceDesign.backendProject, partId, {
+      dimensions: {
+        lengthMm: 0,
+        widthMm: -1,
+        heightMm: Number.NaN,
+        diameterMm: Number.POSITIVE_INFINITY,
+        thicknessMm: Number.NEGATIVE_INFINITY,
+      },
+    });
+    const part = updated.assemblies[0]!.parts.find((candidate) => candidate.id === partId)!;
+
+    expect(part.dimensions).toEqual(original);
   });
 });

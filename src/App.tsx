@@ -1512,7 +1512,7 @@ function App() {
                       <span>{key}</span>
                       <input
                         aria-label={`${key} in ${design.units}`}
-                        min="0"
+                        min="0.001"
                         onChange={(event) => updateSelectedDimension(key as 'length' | 'width' | 'height', event.target.value)}
                         step="0.1"
                         type="number"

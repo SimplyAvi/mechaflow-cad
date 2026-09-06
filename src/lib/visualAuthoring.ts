@@ -43,6 +43,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => value != 
 
 const numberValue = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
 
+const positiveFiniteValue = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0;
+
 const visualMetadata = (project: BackendProject): Record<string, unknown> => {
   const metadata = isRecord(project.metadata) ? { ...project.metadata } : {};
   const visual = isRecord(metadata.visual_authoring) ? { ...metadata.visual_authoring } : {};
@@ -327,11 +329,11 @@ export const updatePartGeometry = (
     }
     const nextDimensions = { ...part.dimensions };
     if (updates.dimensions) {
-      if (updates.dimensions.lengthMm != null) nextDimensions.length_mm = updates.dimensions.lengthMm;
-      if (updates.dimensions.widthMm != null) nextDimensions.width_mm = updates.dimensions.widthMm;
-      if (updates.dimensions.heightMm != null) nextDimensions.height_mm = updates.dimensions.heightMm;
-      if (updates.dimensions.diameterMm != null) nextDimensions.diameter_mm = updates.dimensions.diameterMm;
-      if (updates.dimensions.thicknessMm != null) nextDimensions.thickness_mm = updates.dimensions.thicknessMm;
+      if (positiveFiniteValue(updates.dimensions.lengthMm)) nextDimensions.length_mm = updates.dimensions.lengthMm;
+      if (positiveFiniteValue(updates.dimensions.widthMm)) nextDimensions.width_mm = updates.dimensions.widthMm;
+      if (positiveFiniteValue(updates.dimensions.heightMm)) nextDimensions.height_mm = updates.dimensions.heightMm;
+      if (positiveFiniteValue(updates.dimensions.diameterMm)) nextDimensions.diameter_mm = updates.dimensions.diameterMm;
+      if (positiveFiniteValue(updates.dimensions.thicknessMm)) nextDimensions.thickness_mm = updates.dimensions.thicknessMm;
     }
     const metadata = { ...(isRecord(part.metadata) ? part.metadata : {}) };
     if (updates.manufacturingProcess) metadata.preferred_manufacturing_process = updates.manufacturingProcess;
