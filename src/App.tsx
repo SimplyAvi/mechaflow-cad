@@ -188,13 +188,21 @@ function App() {
   const [substitutionMessage, setSubstitutionMessage] = useState<string | null>(null);
   const [substitutionPending, setSubstitutionPending] = useState(false);
   const [demoStepReviews, setDemoStepReviews] = useState<Set<string>>(() => new Set());
-  const [downstreamReviewStarted, setDownstreamReviewStarted] = useState(false);
+  const [downstreamPanelsReviewed, setDownstreamPanelsReviewed] = useState({
+    bom: false,
+    manufacturing: false,
+    wiring: false,
+  });
   const [exportedEvidence, setExportedEvidence] = useState<ExportedEvidenceSignature | null>(null);
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
 
   const markDemoStep = (stepId: string) => {
     setDemoStepReviews((current) => new Set(current).add(stepId));
+  };
+
+  const markDownstreamPanelReviewed = (panel: 'bom' | 'manufacturing' | 'wiring') => {
+    setDownstreamPanelsReviewed((current) => ({ ...current, [panel]: true }));
   };
 
   const applyLoadedDesign = (loadedDesign: ReferenceDesign) => {
@@ -205,7 +213,7 @@ function App() {
     setAnalysisRunMessage(null);
     setSubstitutionPending(false);
     setAnalysisRunPending(false);
-    setDownstreamReviewStarted(false);
+    setDownstreamPanelsReviewed({ bom: false, manufacturing: false, wiring: false });
     setDemoStepReviews(new Set());
     setDesign(loadedDesign);
     setSelectedAssemblyId(loadedDesign.assembly.id);
@@ -553,20 +561,23 @@ function App() {
         : 'One or more downstream workflow panels need seed or backend data before the captain demo is complete.',
       anchor: '#bom-panel',
       actionLabel: 'Open downstream panels',
-      canMarkReviewed: hasBomManufacturingWiring && downstreamReviewStarted,
+      canMarkReviewed: hasBomManufacturingWiring
+        && downstreamPanelsReviewed.bom
+        && downstreamPanelsReviewed.manufacturing
+        && downstreamPanelsReviewed.wiring,
     },
     {
       id: 'solver-readiness',
       label: 'Check solver readiness',
       status: demoStepReviews.has('solver-readiness')
         ? 'complete'
-        : solverReadiness ? 'available' : 'review',
+        : solverReadiness?.status === 'ready_to_execute_fixture' ? 'available' : 'review',
       summary: solverReadiness
         ? `${solverReadiness.summary} Full project FEA remains review-required unless a real solver result is present.`
         : 'Selected part readiness is visible, but local solver tool detection needs a connected backend.',
       anchor: '#analysis-queue',
       actionLabel: 'Open analysis queue',
-      canMarkReviewed: true,
+      canMarkReviewed: solverReadiness?.status === 'ready_to_execute_fixture',
     },
     {
       id: 'local-analysis',
@@ -838,9 +849,9 @@ function App() {
           selectedPart={selectedPart}
           solverReadiness={solverReadiness}
         />
-        <BomPanel design={visibleDesign} onInteract={() => setDownstreamReviewStarted(true)} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
-        <ManufacturingPanel design={visibleDesign} onInteract={() => setDownstreamReviewStarted(true)} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
-        <WiringPanel design={visibleDesign} onInteract={() => setDownstreamReviewStarted(true)} selectedPart={selectedPart} />
+        <BomPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('bom')} previewActive={Boolean(substitutionPreview)} total={visibleBomTotal} />
+        <ManufacturingPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('manufacturing')} previewActive={Boolean(substitutionPreview)} selectedPartId={selectedPart.id} />
+        <WiringPanel design={visibleDesign} onInteract={() => markDownstreamPanelReviewed('wiring')} selectedPart={selectedPart} />
         <ReportPanel reports={visibleDesign.reports} selectedOption={substitutionPreview?.option ?? selectedOption} />
         <BackendContractPanel design={design} />
       </section>
