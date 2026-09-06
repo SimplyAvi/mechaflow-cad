@@ -351,6 +351,7 @@ function App() {
     setAnalysisRunPending(false);
     setDownstreamPanelsReviewed({ bom: false, manufacturing: false, wiring: false });
     setDemoStepReviews(new Set());
+    setExportedEvidence(null);
     setDesign(loadedDesign);
     setSelectedAssemblyId(loadedDesign.assembly.id);
     setSelectedPartId(loadedDesign.assembly.parts[0]?.id ?? '');
@@ -467,8 +468,11 @@ function App() {
         endpoint: 'local prompt concept, proxy geometry reused from bundled mock data',
         advisoryNotice: 'This project was started from typed design intent. The viewport is an interactive concept proxy until real CAD generation, reconstruction, and FEA workers are connected.',
       },
+      analysisJobs: [],
+      reports: [],
+      wiringReview: null,
     };
-    setDesign(nextDesign);
+    applyLoadedDesign(nextDesign);
     rememberRecentProject(nextDesign, trimmedIntent, referenceImages);
     setWorkspaceMode('design');
     setSubstitutionPreview(null);
@@ -588,6 +592,7 @@ function App() {
       if (projectLoadVersion.current !== requestVersion) return;
       if (result.persisted) {
         setDesign(result.design);
+        rememberRecentProject(result.design, intentText, referenceImages);
         setSubstitutionPreview(null);
         setSelectedOptionId('');
         setSubstitutionMessage('Applied substitution to the backend project. BOM, manufacturing, readiness, and reports were reloaded from persisted state.');
@@ -623,10 +628,12 @@ function App() {
         selectedPart.id,
       );
       if (projectLoadVersion.current !== requestVersion) return;
-      setDesign((current) => current && {
-        ...current,
-        analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
-      });
+      const nextDesign = {
+        ...design,
+        analysisJobs: [job, ...design.analysisJobs.filter((candidate) => candidate.id !== job.id)],
+      };
+      setDesign(nextDesign);
+      rememberRecentProject(nextDesign, intentText, referenceImages);
       setAnalysisRunMessage('Local pre-solver job completed. Artifact is review-required and not FEA.');
       if (isSuccessfulLocalAnalysisJob(job)) markDemoStep('local-analysis');
     } catch (error) {
@@ -654,10 +661,12 @@ function App() {
         selectedPart.id,
       );
       if (projectLoadVersion.current !== requestVersion) return;
-      setDesign((current) => current && {
-        ...current,
-        analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
-      });
+      const nextDesign = {
+        ...design,
+        analysisJobs: [job, ...design.analysisJobs.filter((candidate) => candidate.id !== job.id)],
+      };
+      setDesign(nextDesign);
+      rememberRecentProject(nextDesign, intentText, referenceImages);
       const refreshed = await loadLocalSolverReadiness(design.backend.apiBaseUrl);
       if (projectLoadVersion.current !== requestVersion) return;
       setSolverReadiness(refreshed);
@@ -750,7 +759,9 @@ function App() {
         && exportedEvidence.artifactIds.every((artifactId) => importedArtifactIds.has(artifactId))
         && exportedEvidence.artifactContent === evidenceArtifactSignature(importedArtifacts);
       applyLoadedDesign(importedDesign);
-      rememberRecentProject(importedDesign, intentText, referenceImages);
+      setIntentText('');
+      setReferenceImages([]);
+      rememberRecentProject(importedDesign, '', []);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
       if (roundTripVerified) markDemoStep('export-import');
       const importedProjectVersion = projectLoadVersion.current;

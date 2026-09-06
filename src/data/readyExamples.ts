@@ -54,6 +54,9 @@ export const buildReadyExampleDesign = (baseDesign: ReferenceDesign, exampleId: 
         endpoint: 'local concept seed, proxy geometry reused from bundled mock data',
         advisoryNotice: 'Compact gantry is a repository-local concept seed. The viewport is a proxy rendering until real CAD import or generation workers exist.',
       },
+      analysisJobs: [],
+      reports: [],
+      wiringReview: null,
     };
   }
 
@@ -73,5 +76,8 @@ export const buildReadyExampleDesign = (baseDesign: ReferenceDesign, exampleId: 
       endpoint: 'local concept seed, proxy geometry reused from bundled mock data',
       advisoryNotice: `${design.backend.advisoryNotice} Ready example uses repository-local seed data and does not import external CAD assets.`,
     },
+    analysisJobs: [],
+    reports: [],
+    wiringReview: null,
   };
 };
