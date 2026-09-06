@@ -29,7 +29,7 @@ It includes mocked orchestration data for:
 1. Launch the app and start in the 3D workspace. Orbit, explode, or click a part before opening any advanced panel.
 2. Type into `Describe what you want to design...`. The command line extracts chips for payload, reach, cycle time, material cues, constraints, and restrictions when it can. Click `Start design` to create a local prompt concept. The current viewport remains a proxy rendering until real CAD generation exists.
 3. Add reference photos or images with upload or drag/drop. Images are treated as local reference metadata only in this slice. The UI does not claim photo-to-CAD reconstruction, FEA, supplier quotes, or electrical validation.
-4. Use the left sidebar to open an existing `.mfcad.json` project through the local desktop mock or backend, reopen the recent project, or load one of the repository-local ready examples.
+4. Use the left sidebar to open an existing `.mfcad.json` project through the offline client path, local desktop mock, or backend, reopen the recent project, or load one of the repository-local ready examples.
 5. Stay in Design mode for model tree, part selection, and contextual part tools. Switch to Analysis for solver readiness and job queue, Manufacturing for BOM, make or buy paths, wiring and electronics, Reports for advisory reports and project import/export, and Backend for API handoff details.
 6. Ready examples in this slice are repository-local MIT seed data. No external CAD assets were imported, so no third-party attribution is required beyond the local seed notes.
 
@@ -203,7 +203,7 @@ GET /api/local-analysis/solver-readiness
 POST /api/projects/{project_id}/analysis-jobs/solver-readiness-runs
 ```
 
-The project file controls in the reference panel download and read `.mfcad.json` files in the browser or Electron shell. The JSON format is documented in [Project files](project-files.md). Unsupported or malformed files stay in the current project and show an understandable import error.
+The project file controls in Reports mode download and read `.mfcad.json` files in the browser or Electron shell. Local imports also work without a configured backend; backend imports use the configured API when available. The JSON format is documented in [Project files](project-files.md). Unsupported or malformed files stay in the current project and show an understandable import error.
 
 Readiness responses are not FEA results. The local pre-solver run packages explicit worker inputs, computes only a demo-safe nominal screening estimate when possible, and lists FreeCAD, Gmsh, and CalculiX command availability. Missing solver binaries appear as `unavailable_review_required`; available binaries are still not invoked by this runner. The separate solver-readiness fixture can invoke CalculiX for a deterministic generated deck when `ccx` is installed, but that output is labeled as a fixture result, not project FEA. Cloud recommendations in the queue are planning-only and disabled until a provider, credentials, budget policy, and explicit approval are configured by a future slice.
 
