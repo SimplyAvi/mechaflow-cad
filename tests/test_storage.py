@@ -45,7 +45,7 @@ def test_in_memory_project_store_upsert_uses_path_id() -> None:
     assert store.get_project("server-path-id") is not None
 
 
-def test_project_store_rejects_duplicate_artifact_ids_across_projects() -> None:
+def test_project_store_allows_metadata_artifact_ids_but_protects_downloadable_ids() -> None:
     sample = build_sample_project()
     store = InMemoryProjectStore(seed_projects=[sample])
     metadata_clone = sample.model_copy(deep=True)
@@ -53,8 +53,11 @@ def test_project_store_rejects_duplicate_artifact_ids_across_projects() -> None:
     for job in metadata_clone.analysis_jobs:
         job.id = f"{job.id}-metadata-clone"
 
-    with pytest.raises(ValueError, match="analysis artifact ID already belongs to another project"):
-        store.create_project(metadata_clone)
+    stored = store.create_project(metadata_clone)
+
+    assert stored.id == "project-metadata-clone"
+    assert stored.analysis_jobs[0].artifacts[0].id == sample.analysis_jobs[0].artifacts[0].id
+    assert store.get_analysis_artifact(sample.analysis_jobs[0].artifacts[0].id) is None
 
     downloadable_sample = build_sample_project()
     downloadable_sample.analysis_jobs[0].artifacts[0].payload = {

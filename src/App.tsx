@@ -442,7 +442,7 @@ function App() {
   const hasLocalAnalysisRun = design.analysisJobs.some((job) => (
     (job.worker === 'local-pre-solver-runner' || job.worker === 'local-calculix-fixture-runner')
     && (job.status === 'complete' || job.status === 'solver-unavailable')
-    && (job.artifacts.length > 0 || job.cachedArtifactRefs.length > 0 || job.cachedReportRefs.length > 0)
+    && (job.artifacts.length > 0 || job.cachedArtifactRefs.length > 0)
   ));
   const hasExportOrImport = projectFileMessage != null && /Exported|Opened/.test(projectFileMessage);
   const demoGuideSteps: DemoGuideStep[] = [
