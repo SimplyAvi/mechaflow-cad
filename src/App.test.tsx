@@ -27,6 +27,9 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/Selected-part properties and context tools/i)).toHaveTextContent(/Context inspector/i);
     expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('50 lb payload, 8 s cycle, 0.65 m reach');
     expect(screen.getByText(/Reference only. No photo-to-CAD reconstruction/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Canvas CAD tool palette/i)).toHaveTextContent(/Tool plate/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Selected actual part/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Task criteria and thresholds/i);
     expect(screen.getByLabelText(/Visual CAD primitive palette/i)).toHaveTextContent(/Motor/i);
     expect(screen.getByLabelText(/Selected geometry inspector/i)).toHaveTextContent(/Rotation Z/i);
     expect(screen.getByLabelText(/Assembly and wiring authoring/i)).toHaveTextContent(/Route visible wire/i);
@@ -45,9 +48,16 @@ describe('MechaFlow input-first cockpit', () => {
     await user.selectOptions(screen.getByLabelText(/Project authoring units/i), 'in');
     expect(await screen.findByText(/Project units changed to inches/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /^Motor$/i }));
+    await user.click(within(screen.getByLabelText(/Visual CAD primitive palette/i)).getByRole('button', { name: /^Motor$/i }));
     expect(await screen.findByText(/Created motor block primitive/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Selected geometry inspector/i)).toHaveTextContent(/motor block/i);
+
+    const labelInput = screen.getByLabelText(/Selected part label/i);
+    await user.clear(labelInput);
+    await user.type(labelInput, 'Wrist motor layout proxy');
+    await user.tab();
+    expect(await screen.findByText(/label changed to Wrist motor layout proxy/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Wrist motor layout proxy/i);
 
     const lengthInput = screen.getByLabelText(/length in in/i);
     await user.clear(lengthInput);
@@ -62,7 +72,7 @@ describe('MechaFlow input-first cockpit', () => {
     await user.selectOptions(screen.getByLabelText(/Wire route target part/i), 'part-palm-plate');
     await user.click(screen.getByRole('button', { name: /Route visible wire/i }));
     expect(await screen.findByText(/Created visible wire route/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Visible wire routes/i)).toHaveTextContent(/Motor block/i);
+    expect(screen.getByLabelText(/Visible wire routes/i)).toHaveTextContent(/Wrist motor layout proxy/i);
   });
 
   it('captures typed design intent into structured chips and starts a prompt concept honestly', async () => {
@@ -181,6 +191,11 @@ describe('MechaFlow input-first cockpit', () => {
     const user = userEvent.setup();
 
     render(<App />);
+
+    await user.click(await screen.findByRole('button', { name: /Select Upper arm link geometry/i }));
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Upper arm link/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Why this material or process is here/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Payload: 50 lb preserved task/i);
 
     const partTree = await screen.findByText('Selectable parts');
     const treeContainer = partTree.closest('.part-tree');

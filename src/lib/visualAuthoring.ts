@@ -310,6 +310,7 @@ export const updatePartGeometry = (
     rotationZDeg?: number;
     materialId?: string;
     manufacturingProcess?: string;
+    label?: string;
   },
 ): BackendProject => {
   const next = cloneProject(project);
@@ -337,8 +338,12 @@ export const updatePartGeometry = (
     }
     const metadata = { ...(isRecord(part.metadata) ? part.metadata : {}) };
     if (updates.manufacturingProcess) metadata.preferred_manufacturing_process = updates.manufacturingProcess;
+    const nextName = typeof updates.label === 'string' && updates.label.trim() !== ''
+      ? updates.label.trim()
+      : part.name;
     return {
       ...part,
+      name: nextName,
       material_id: updates.materialId ?? part.material_id,
       dimensions: nextDimensions,
       mass_kg: updates.dimensions || updates.materialId ? null : part.mass_kg,

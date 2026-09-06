@@ -172,6 +172,73 @@ function boxFaces(part: Part, explodePercent: number, project: (point: Point3D) 
   ];
 }
 
+const boundsForPoints = (points: ProjectedPoint[]) => {
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+    centerX: xs.reduce((sum, value) => sum + value, 0) / points.length,
+    centerY: ys.reduce((sum, value) => sum + value, 0) / points.length,
+  };
+};
+
+function PrimitiveSurfaceDetails({ part, faces }: { part: Part; faces: BoxFace[] }) {
+  const topBounds = boundsForPoints(faces[0]?.points ?? []);
+  const width = Math.max(14, topBounds.maxX - topBounds.minX);
+  const height = Math.max(10, topBounds.maxY - topBounds.minY);
+  if (part.authoring.primitive === 'bracket') {
+    return (
+      <g className="primitive-surface-details bracket-details" aria-hidden="true">
+        <circle cx={topBounds.centerX - width * 0.22} cy={topBounds.centerY} r="5" />
+        <circle cx={topBounds.centerX + width * 0.22} cy={topBounds.centerY} r="5" />
+        <line x1={topBounds.centerX} y1={topBounds.centerY - height * 0.35} x2={topBounds.centerX} y2={topBounds.centerY + height * 0.35} />
+      </g>
+    );
+  }
+  if (part.authoring.primitive === 'motor_block') {
+    return (
+      <g className="primitive-surface-details motor-details" aria-hidden="true">
+        <circle cx={topBounds.centerX} cy={topBounds.centerY} r={Math.max(7, Math.min(width, height) * 0.32)} />
+        <line x1={topBounds.centerX - width * 0.28} y1={topBounds.centerY} x2={topBounds.centerX + width * 0.28} y2={topBounds.centerY} />
+      </g>
+    );
+  }
+  if (part.authoring.primitive === 'connector') {
+    return (
+      <g className="primitive-surface-details connector-details" aria-hidden="true">
+        {[-0.24, 0, 0.24].map((offset) => <circle key={offset} cx={topBounds.centerX + width * offset} cy={topBounds.centerY} r="3.6" />)}
+      </g>
+    );
+  }
+  if (part.authoring.primitive === 'electronics') {
+    return (
+      <g className="primitive-surface-details electronics-details" aria-hidden="true">
+        <rect x={topBounds.centerX - width * 0.22} y={topBounds.centerY - height * 0.2} width={width * 0.44} height={height * 0.4} rx="3" />
+        {[-0.34, -0.22, 0.22, 0.34].map((offset) => <circle key={offset} cx={topBounds.centerX + width * offset} cy={topBounds.centerY + height * 0.35} r="2.6" />)}
+      </g>
+    );
+  }
+  if (part.authoring.primitive === 'tool') {
+    return (
+      <g className="primitive-surface-details tool-details" aria-hidden="true">
+        <path d={`M ${topBounds.centerX - width * 0.24} ${topBounds.centerY - height * 0.25} L ${topBounds.centerX + width * 0.28} ${topBounds.centerY} L ${topBounds.centerX - width * 0.24} ${topBounds.centerY + height * 0.25} Z`} />
+      </g>
+    );
+  }
+  if (part.authoring.primitive === 'base_plate' || part.authoring.primitive === 'beam') {
+    return (
+      <g className="primitive-surface-details fastener-details" aria-hidden="true">
+        <circle cx={topBounds.minX + width * 0.18} cy={topBounds.minY + height * 0.3} r="3.6" />
+        <circle cx={topBounds.maxX - width * 0.18} cy={topBounds.maxY - height * 0.3} r="3.6" />
+      </g>
+    );
+  }
+  return null;
+}
+
 function VisualBox({ part, selected, explodePercent, project, onSelect }: {
   part: Part;
   selected: boolean;
@@ -189,7 +256,7 @@ function VisualBox({ part, selected, explodePercent, project, onSelect }: {
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-${part.authoring.primitive} ${selected ? 'selected' : ''}`}
+      className={`cad-primitive primitive-${part.authoring.primitive} risk-${part.stressRisk} ${selected ? 'selected' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -197,12 +264,17 @@ function VisualBox({ part, selected, explodePercent, project, onSelect }: {
           onSelect();
         }
       }}
+      onPointerDown={(event) => event.stopPropagation()}
       role="button"
       style={style}
       tabIndex={0}
     >
+      <title>{`${part.name}: ${part.purpose}`}</title>
       {faces.map((face) => <polygon className={face.className} key={face.className} points={pointString(face.points)} />)}
+      <PrimitiveSurfaceDetails faces={faces} part={part} />
+      {selected ? <circle className="selected-part-pulse" cx={labelPoint.x} cy={labelPoint.y - 22} r="18" /> : null}
       <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text>
+      {selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
     </g>
   );
 }
@@ -231,7 +303,7 @@ function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-cylinder_joint ${selected ? 'selected' : ''}`}
+      className={`cad-primitive primitive-cylinder_joint risk-${part.stressRisk} ${selected ? 'selected' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -239,15 +311,19 @@ function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
           onSelect();
         }
       }}
+      onPointerDown={(event) => event.stopPropagation()}
       role="button"
       style={style}
       tabIndex={0}
     >
+      <title>{`${part.name}: ${part.purpose}`}</title>
       <path className="cylinder-wall" d={`M ${top.x - rx} ${top.y} L ${bottom.x - rx} ${bottom.y} Q ${bottom.x} ${bottom.y + ry} ${bottom.x + rx} ${bottom.y} L ${top.x + rx} ${top.y}`} />
       <ellipse className="face-side" cx={bottom.x} cy={bottom.y} rx={rx} ry={ry} />
       <ellipse className="face-top" cx={top.x} cy={top.y} rx={rx} ry={ry} />
       <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />
+      {selected ? <circle className="selected-part-pulse" cx={top.x} cy={top.y} r={Math.max(18, rx * 0.72)} /> : null}
       <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text>
+      {selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
     </g>
   );
 }
@@ -314,7 +390,7 @@ export function VisualCadWorkspace({
     if (event.button !== 0) return;
     const mode = event.shiftKey ? 'pan' : 'orbit';
     dragRef.current = { x: event.clientX, y: event.clientY, view, mode };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
     if (!dragRef.current) return;
@@ -332,7 +408,9 @@ export function VisualCadWorkspace({
   };
   const onPointerUp = (event: PointerEvent<SVGSVGElement>) => {
     dragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
   };
   const onWheel = (event: WheelEvent<SVGSVGElement>) => {
     event.preventDefault();
