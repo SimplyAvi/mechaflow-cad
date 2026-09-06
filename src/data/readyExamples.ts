@@ -1,4 +1,5 @@
 import readyExampleSeed from '../../data/ready-examples.seed.json';
+import { mockReferenceDesign } from './mockDesign';
 import type { AnalysisReadinessPreview, ReferenceDesign } from '../types';
 
 export type ReadyExampleId = 'robot-arm-gripper' | 'compact-gantry-concept';
@@ -61,7 +62,7 @@ export const isolateOfflineDesign = (design: ReferenceDesign, projectId: string)
 };
 
 export const buildReadyExampleDesign = (baseDesign: ReferenceDesign, exampleId: ReadyExampleId): ReferenceDesign => {
-  const design = cloneDesign(baseDesign);
+  const design = cloneDesign(mockReferenceDesign);
   if (exampleId === 'compact-gantry-concept') {
     const localBackend = { ...design.backend };
     delete localBackend.apiBaseUrl;

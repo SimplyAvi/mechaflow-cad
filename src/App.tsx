@@ -3,6 +3,7 @@ import {
   applyMaterialSubstitution,
   exportProjectFile,
   importProjectFile,
+  importLocalProjectFile,
   loadCockpitDesign,
   loadLocalSolverReadiness,
   previewMaterialSubstitution,
@@ -737,10 +738,8 @@ function App() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!design?.backend.apiBaseUrl) {
-      setProjectFileMessage('Start the desktop demo with a local backend or mock API to import a project file.');
-      return;
-    }
+    const currentDesign = design;
+    if (!currentDesign) return;
     const requestVersion = importRequestVersion.current + 1;
     importRequestVersion.current = requestVersion;
     setProjectFilePending(true);
@@ -748,7 +747,9 @@ function App() {
     try {
       const text = await file.text();
       const projectFile = JSON.parse(text) as unknown;
-      const importedDesign = await importProjectFile(design.backend.apiBaseUrl, projectFile);
+      const importedDesign = currentDesign.backend.apiBaseUrl
+        ? await importProjectFile(currentDesign.backend.apiBaseUrl, projectFile)
+        : importLocalProjectFile(projectFile);
       if (importRequestVersion.current !== requestVersion) return;
       const importedJobIds = new Set(importedDesign.analysisJobs.map((job) => job.id));
       const importedArtifacts = importedDesign.analysisJobs.flatMap((job) => job.artifacts);
@@ -993,13 +994,13 @@ function App() {
               <span>New from prompt</span>
               <small>Uses the command line below and keeps the first render as a proxy concept.</small>
             </button>
-            <label className={`open-project-button ${!design.backend.apiBaseUrl || projectFilePending ? 'disabled' : ''}`}>
+            <label className={`open-project-button ${projectFilePending ? 'disabled' : ''}`}>
               <span>Open local project</span>
-              <small>{design.backend.apiBaseUrl ? '.mfcad JSON through the local API' : 'Start the desktop mock API for validated import'}</small>
+              <small>{design.backend.apiBaseUrl ? '.mfcad JSON through the local API' : '.mfcad JSON opens locally in this browser'}</small>
               <input
                 accept=".mfcad.json,application/json"
                 aria-label="Open existing MechaFlow project file"
-                disabled={!design.backend.apiBaseUrl || projectFilePending}
+                disabled={projectFilePending}
                 onChange={importCurrentProjectFile}
                 type="file"
               />
