@@ -233,7 +233,7 @@ The current repository provides:
 
 - Root README and planning docs as the onboarding map.
 - FastAPI backend contracts and in-memory local store.
-- React cockpit with input-first 3D workspace and contextual mode surfaces.
+- React cockpit with a visual-authoring 3D workspace and contextual mode surfaces.
 - Node mock API and Electron desktop path.
 - Seed reference, project, materials, manufacturing, wiring, integration, and ready-example data.
 - Portable `.mfcad.json` project file import/export.

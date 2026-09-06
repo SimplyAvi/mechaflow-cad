@@ -84,7 +84,7 @@ Use [Technical architecture](docs/technical-architecture.md) as the architectura
 Read these before scoping significant work:
 
 1. [Product requirements](docs/product-requirements.md) - mission, business rules, MVP requirements, deliverables, non-goals, and acceptance criteria.
-2. [User experience](docs/user-experience.md) - input-first cockpit direction, target workflows, interaction style, and honest analysis copy.
+2. [User experience](docs/user-experience.md) - visual-authoring cockpit direction, target workflows, interaction style, and honest analysis copy.
 3. [Technical architecture](docs/technical-architecture.md) - current code architecture, target worker architecture, contracts, data model, and boundaries.
 4. [MVP roadmap](docs/mvp-roadmap.md) - what is complete, what is only a safe MVP boundary, and what future milestones require.
 5. [Backend development](docs/backend.md), [Frontend development](docs/frontend.md), and [Desktop demo](docs/desktop.md) - implementation details and local workflows.

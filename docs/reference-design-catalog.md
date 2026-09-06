@@ -55,7 +55,7 @@ The seed catalog includes only metadata and source links. It does not vendor any
 
 ## Ready-example follow-up candidates
 
-The input-first opening flow currently uses only repository-local MIT seed data in `data/ready-examples.seed.json`; no internet-sourced CAD, mesh, or photo asset is included. Future external ready examples should go through the license checklist before any asset import. Candidate upstreams found during this slice:
+The visual-authoring opening flow currently uses only repository-local MIT seed data in `data/ready-examples.seed.json`; no internet-sourced CAD, mesh, or photo asset is included. Future external ready examples should go through the license checklist before any asset import. Candidate upstreams found during this slice:
 
 - BCN3D Moveo: https://github.com/BCN3D/BCN3D-Moveo. The repository exposes CAD files, STL files, BOM, firmware, and a license file. It still needs per-file CAD license confirmation and attribution review before import.
 - Thor robot arm: https://github.com/AngelLM/Thor. The repository exposes FreeCAD, STEP, and STL folders and states CC BY-SA 4.0 licensing in the README. Its reciprocal attribution and share-alike requirements need product review before import.

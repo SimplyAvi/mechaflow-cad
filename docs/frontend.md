@@ -28,7 +28,7 @@ It includes mocked orchestration data for:
 - Surfacing a wiring/electronics workflow with route summaries, connector details, linked electronics, wire segments, harness BOM additions, heuristic clearance and bend-radius evidence, and a simple route diagram.
 - Mirroring the backend project, panel-data, wiring review, modification preview, report, catalog, and metadata contracts.
 
-## Input-first user flow
+## Visual-authoring user flow
 
 1. Launch the app and start in the visual CAD workspace. Orbit, pan, zoom, explode, or click a part before opening any advanced panel.
 2. Choose working units in Design mode. Values are displayed in the selected units while project JSON stores millimeter geometry for backend consistency.
