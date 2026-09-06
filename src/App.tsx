@@ -249,12 +249,10 @@ function App() {
         setSelectedOptionId('');
         setSubstitutionMessage('Applied substitution to the backend project. BOM, manufacturing, readiness, and reports were reloaded from persisted state.');
         markDemoStep('material-substitution');
-        markDemoStep('bom-wiring-manufacturing');
       } else {
         setSubstitutionPreview(result);
         setSubstitutionMessage('Preview only: BOM, manufacturing, readiness, and reports below show projected effects. Project is unchanged until Apply is clicked.');
         markDemoStep('material-substitution');
-        markDemoStep('bom-wiring-manufacturing');
       }
     } catch (error) {
       console.warn('Material substitution failed.', error);
