@@ -137,6 +137,15 @@ try {
   assert.ok(exported.project.analysis_jobs.length >= fixture.project.analysis_jobs.length + 2, 'export should retain new local jobs');
   assert.ok(JSON.stringify(exported).includes('not FEA'), 'exported evidence must preserve honest analysis labels');
 
+  const roundTripImport = await fetchJson('/api/projects/import-file', {
+    body: JSON.stringify(exported),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+  });
+  assert.equal(roundTripImport.status, 'imported');
+  assert.equal(roundTripImport.project.id, exported.project.id, 'round-trip import must preserve project identity');
+  assert.ok(roundTripImport.project.analysis_jobs.some((job) => job.artifacts.some((artifact) => /not FEA/i.test(artifact.title))), 'round-trip import must preserve analysis evidence');
+
   console.log('Captain demo smoke passed: desktop launch, fixture import, material preview, local-safe jobs, solver-unavailable state, and export round trip are verified.');
 } finally {
   await stopApi();

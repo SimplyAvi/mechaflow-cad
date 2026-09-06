@@ -395,8 +395,6 @@ class InMemoryProjectStore:
                 raise AnalysisJobAlreadyExistsError(next(iter(conflict)))
 
     def _artifact_has_downloadable_file(self, artifact: AnalysisArtifact) -> bool:
-        if isinstance(artifact.payload.get("storage_bundle_id"), str):
-            return True
         file_manifest = artifact.payload.get("file_manifest")
         if not isinstance(file_manifest, list):
             return False
