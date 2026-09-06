@@ -210,6 +210,7 @@ describe('loadCockpitDesign', () => {
         trust_label: 'demo_pre_solver_not_fea',
       },
       artifacts: [{
+        id: 'artifact-local-presolver',
         kind: 'fea_summary',
         title: 'Local pre-solver screening package, not FEA',
         summary: 'No FreeCAD geometry prep, Gmsh mesh, or CalculiX solve was run.',
@@ -264,6 +265,7 @@ describe('loadCockpitDesign', () => {
         trust_label: 'pre_solver_input',
       },
       artifacts: [{
+        id: 'artifact-local-fixture',
         kind: 'fea_summary',
         title: 'CalculiX solver fixture prepared, solver unavailable',
         payload: { file_manifest: [{ name: 'mechaflow_static_fixture.inp' }] },

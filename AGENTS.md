@@ -2,9 +2,9 @@
 
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
-- Backend setup, configurable local ports, project file import/export, wiring/electronics review, integration stubs, local solver-readiness execution boundaries, and test commands are documented in `docs/backend.md`, `docs/project-files.md`, `docs/wiring-electronics.md`, and `docs/local-solver-execution.md`.
-- Run backend validation with `pytest` after installing `.[dev]` dependencies in a virtual environment.
-- Frontend setup, configurable ports, local mock backend, desktop demo launch, the captain demo script, and smoke test commands are documented in `docs/frontend.md` and `docs/desktop.md`.
+- Backend setup, configurable local ports, project file import/export, wiring/electronics review, integration stubs, local solver-readiness execution boundaries, and test commands are documented in `docs/backend.md`, `docs/project-files.md`, `docs/wiring-electronics.md`, `docs/local-solver-execution.md`, and `docs/validation.md`.
+- Run validation using the local and CI command policy in `docs/validation.md` after installing `.[dev]` and npm dependencies.
+- Frontend setup, configurable ports, local mock backend, desktop demo launch, the captain demo script, and smoke test commands are documented in `docs/frontend.md`, `docs/desktop.md`, and `docs/validation.md`.
 - Seed catalog, integration contracts, and handoff projections are documented in `docs/reference-design-catalog.md`, `docs/integrations/README.md`, `docs/dependency-license-verification.md`, `data/integration-adapters.seed.json`, and `data/backend-frontend-handoff.seed.json`.
 - Validate catalog changes with `python3 scripts/validate_catalog.py`; run `python3 -m unittest discover -s tests -p 'test_seed_data_validation.py'` and the local frontend plus backend smoke path with `PYTHONPATH=src python3 tests/smoke_test.py` (Node.js is needed for the browser-like frontend proof). Run `npm run captain:smoke` for the desktop captain demo import/export and local-safe analysis flow using `data/captain-demo-project.mfcad.json`.
 

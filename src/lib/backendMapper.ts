@@ -659,6 +659,9 @@ const mapMaterialOptions = (
 export const mapBackendAnalysisJob = (job: BackendAnalysisJob): AnalysisJob => {
   const status = jobStatus(job.status);
   const progress = job.result_summary.progress;
+  const artifacts = job.artifacts.filter(
+    (artifact): artifact is typeof artifact & { id: string } => typeof artifact.id === 'string' && artifact.id.trim().length > 0,
+  );
   return {
     id: job.id,
     name: toTitle(job.job_type),
@@ -670,8 +673,8 @@ export const mapBackendAnalysisJob = (job: BackendAnalysisJob): AnalysisJob => {
       typeof job.result_summary.message === 'string'
         ? job.result_summary.message
         : `Adapter ${job.adapter_name} is reserved for ${toTitle(job.job_type)} handoff.`,
-    expectedArtifact: job.artifacts.at(-1)?.kind ?? job.artifacts[0]?.kind ?? undefined,
-    artifacts: job.artifacts.map((artifact) => ({
+    expectedArtifact: artifacts.at(-1)?.kind ?? artifacts[0]?.kind ?? undefined,
+    artifacts: artifacts.map((artifact) => ({
       id: artifact.id,
       kind: artifact.kind,
       title: artifact.title,

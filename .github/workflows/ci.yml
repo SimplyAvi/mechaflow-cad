@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-validation:
+    name: Python, catalog, and local app smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Set up Node.js for smoke proof
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+
+      - name: Install Node.js dependencies for browser-like smoke proof
+        run: npm ci
+
+      - name: Run Python test suite
+        run: pytest
+
+      - name: Validate catalog and seed data
+        run: |
+          python scripts/validate_catalog.py
+          python -m unittest discover -s tests -p 'test_seed_data_validation.py'
+
+      - name: Run local seed app smoke test
+        run: PYTHONPATH=src python tests/smoke_test.py
+
+  frontend-validation:
+    name: Frontend, smoke, and captain desktop smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run frontend and mock backend smoke
+        run: npm run smoke
+
+      - name: Install headless display for Electron smoke
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb
+
+      - name: Run captain desktop smoke headlessly
+        run: xvfb-run -a npm run captain:smoke

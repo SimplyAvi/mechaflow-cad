@@ -24,10 +24,24 @@ const apiBaseUrl = `http://${host}:${backendPort}`;
 const frontendUrl = `http://${host}:${frontendPort}`;
 const children = [];
 
+const terminate = (child) => {
+  if (child.killed) return;
+  if (process.platform === 'win32' || !child.pid) {
+    child.kill('SIGTERM');
+    return;
+  }
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+};
+
 const spawnChild = (name, command, args, env = {}) => {
   const child = spawn(command, args, {
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: process.platform !== 'win32',
   });
   children.push(child);
   child.stdout.on('data', (chunk) => process.stdout.write(`[${name}] ${chunk}`));
@@ -78,7 +92,7 @@ const waitForDom = async (document, attempts = 50) => {
 
 const shutdown = () => {
   for (const child of children) {
-    if (!child.killed) child.kill('SIGTERM');
+    terminate(child);
   }
 };
 
@@ -390,7 +404,10 @@ try {
     });
   });
 
-  spawnChild('preview', 'npx', ['vite', 'preview', '--host', host, '--port', String(frontendPort), '--strictPort']);
+  const vitePreview = process.platform === 'win32'
+    ? './node_modules/.bin/vite.cmd'
+    : './node_modules/.bin/vite';
+  spawnChild('preview', vitePreview, ['preview', '--host', host, '--port', String(frontendPort), '--strictPort']);
   const html = await waitForText(frontendUrl);
   if (!html.includes('MechaFlow CAD Cockpit')) {
     throw new Error('Frontend preview did not serve the expected app shell.');

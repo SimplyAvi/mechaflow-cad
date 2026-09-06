@@ -144,20 +144,21 @@ python -m pip install -e '.[dev]'
 npm ci
 ```
 
-Run backend checks:
+Run backend, catalog, frontend, smoke, and desktop/captain checks:
 
 ```bash
 pytest
-```
-
-Run frontend and desktop checks:
-
-```bash
+python scripts/validate_catalog.py
+python -m unittest discover -s tests -p 'test_seed_data_validation.py'
+PYTHONPATH=src python3 tests/smoke_test.py
+npm run lint
 npm test
 npm run build
 npm run smoke
-npm run desktop:smoke
+npm run captain:smoke
 ```
+
+GitHub Actions runs the CI-safe subset of these checks on pull requests and pushes to `main`. See [Validation policy](docs/validation.md) for the CI workflow, local commands, and the manual desktop demo check that remains release-readiness evidence.
 
 Run the backend on an explicit local port:
 

@@ -1,8 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { mockBackendMetadata, mockProjectPanelData } from '../data/mockDesign';
-import { mapProjectPanelDataToReferenceDesign } from './backendMapper';
+import { mapBackendAnalysisJob, mapProjectPanelDataToReferenceDesign } from './backendMapper';
 
 describe('mapProjectPanelDataToReferenceDesign', () => {
+  it('filters analysis artifacts without ids before exposing frontend records', () => {
+    const job = {
+      id: 'job-1',
+      job_type: 'mesh_generation',
+      status: 'queued',
+      target_id: 'part-1',
+      project_id: 'project-1',
+      adapter_name: 'mesh-worker',
+      local_compute_preferred: true,
+      input_summary: {},
+      result_summary: {},
+      artifacts: [
+        { kind: 'mesh', title: 'Missing id', summary: 'Ignored' },
+        { id: 'artifact-1', kind: 'mesh', title: 'Valid artifact', summary: 'Kept' },
+      ],
+    };
+
+    const mapped = mapBackendAnalysisJob(job);
+
+    expect(mapped.artifacts).toEqual([expect.objectContaining({ id: 'artifact-1', title: 'Valid artifact' })]);
+    expect(mapped.expectedArtifact).toBe('mesh');
+  });
+
   it('marks a heavy part as high stress risk', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
 
