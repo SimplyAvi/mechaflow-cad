@@ -11,7 +11,7 @@ import {
   type MaterialSubstitutionResult,
 } from './lib/api';
 import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
-import { readyExamples, buildReadyExampleDesign, type ReadyExampleId } from './data/readyExamples';
+import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
 import { extractDesignIntentChips, taskFromDesignIntent, type DesignIntentChip } from './lib/designIntent';
 import './App.css';
 
@@ -453,7 +453,7 @@ function App() {
     const conceptTask = taskFromDesignIntent(conceptDesign.task, trimmedIntent);
     const localBackend = { ...conceptDesign.backend };
     delete localBackend.apiBaseUrl;
-    const nextDesign: ReferenceDesign = {
+    const nextDesign: ReferenceDesign = isolateOfflineDesign({
       ...conceptDesign,
       id: 'local-design-intent-concept',
       name: 'New mechanism concept from prompt',
@@ -471,7 +471,7 @@ function App() {
       analysisJobs: [],
       reports: [],
       wiringReview: null,
-    };
+    }, 'local-design-intent-concept');
     applyLoadedDesign(nextDesign);
     rememberRecentProject(nextDesign, trimmedIntent, referenceImages);
     setWorkspaceMode('design');
@@ -484,7 +484,8 @@ function App() {
     const loadedDesign = await loadCockpitDesign();
     const nextDesign = buildReadyExampleDesign(loadedDesign, exampleId);
     applyLoadedDesign(nextDesign);
-    rememberRecentProject(nextDesign, example?.intent ?? '', referenceImages);
+    setReferenceImages([]);
+    rememberRecentProject(nextDesign, example?.intent ?? '', []);
     setWorkspaceMode('design');
     setIntentText(example?.intent ?? '');
     setIntentMessage(`${example?.title ?? 'Ready example'} loaded. Example data is repository-local and does not import external CAD assets.`);

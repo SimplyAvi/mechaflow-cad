@@ -1,5 +1,5 @@
 import readyExampleSeed from '../../data/ready-examples.seed.json';
-import type { ReferenceDesign } from '../types';
+import type { AnalysisReadinessPreview, ReferenceDesign } from '../types';
 
 export type ReadyExampleId = 'robot-arm-gripper' | 'compact-gantry-concept';
 
@@ -16,12 +16,56 @@ export const readyExamples: ReadyExampleCard[] = readyExampleSeed as ReadyExampl
 
 const cloneDesign = (design: ReferenceDesign): ReferenceDesign => JSON.parse(JSON.stringify(design)) as ReferenceDesign;
 
+const resetReadiness = (
+  readiness: AnalysisReadinessPreview,
+  projectId: string,
+  targetId: string,
+  targetName: string,
+  targetKind: 'part' | 'assembly',
+): AnalysisReadinessPreview => ({
+  ...readiness,
+  project_id: projectId,
+  target_id: targetId,
+  target_name: targetName,
+  target_kind: targetKind,
+  state: 'review_required',
+  trust_label: 'demo_estimate',
+  summary: 'Local example readiness requires review; no backend analysis is attached.',
+  criteria: [],
+  load_cases: [],
+  constraints: [],
+  material_properties: null,
+  solver_inputs: { units: 'SI', notes: ['Local example seed; solver inputs are not prepared.'] },
+  expected_result_artifacts: [],
+  solver_pipeline: [],
+  demo_estimates: [],
+  review_required: ['No backend solver readiness is attached to this local example.'],
+  recommended_job_request: null,
+  generated_at: undefined,
+});
+
+export const isolateOfflineDesign = (design: ReferenceDesign, projectId: string): ReferenceDesign => {
+  const assemblies = design.assemblies.map((assembly) => {
+    const parts = assembly.parts.map((part) => ({
+      ...part,
+      analysisReadiness: resetReadiness(part.analysisReadiness, projectId, part.id, part.name, 'part'),
+    }));
+    return {
+      ...assembly,
+      analysisReadiness: resetReadiness(assembly.analysisReadiness, projectId, assembly.id, assembly.name, 'assembly'),
+      parts,
+    };
+  });
+  const assembly = assemblies.find((candidate) => candidate.id === design.assembly.id) ?? assemblies[0] ?? design.assembly;
+  return { ...design, assembly, assemblies, analysisJobs: [], reports: [], wiringReview: null };
+};
+
 export const buildReadyExampleDesign = (baseDesign: ReferenceDesign, exampleId: ReadyExampleId): ReferenceDesign => {
   const design = cloneDesign(baseDesign);
   if (exampleId === 'compact-gantry-concept') {
     const localBackend = { ...design.backend };
     delete localBackend.apiBaseUrl;
-    return {
+    return isolateOfflineDesign({
       ...design,
       id: 'project-compact-gantry-concept',
       name: 'Compact pick-and-place gantry concept',
@@ -57,12 +101,12 @@ export const buildReadyExampleDesign = (baseDesign: ReferenceDesign, exampleId: 
       analysisJobs: [],
       reports: [],
       wiringReview: null,
-    };
+    }, 'project-compact-gantry-concept');
   }
 
   const localBackend = { ...design.backend };
   delete localBackend.apiBaseUrl;
-  return {
+  return isolateOfflineDesign({
     ...design,
     id: 'project-robot-arm-gripper-example',
     name: 'Robot arm gripper example',
@@ -79,5 +123,5 @@ export const buildReadyExampleDesign = (baseDesign: ReferenceDesign, exampleId: 
     analysisJobs: [],
     reports: [],
     wiringReview: null,
-  };
+  }, 'project-robot-arm-gripper-example');
 };
