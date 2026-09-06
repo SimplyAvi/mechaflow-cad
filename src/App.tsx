@@ -498,6 +498,17 @@ function App() {
     setReferenceImages(recentProject.referenceImages);
     setWorkspaceMode('design');
     setIntentMessage(`Reopened ${recentProject.design.name} from local recent-project history.`);
+    const reopenedProjectVersion = projectLoadVersion.current;
+    if (recentProject.design.backend.apiBaseUrl) {
+      loadLocalSolverReadiness(recentProject.design.backend.apiBaseUrl)
+        .then((readiness) => {
+          if (projectLoadVersion.current === reopenedProjectVersion) setSolverReadiness(readiness);
+        })
+        .catch((error) => {
+          console.warn('Local solver readiness endpoint is unavailable after recent-project reopen.', error);
+          if (projectLoadVersion.current === reopenedProjectVersion) setSolverReadiness(null);
+        });
+    }
   };
 
   const addReferenceImages = (files: FileList | File[], source: ReferenceImageSource) => {
@@ -507,7 +518,9 @@ function App() {
       setIntentMessage('Add image files such as PNG, JPG, WebP, GIF, BMP, SVG, or AVIF. They are stored as local reference metadata only.');
       return;
     }
-    setReferenceImages((current) => [...images, ...current].slice(0, 8));
+    const nextReferenceImages = [...images, ...referenceImages].slice(0, 8);
+    setReferenceImages(nextReferenceImages);
+    if (design) rememberRecentProject(design, intentText, nextReferenceImages);
     setIntentMessage(`${images.length} reference image${images.length === 1 ? '' : 's'} added. Images guide the concept only; no photo-to-CAD reconstruction is running in this MVP.`);
   };
 

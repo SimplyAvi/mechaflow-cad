@@ -57,11 +57,20 @@ export const buildReadyExampleDesign = (baseDesign: ReferenceDesign, exampleId: 
     };
   }
 
+  const localBackend = { ...design.backend };
+  delete localBackend.apiBaseUrl;
   return {
     ...design,
+    id: 'project-robot-arm-gripper-example',
+    name: 'Robot arm gripper example',
+    sourceUrl: null,
+    license: 'MIT local demo seed, no external CAD asset',
     formats: Array.from(new Set([...design.formats, 'MFCAD JSON local demo seed'])),
     backend: {
-      ...design.backend,
+      ...localBackend,
+      projectId: 'project-robot-arm-gripper-example',
+      source: 'bundled-mock',
+      endpoint: 'local concept seed, proxy geometry reused from bundled mock data',
       advisoryNotice: `${design.backend.advisoryNotice} Ready example uses repository-local seed data and does not import external CAD assets.`,
     },
   };

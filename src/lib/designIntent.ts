@@ -32,7 +32,9 @@ const uniquePush = (chips: DesignIntentChip[], chip: DesignIntentChip) => {
 const normalizedNumber = (value: string): number => Number.parseFloat(value.replace(/,/g, ''));
 
 export const extractPayloadLb = (text: string): number | null => {
-  const match = /(?:payload|lift|carry|hold|pick)?[^\d]{0,18}(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds|kg|kilogram|kilograms)\b/i.exec(text);
+  const beforeValue = /(?:payload|lift|carry|hold|pick)[^\d]{0,18}(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds|kg|kilogram|kilograms)\b/i.exec(text);
+  const afterValue = /(\d+(?:\.\d+)?)\s*(lb|lbs|pound|pounds|kg|kilogram|kilograms)\b[^.\n,;]{0,18}(?:payload|lift|carry|hold|pick)/i.exec(text);
+  const match = beforeValue ?? afterValue;
   if (!match) return null;
   const value = normalizedNumber(match[1]);
   const unit = match[2].toLowerCase();
