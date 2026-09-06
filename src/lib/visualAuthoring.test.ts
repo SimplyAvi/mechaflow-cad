@@ -62,7 +62,7 @@ describe('visual authoring project helpers', () => {
     const createdAssembly = createAssemblyWithBase(mockReferenceDesign.backendProject);
     const child = createPrimitivePart(createdAssembly.project, createdAssembly.assemblyId, 'beam', createdAssembly.partId);
     const grandchild = createPrimitivePart(child.project, createdAssembly.assemblyId, 'motor_block', child.partId);
-    const linkedChild = connectPartToParent(child.project, child.partId, createdAssembly.partId, 'fixed');
+    const linkedChild = connectPartToParent(grandchild.project, child.partId, createdAssembly.partId, 'fixed');
     const linkedGrandchild = connectPartToParent(linkedChild, grandchild.partId, child.partId, 'revolute');
 
     const deleted = deleteVisualPart(linkedGrandchild, createdAssembly.assemblyId, child.partId);
@@ -106,7 +106,7 @@ describe('visual authoring project helpers', () => {
 
   it('preserves valid dimensions when geometry updates are nonpositive or nonfinite', () => {
     const partId = mockReferenceDesign.assembly.parts[0]!.id;
-    const original = mockReferenceDesign.assembly.parts[0]!.dimensions;
+    const original = mockReferenceDesign.backendProject.assemblies[0]!.parts[0]!.dimensions;
     const updated = updatePartGeometry(mockReferenceDesign.backendProject, partId, {
       dimensions: {
         lengthMm: 0,

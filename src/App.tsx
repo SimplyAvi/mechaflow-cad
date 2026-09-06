@@ -363,6 +363,7 @@ function App() {
   const [referenceImages, setReferenceImages] = useState<ReferenceImageRecord[]>([]);
   const [imageDropActive, setImageDropActive] = useState(false);
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
+  const [dimensionDrafts, setDimensionDrafts] = useState<Record<string, string>>({});
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -519,7 +520,12 @@ function App() {
 
   const updateSelectedDimension = (key: 'length' | 'width' | 'height', rawValue: string) => {
     if (!design || !selectedPart) return;
-    const valueMm = lengthToMm(Number(rawValue), design.units);
+    const draftKey = `${selectedPart.id}:${design.units}:${key}`;
+    setDimensionDrafts((current) => ({ ...current, [draftKey]: rawValue }));
+    if (rawValue.trim() === '') return;
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) return;
+    const valueMm = lengthToMm(numericValue, design.units);
     const dimensions = key === 'length'
       ? { lengthMm: valueMm }
       : key === 'width'
@@ -1516,7 +1522,7 @@ function App() {
                         onChange={(event) => updateSelectedDimension(key as 'length' | 'width' | 'height', event.target.value)}
                         step="0.1"
                         type="number"
-                        value={Number(lengthFromMm(Number(value), design.units).toFixed(3))}
+                        value={dimensionDrafts[`${selectedPart.id}:${design.units}:${key}`] ?? Number(lengthFromMm(Number(value), design.units).toFixed(3))}
                       />
                     </label>
                   ))}
