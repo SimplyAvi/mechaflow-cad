@@ -1,0 +1,20 @@
+[
+  {
+    "id": "robot-arm-gripper",
+    "title": "Robot arm with wrist gripper",
+    "summary": "Bundled local seed with selectable parts, wiring routes, BOM ranges, and analysis jobs.",
+    "intent": "Design a robot arm that lifts 50 lb with 0.65 m reach and an 8 s cycle. Keep wiring serviceable.",
+    "attribution": "Local MechaFlow CAD seed data in this repository.",
+    "license": "MIT, repository-local demo data, no external CAD asset imported.",
+    "asset_policy": "Uses existing repository seed geometry metadata and proxy viewport shapes only."
+  },
+  {
+    "id": "compact-gantry-concept",
+    "title": "Compact pick-and-place gantry concept",
+    "summary": "Local concept seed for a school or lab automation cell. Uses the same proxy renderer until real CAD import exists.",
+    "intent": "Design a compact pick-and-place gantry for 8 lb payload, 0.45 m travel, 3 s cycle, aluminum frame, local-only analysis.",
+    "attribution": "Local MechaFlow CAD concept seed derived from bundled mock panel data.",
+    "license": "MIT, repository-local demo data, no external CAD asset imported.",
+    "asset_policy": "No internet-sourced CAD, mesh, or photo asset is included in this slice."
+  }
+]

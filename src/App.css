@@ -1475,3 +1475,592 @@ small,
     grid-template-columns: 1fr;
   }
 }
+
+/* Input-first cockpit redesign */
+.input-first-shell {
+  background:
+    radial-gradient(circle at 18% -12%, rgba(20, 184, 166, 0.22), transparent 32rem),
+    radial-gradient(circle at 82% 6%, rgba(59, 130, 246, 0.22), transparent 34rem),
+    linear-gradient(135deg, #07111f 0%, #0b1220 54%, #111827 100%);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0;
+}
+
+.workspace-topbar {
+  align-items: center;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(320px, 1.15fr) minmax(360px, 0.9fr) minmax(280px, 0.75fr);
+  padding: 14px 18px;
+}
+
+.brand-block {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+
+.app-mark {
+  align-items: center;
+  background: linear-gradient(135deg, #38bdf8, #34d399);
+  border-radius: 16px;
+  color: #03111f;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-weight: 950;
+  height: 48px;
+  justify-content: center;
+  letter-spacing: -0.05em;
+  width: 48px;
+}
+
+.brand-block h1 {
+  font-size: clamp(1.35rem, 2.6vw, 2.3rem);
+  line-height: 1.02;
+  margin: 0 0 6px;
+  max-width: none;
+}
+
+.brand-block p:last-child,
+.sidebar-copy,
+.mode-deck-heading p {
+  color: #b8c7d8;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.tool-rail {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.42);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 999px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 6px;
+}
+
+.tool-rail button,
+.quick-start-stack button,
+.open-project-button,
+.example-card button,
+.command-row button,
+.intent-chip-list button {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.tool-rail button {
+  background: transparent;
+  border-radius: 999px;
+  min-height: 38px;
+  padding: 7px 10px;
+}
+
+.tool-rail button.active,
+.tool-rail button:hover,
+.tool-rail button:focus-visible {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(125, 211, 252, 0.62);
+  outline: none;
+}
+
+.cockpit-task-card {
+  border-radius: 16px;
+  gap: 6px;
+  padding: 14px;
+}
+
+.cockpit-task-card strong {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+}
+
+.project-cockpit {
+  display: grid;
+  flex: 1;
+  gap: 14px;
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr) minmax(270px, 340px);
+  min-height: 0;
+  padding: 14px;
+}
+
+.cad-sidebar,
+.context-sidebar,
+.canvas-column {
+  min-height: 0;
+}
+
+.cad-sidebar,
+.context-sidebar {
+  align-self: start;
+  max-height: calc(100vh - 104px);
+  overflow: auto;
+  padding: 16px;
+}
+
+.canvas-column {
+  display: grid;
+  gap: 14px;
+  grid-auto-rows: max-content;
+  min-width: 0;
+}
+
+.primary-viewer {
+  min-height: clamp(500px, 64vh, 740px);
+  overflow: hidden;
+  padding: 18px;
+}
+
+.primary-viewer .viewer-stage {
+  height: clamp(420px, 52vh, 620px);
+  margin: 14px 0;
+}
+
+.primary-viewer .viewer-toolbar {
+  align-items: start;
+}
+
+.primary-viewer .viewer-controls {
+  background: rgba(2, 6, 23, 0.36);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 18px;
+  padding: 8px;
+}
+
+.primary-viewer .viewer-controls button,
+.primary-viewer .viewer-controls input,
+.primary-viewer .viewer-controls label {
+  min-height: 32px;
+}
+
+.quick-start-stack,
+.ready-example-list,
+.model-tree,
+.command-dock,
+.command-form,
+.reference-image-list,
+.mode-deck,
+.context-sidebar,
+.context-details,
+.mode-summary-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-start-stack {
+  margin: 14px 0;
+}
+
+.quick-start-stack button,
+.open-project-button {
+  background: rgba(15, 23, 42, 0.72);
+  border-radius: 16px;
+  display: grid;
+  gap: 4px;
+  min-height: 62px;
+  padding: 12px;
+  text-align: left;
+}
+
+.quick-start-stack .primary-start {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.26), rgba(20, 184, 166, 0.2));
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+.quick-start-stack button:hover,
+.quick-start-stack button:focus-visible,
+.open-project-button:hover:not(.disabled),
+.open-project-button:focus-within:not(.disabled) {
+  border-color: rgba(125, 211, 252, 0.68);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.16);
+  outline: none;
+}
+
+.quick-start-stack span,
+.open-project-button span,
+.example-card strong {
+  font-weight: 900;
+}
+
+.open-project-button {
+  position: relative;
+}
+
+.open-project-button input {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.open-project-button.disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.section-heading-row,
+.example-card,
+.command-row,
+.reference-dropzone,
+.mode-deck-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.ready-example-list {
+  margin: 16px 0;
+}
+
+.section-heading-row h3,
+.model-tree summary,
+.context-details summary {
+  margin: 0;
+}
+
+.example-card {
+  align-items: stretch;
+  background: rgba(2, 6, 23, 0.34);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  padding: 10px;
+}
+
+.example-card p {
+  color: #b8c7d8;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin: 5px 0;
+}
+
+.example-card button {
+  background: rgba(56, 189, 248, 0.16);
+  border-radius: 999px;
+  padding: 0 12px;
+}
+
+.model-tree {
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.model-tree summary,
+.context-details summary {
+  border-radius: 12px;
+  color: #e0f2fe;
+  cursor: pointer;
+  font-weight: 900;
+  padding: 8px 0;
+}
+
+.command-dock {
+  background: rgba(6, 18, 32, 0.9);
+  border-color: rgba(125, 211, 252, 0.28);
+  padding: 16px;
+}
+
+.command-form label {
+  color: #e0f2fe;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.command-row {
+  align-items: stretch;
+}
+
+.command-row input {
+  background: rgba(2, 6, 23, 0.8);
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  border-radius: 999px;
+  color: var(--text);
+  flex: 1 1 360px;
+  font-size: 1rem;
+  min-height: 48px;
+  padding: 0 18px;
+}
+
+.command-row input:focus-visible {
+  border-color: rgba(56, 189, 248, 0.92);
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.16);
+  outline: none;
+}
+
+.command-row button {
+  background: rgba(15, 23, 42, 0.88);
+  border-radius: 999px;
+  min-height: 48px;
+  padding: 0 16px;
+}
+
+.command-row .submit-command {
+  background: linear-gradient(135deg, #38bdf8, #34d399);
+  border: 0;
+  color: #03111f;
+}
+
+.intent-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.intent-chip,
+.intent-chip-list button {
+  border-radius: 999px;
+  font-size: 0.8rem;
+  padding: 7px 10px;
+}
+
+.intent-chip {
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  color: #e0f2fe;
+  font-weight: 850;
+}
+
+.intent-chip.kind-restriction,
+.intent-chip.kind-constraint {
+  background: rgba(245, 158, 11, 0.13);
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+.intent-chip-list button {
+  background: rgba(2, 6, 23, 0.46);
+}
+
+.reference-dropzone {
+  background: rgba(2, 6, 23, 0.36);
+  border: 1px dashed rgba(125, 211, 252, 0.38);
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.reference-dropzone.active,
+.reference-dropzone:focus-visible {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(125, 211, 252, 0.76);
+  outline: none;
+}
+
+.reference-dropzone strong,
+.reference-dropzone small,
+.reference-image-list strong,
+.reference-image-list small {
+  display: block;
+}
+
+.reference-upload {
+  flex: 0 0 auto;
+  margin: 0;
+  min-height: 38px;
+}
+
+.reference-image-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reference-image-list li {
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.intent-message {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 14px;
+  color: #dff7ff;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px;
+}
+
+.design-overview {
+  padding: 16px;
+}
+
+.design-overview h2,
+.mode-deck-heading h2 {
+  margin-bottom: 8px;
+}
+
+.mode-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mode-summary-grid div {
+  background: rgba(2, 6, 23, 0.32);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.mode-summary-grid strong,
+.mode-summary-grid span {
+  display: block;
+}
+
+.mode-summary-grid strong {
+  font-size: 1.45rem;
+}
+
+.mode-summary-grid span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.mode-deck {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mode-deck-heading,
+.mode-deck .project-file-panel,
+.mode-deck .demo-guide-panel,
+.mode-deck .job-queue-panel,
+.mode-deck .wiring-workflow-panel {
+  grid-column: 1 / -1;
+}
+
+.context-sidebar .meta-grid {
+  margin-bottom: 12px;
+}
+
+.context-details {
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  padding: 4px 12px 12px;
+}
+
+.context-details:not([open]) {
+  padding-bottom: 4px;
+}
+
+.context-details .strength-panel,
+.context-details .readiness-panel,
+.context-details .substitution-panel {
+  margin-top: 8px;
+}
+
+@media (max-width: 1280px) {
+  .workspace-topbar,
+  .project-cockpit {
+    grid-template-columns: 1fr;
+  }
+
+  .cad-sidebar,
+  .context-sidebar {
+    max-height: none;
+  }
+
+  .tool-rail {
+    border-radius: 18px;
+  }
+
+  .canvas-column {
+    order: -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .input-first-shell {
+    padding: 0;
+  }
+
+  .workspace-topbar,
+  .project-cockpit {
+    padding: 10px;
+  }
+
+  .brand-block,
+  .section-heading-row,
+  .example-card,
+  .command-row,
+  .reference-dropzone,
+  .mode-deck-heading,
+  .viewer-toolbar,
+  .viewer-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tool-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .primary-viewer {
+    min-height: auto;
+  }
+
+  .primary-viewer .viewer-stage {
+    height: 380px;
+  }
+
+  .mode-deck,
+  .mode-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Keep the command line visible in the first viewport. */
+.input-first-shell .command-dock {
+  order: -1;
+}
+
+.input-first-shell .primary-viewer {
+  min-height: clamp(440px, 54vh, 650px);
+}
+
+.input-first-shell .primary-viewer .viewer-stage {
+  height: clamp(330px, 40vh, 500px);
+}
+
+.input-first-shell .reference-dropzone {
+  padding: 10px 12px;
+}
+
+.input-first-shell .workspace-topbar {
+  grid-template-columns: minmax(440px, 1fr) minmax(510px, max-content) minmax(300px, 370px);
+}
+
+.input-first-shell .tool-rail {
+  grid-template-columns: repeat(5, max-content);
+  justify-content: center;
+}
+
+.input-first-shell .tool-rail button {
+  font-size: 0.92rem;
+  padding-inline: 13px;
+}
+
+@media (max-width: 1280px) {
+  .input-first-shell .workspace-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .input-first-shell .tool-rail {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}

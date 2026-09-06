@@ -4,7 +4,9 @@ The first MechaFlow CAD frontend is a Vite, React, and TypeScript application. I
 
 ## What the cockpit demonstrates
 
-The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. It includes mocked orchestration data for:
+The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. It now opens as an input-first CAD cockpit: a large interactive 3D viewport, one design-intent command line, compact project and model browsing on the left, and selected-part context on the right. Advanced analysis, manufacturing, reporting, import/export, and backend handoff panels are grouped behind mode buttons instead of appearing as a startup checklist.
+
+It includes mocked orchestration data for:
 
 - Opening a bundled robot arm visual MVP with a wrist gripper.
 - Viewing an interactive exploded assembly concept with desktop-demo orbit, yaw, pitch, and explode controls.
@@ -21,6 +23,17 @@ The initial UI is useful before FreeCAD, KiCad, FEA, or supplier workers exist. 
 - Reviewing BOM, cost, manufacturing, and lead-time panels where substitutions visibly change ranged estimates without inventing exact quotes.
 - Surfacing a wiring/electronics workflow with route summaries, connector details, linked electronics, wire segments, harness BOM additions, heuristic clearance and bend-radius evidence, and a simple route diagram.
 - Mirroring the backend project, panel-data, wiring review, modification preview, report, catalog, and metadata contracts.
+
+## Input-first user flow
+
+1. Launch the app and start in the 3D workspace. Orbit, explode, or click a part before opening any advanced panel.
+2. Type into `Describe what you want to design...`. The command line extracts chips for payload, reach, cycle time, material cues, constraints, and restrictions when it can. Click `Start design` to create a local prompt concept. The current viewport remains a proxy rendering until real CAD generation exists.
+3. Add reference photos or images with upload or drag/drop. Images are treated as local reference metadata only in this slice. The UI does not claim photo-to-CAD reconstruction, FEA, supplier quotes, or electrical validation.
+4. Use the left sidebar to open an existing `.mfcad.json` project through the local desktop mock or backend, reopen the recent project, or load one of the repository-local ready examples.
+5. Stay in Design mode for model tree, part selection, and contextual part tools. Switch to Analysis for solver readiness and job queue, Manufacturing for BOM, make or buy paths, wiring and electronics, Reports for advisory reports and project import/export, and Backend for API handoff details.
+6. Ready examples in this slice are repository-local MIT seed data. No external CAD assets were imported, so no third-party attribution is required beyond the local seed notes.
+
+Screenshot evidence for the redesigned opening state is stored at `docs/screenshots/input-first-opening.png`.
 
 ## Install
 
