@@ -8,30 +8,32 @@ The interface should explain what is safe, what is risky, what is unknown, what 
 
 ## Product direction
 
-The current product direction is input-first and 3D-first:
+The current product direction is visual-authoring first, input-first, and 3D-first:
 
-- The app opens directly into an interactive 3D workspace.
+- The app opens directly into an interactive visual CAD workspace with an XYZ grid.
+- Users can choose units, create editable primitives, select canvas geometry, orbit, pan, zoom, and explode before opening advanced panels.
+- The Design mode inspector edits dimensions, XYZ position, rotation, material, process, parent, joint type, motors, connectors, and visible wire routes.
 - One command line captures design intent before forcing detailed setup.
 - CAD-style contextual sidebars keep project paths and selected-part details nearby.
 - New, open/import, recent, reference catalog, and ready-example paths are visible but compact.
 - Reference images are accepted as local context only.
 - Advanced Analysis, Manufacturing, Reports, and Backend surfaces are progressively disclosed through mode buttons.
 
-This direction is implemented in `src/App.tsx` and visually covered by the desktop checklist in [Desktop demo](desktop.md). Screenshot evidence for the redesigned opening state is stored at `docs/screenshots/input-first-opening.png`.
+This direction is implemented in `src/App.tsx`, `src/VisualCadWorkspace.tsx`, and `src/lib/visualAuthoring.ts`, and visually covered by the desktop checklist in [Desktop demo](desktop.md). Screenshot evidence for the visual CAD authoring MVP is stored at `docs/screenshots/visual-cad-authoring-mvp.png` and `docs/screenshots/visual-cad-authoring-tools.png`.
 
 ## Primary workflow
 
-### 1. Land in the 3D cockpit
+### 1. Land in the visual CAD cockpit
 
 The first screen should show:
 
-- Large interactive robot assembly viewport.
+- Large interactive robot or machine authoring viewport on an XYZ grid.
 - Design-intent command line.
 - Compact left project browser.
 - Contextual right inspector.
 - Mode rail for Design, Analysis, Manufacturing, Reports, and Backend tools.
 
-The user should be able to orbit, explode, and select before filling out a long form.
+The user should be able to orbit, pan, zoom, explode, create primitives, route visible wiring, and select before filling out a long form.
 
 ### 2. Choose a starting point
 
@@ -71,12 +73,17 @@ MVP copy must be clear:
 - They are not converted into CAD geometry.
 - They do not produce FEA, supplier quotes, or electrical validation.
 
-### 5. Explore the exploded assembly
+### 5. Author and explore the visual assembly
 
 The user can:
 
+- Choose millimeters, centimeters, meters, or inches as working units.
+- Create base plates, beams, joints, brackets, motors, connectors, electronics, and tools from the primitive palette.
+- Edit length, width, height, XYZ position, Z rotation, material, and manufacturing process for the selected primitive.
+- Connect a selected part to a parent with fixed, revolute, prismatic, tool-mount, or unassigned joint metadata.
+- Route visible wire harness polylines between parts and persist the route as connector, wire segment, route, and harness BOM data.
 - Play, toggle, or scrub exploded-view state.
-- Orbit with yaw and pitch controls.
+- Orbit with yaw and pitch controls, shift-drag to pan, and wheel or slider to zoom.
 - Select a part in the visual model.
 - Select a part from the model tree.
 - See selected-part highlighting.
@@ -109,13 +116,17 @@ The user can compare or change:
 - Material.
 - Thickness.
 - Length.
+- Width and height.
+- XYZ position.
+- Rotation.
 - Hole size.
 - Fastener type.
+- Parent part and joint type.
 - Manufacturing process.
 - Surface treatment.
 - Wiring path.
 
-Current MVP substitution flow:
+Current MVP substitution and visual authoring flow:
 
 1. List only compatible material/process intersections.
 2. Preview backend impact without persisting.
@@ -177,7 +188,7 @@ Backend mode should expose API handoff details for workers without distracting f
 
 ### Opening cockpit
 
-- 3D assembly viewport.
+- Visual CAD assembly viewport on an XYZ grid.
 - Command line for design intent.
 - Reference image intake.
 - Compact project paths.
@@ -196,7 +207,12 @@ Backend mode should expose API handoff details for workers without distracting f
 
 ### Assembly cockpit
 
-- 3D viewer.
+- Visual CAD viewer.
+- Primitive palette.
+- Unit selector.
+- Dimension and XYZ position controls.
+- Parent and joint controls.
+- Visible wiring route controls.
 - Exploded-view controls.
 - Part tree.
 - Task panel.

@@ -3,6 +3,9 @@ export type RiskLevel = 'low' | 'medium' | 'high' | 'unknown';
 export type RatingStatus = 'passes' | 'watch' | 'fails';
 export type AnalysisReadinessState = 'pre_solver_ready' | 'review_required' | 'blocked_missing_inputs' | 'solver_result_available';
 export type AnalysisResultTrust = 'demo_estimate' | 'pre_solver_input' | 'solver_result';
+export type AuthoringUnit = 'mm' | 'cm' | 'm' | 'in';
+export type CADPrimitiveShape = 'base_plate' | 'beam' | 'cylinder_joint' | 'bracket' | 'motor_block' | 'connector' | 'electronics' | 'tool';
+export type CADJointType = 'fixed' | 'revolute' | 'prismatic' | 'linear' | 'tool_mount' | 'unassigned';
 
 export interface ReferenceDesign {
   id: string;
@@ -22,6 +25,9 @@ export interface ReferenceDesign {
   wiringRoutes: WiringRoute[];
   wiringReview: WiringReviewReport | null;
   reports: AdvisoryReport[];
+  units: AuthoringUnit;
+  backendProject: BackendProject;
+  analysisReadinessPreviews: AnalysisReadinessPreview[];
   backend: BackendConnectionSummary;
 }
 
@@ -70,6 +76,7 @@ export interface Part {
   designCriteria: DesignCriterion[];
   analysisReadiness: AnalysisReadinessPreview;
   visual: PartVisual;
+  authoring: PartAuthoringData;
 }
 
 export interface DesignCriterion {
@@ -183,9 +190,31 @@ export interface PartVisual {
   explodeX: number;
   explodeY: number;
   color: string;
-  shape?: 'base' | 'joint' | 'link' | 'plate' | 'tool' | 'pcb';
+  shape?: 'base' | 'joint' | 'link' | 'plate' | 'tool' | 'pcb' | 'motor' | 'connector' | 'bracket';
   rotationDeg?: number;
   zIndex?: number;
+}
+
+export interface PartAuthoringDimensions {
+  lengthMm: number | null;
+  widthMm: number | null;
+  heightMm: number | null;
+  diameterMm: number | null;
+  thicknessMm: number | null;
+}
+
+export interface PartAuthoringData {
+  primitive: CADPrimitiveShape;
+  positionMm: BackendVector3;
+  rotationDeg: BackendVector3;
+  dimensionsMm: PartAuthoringDimensions;
+  color: string;
+  materialId: string | null;
+  parentPartId: string | null;
+  jointType: CADJointType;
+  assignedToPartId: string | null;
+  connectorId: string | null;
+  authored: boolean;
 }
 
 export interface CapabilityRating {
@@ -551,6 +580,8 @@ export interface BackendProject {
   description?: string | null;
   reference_design_id?: string | null;
   active_task?: BackendTaskRequirement | null;
+  units?: AuthoringUnit;
+  metadata?: Record<string, unknown>;
   assemblies: BackendAssembly[];
   materials: BackendMaterial[];
   electronics_components: BackendElectronicsComponent[];
@@ -624,6 +655,7 @@ export interface BackendPartDimensions {
   length_mm?: number | null;
   width_mm?: number | null;
   height_mm?: number | null;
+  diameter_mm?: number | null;
   thickness_mm?: number | null;
   metadata: Record<string, unknown>;
 }

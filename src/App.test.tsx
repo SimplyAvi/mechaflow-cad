@@ -17,8 +17,8 @@ describe('MechaFlow input-first cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /Start with intent, then refine the model/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /Interactive exploded view/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Author a visual robot or machine on the XYZ grid/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /New from prompt/i })).toBeInTheDocument();
     expect(screen.getByText(/Open local project/i)).toBeInTheDocument();
@@ -27,9 +27,42 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/Selected-part properties and context tools/i)).toHaveTextContent(/Context inspector/i);
     expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('50 lb payload, 8 s cycle, 0.65 m reach');
     expect(screen.getByText(/Reference only. No photo-to-CAD reconstruction/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Visual CAD primitive palette/i)).toHaveTextContent(/Motor/i);
+    expect(screen.getByLabelText(/Selected geometry inspector/i)).toHaveTextContent(/Rotation Z/i);
+    expect(screen.getByLabelText(/Assembly and wiring authoring/i)).toHaveTextContent(/Route visible wire/i);
     expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BOM and cost/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/MVP coverage guide/i)).not.toBeInTheDocument();
+  });
+
+  it('authors units, primitives, dimensions, assembly links, and visible wiring locally', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/Project authoring units/i), 'in');
+    expect(await screen.findByText(/Project units changed to inches/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Motor$/i }));
+    expect(await screen.findByText(/Created motor block primitive/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected geometry inspector/i)).toHaveTextContent(/motor block/i);
+
+    const lengthInput = screen.getByLabelText(/length in in/i);
+    await user.clear(lengthInput);
+    await user.type(lengthInput, '6');
+    expect(await screen.findByText(/length set to 6 in/i)).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText(/Selected part parent/i), 'part-palm-plate');
+    expect(await screen.findByText(/connected to Base pedestal plate/i)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/Selected part joint type/i), 'revolute');
+    expect(await screen.findByText(/revolute joint marker/i)).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText(/Wire route target part/i), 'part-palm-plate');
+    await user.click(screen.getByRole('button', { name: /Route visible wire/i }));
+    expect(await screen.findByText(/Created visible wire route/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Visible wire routes/i)).toHaveTextContent(/Motor block/i);
   });
 
   it('captures typed design intent into structured chips and starts a prompt concept honestly', async () => {
@@ -54,7 +87,7 @@ describe('MechaFlow input-first cockpit', () => {
     expect(await screen.findByText(/Started a concept workspace from your prompt/i)).toBeInTheDocument();
     expect(screen.getAllByText(/New mechanism concept from prompt/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('26.5 lb payload, 5 s cycle, 0.4 m reach');
-    expect(screen.getByText(/proxy rendering, not generated CAD or photo reconstruction/i)).toBeInTheDocument();
+    expect(screen.getByText(/not generated parametric CAD or photo reconstruction/i)).toBeInTheDocument();
   });
 
   it('adds reference image metadata and falls back cleanly when speech is unavailable', async () => {
@@ -98,7 +131,7 @@ describe('MechaFlow input-first cockpit', () => {
     const user = userEvent.setup();
 
     render(<App />);
-    await screen.findByRole('img', { name: /Interactive exploded view/i });
+    await screen.findByRole('img', { name: /Visual CAD authoring canvas/i });
     const gantryCard = screen.getByText(/Compact pick-and-place gantry concept/i).closest('article');
     expect(gantryCard).not.toBeNull();
     await user.click(within(gantryCard as HTMLElement).getByRole('button', { name: /Load/i }));
@@ -113,7 +146,7 @@ describe('MechaFlow input-first cockpit', () => {
     cleanup();
     window.localStorage.clear();
     render(<App />);
-    await screen.findByRole('img', { name: /Interactive exploded view/i });
+    await screen.findByRole('img', { name: /Visual CAD authoring canvas/i });
     await user.click(screen.getByRole('button', { name: /Recent project/i }));
     expect(await screen.findByText(/No saved recent project is available/i)).toBeInTheDocument();
   });
@@ -124,7 +157,7 @@ describe('MechaFlow input-first cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('img', { name: /Interactive exploded view/i })).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
     expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^Analysis$/i }));
@@ -337,7 +370,7 @@ describe('MechaFlow input-first cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /Start with intent/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Author a visual robot or machine/i })).toBeInTheDocument();
     await user.upload(
       screen.getByLabelText(/Open existing MechaFlow project file/i),
       new File([JSON.stringify(projectFile)], 'demo.mfcad.json', { type: 'application/json' }),
@@ -345,7 +378,7 @@ describe('MechaFlow input-first cockpit', () => {
 
     expect(await screen.findByText(/Opened Imported robot arm project from demo.mfcad.json/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Imported robot arm project/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Exploded-view data/i)).toHaveTextContent('100% demo transforms ready');
+    expect(screen.getByText(/Visual model:/i)).toHaveTextContent(/units mm/i);
     await user.click(screen.getByRole('button', { name: /^Analysis$/i }));
     expect(await screen.findByText(/Prior project solver state/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
@@ -611,7 +644,7 @@ describe('MechaFlow input-first cockpit', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /Start with intent/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Author a visual robot or machine/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '$1.37-$2.74 open estimate' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
     expect(await screen.findByRole('heading', { name: '$1.37-$2.74 open estimate' })).toBeInTheDocument();

@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import {
   applyMaterialSubstitution,
-  exportProjectFile,
   importProjectFile,
   importLocalProjectFile,
   loadCockpitDesign,
@@ -15,6 +14,26 @@ import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOpt
 import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
 import { mockReferenceDesign } from './data/mockDesign';
 import { extractDesignIntentChips, taskFromDesignIntent, type DesignIntentChip } from './lib/designIntent';
+import { VisualCadWorkspace } from './VisualCadWorkspace';
+import {
+  applyIntentToProjectGeometry,
+  buildLocalProjectFile,
+  connectPartToParent,
+  createAssemblyWithBase,
+  createPrimitivePart,
+  createWireRoute,
+  deleteVisualPart,
+  duplicatePart,
+  formatLength,
+  lengthFromMm,
+  lengthToMm,
+  remapDesignFromProject,
+  unitOptions,
+  updatePartGeometry,
+  updateProjectTargets,
+  updateProjectUnits,
+} from './lib/visualAuthoring';
+import type { AuthoringUnit, BackendProject, CADJointType, CADPrimitiveShape } from './types';
 import './App.css';
 
 const formatCurrency = (value: number): string => {
@@ -302,14 +321,27 @@ const summarizeTask = (design: ReferenceDesign): string => [
 
 const chipCopy = (chip: DesignIntentChip): string => `${chip.label}: ${chip.detail}`;
 
+const inferUnitsFromIntent = (intent: string, fallback: AuthoringUnit): AuthoringUnit => {
+  const lower = intent.toLowerCase();
+  if (/\b(in|inch|inches)\b/.test(lower)) return 'in';
+  if (/\bcm|centimeter|centimeters\b/.test(lower)) return 'cm';
+  if (/\b(mm|millimeter|millimeters)\b/.test(lower)) return 'mm';
+  if (/\b(m|meter|meters)\b/.test(lower)) return 'm';
+  return fallback;
+};
+
 function App() {
   const [design, setDesign] = useState<ReferenceDesign | null>(null);
   const [selectedAssemblyId, setSelectedAssemblyId] = useState('');
   const [selectedPartId, setSelectedPartId] = useState('part-palm-plate');
   const [selectedOptionId, setSelectedOptionId] = useState('');
-  const [explodePercent, setExplodePercent] = useState(100);
-  const [rotationDeg, setRotationDeg] = useState(18);
-  const [orbitPitchDeg, setOrbitPitchDeg] = useState(10);
+  const [explodePercent, setExplodePercent] = useState(45);
+  const [rotationDeg, setRotationDeg] = useState(28);
+  const [orbitPitchDeg, setOrbitPitchDeg] = useState(38);
+  const [viewZoom, setViewZoom] = useState(1);
+  const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [wireRouteTargetId, setWireRouteTargetId] = useState('');
+  const [authoringMessage, setAuthoringMessage] = useState<string | null>('Visual CAD authoring is active: select geometry, choose units, create parts, add motors, and route wiring on the XYZ grid.');
   const [analysisRunMessage, setAnalysisRunMessage] = useState<string | null>(null);
   const [analysisRunPending, setAnalysisRunPending] = useState(false);
   const [solverReadiness, setSolverReadiness] = useState<LocalSolverReadinessSummary | null>(null);
@@ -331,6 +363,7 @@ function App() {
   const [referenceImages, setReferenceImages] = useState<ReferenceImageRecord[]>([]);
   const [imageDropActive, setImageDropActive] = useState(false);
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
+  const [dimensionDrafts, setDimensionDrafts] = useState<Record<string, string>>({});
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -414,6 +447,16 @@ function App() {
     [activeAssembly, selectedPartId],
   );
 
+  const selectedBackendPart = useMemo(
+    () => design?.backendProject.assemblies.flatMap((assembly) => assembly.parts).find((part) => part.id === selectedPart?.id),
+    [design, selectedPart?.id],
+  );
+
+  const selectedPartProcessOptions = selectedBackendPart?.manufacturing_options ?? [];
+  const selectedPartProcessValue = typeof selectedBackendPart?.metadata?.preferred_manufacturing_process === 'string'
+    ? selectedBackendPart.metadata.preferred_manufacturing_process
+    : selectedPartProcessOptions[0]?.process ?? '';
+
   const materialCriterion = selectedPart?.designCriteria.find((criterion) => criterion.id === 'elasticity-stiffness');
 
   const materialOptions = useMemo(
@@ -443,6 +486,120 @@ function App() {
     selectPart(assembly.parts[0]?.id ?? '');
   };
 
+  const commitAuthoredProject = (
+    project: BackendProject,
+    options: { selectedAssemblyId?: string; selectedPartId?: string; message?: string } = {},
+  ) => {
+    if (!design) return;
+    const nextDesign = remapDesignFromProject(design, project);
+    setDesign(nextDesign);
+    const nextAssemblyId = options.selectedAssemblyId ?? selectedAssemblyId;
+    const nextAssembly = nextDesign.assemblies.find((assembly) => assembly.id === nextAssemblyId) ?? nextDesign.assembly;
+    setSelectedAssemblyId(nextAssembly.id);
+    setSelectedPartId(options.selectedPartId ?? nextAssembly.parts[0]?.id ?? '');
+    setSubstitutionPreview(null);
+    if (options.message) setAuthoringMessage(options.message);
+    rememberRecentProject(nextDesign, intentText, referenceImages);
+  };
+
+  const changeProjectUnits = (units: AuthoringUnit) => {
+    if (!design) return;
+    commitAuthoredProject(updateProjectUnits(design.backendProject, units), {
+      selectedPartId: selectedPart?.id,
+      message: `Project units changed to ${unitOptions.find((option) => option.value === units)?.label ?? units}. Geometry remains stored in millimeters inside the project file.`,
+    });
+  };
+
+  const updateSelectedPartGeometry = (updates: Parameters<typeof updatePartGeometry>[2], message?: string) => {
+    if (!design || !selectedPart) return;
+    commitAuthoredProject(updatePartGeometry(design.backendProject, selectedPart.id, updates), {
+      selectedPartId: selectedPart.id,
+      message: message ?? `${selectedPart.name} geometry updated on the visual CAD canvas. Mass and engineering ratings remain review-required.`,
+    });
+  };
+
+  const updateSelectedDimension = (key: 'length' | 'width' | 'height', rawValue: string) => {
+    if (!design || !selectedPart) return;
+    const draftKey = `${selectedPart.id}:${design.units}:${key}`;
+    setDimensionDrafts((current) => ({ ...current, [draftKey]: rawValue }));
+    if (rawValue.trim() === '') return;
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) return;
+    const valueMm = lengthToMm(numericValue, design.units);
+    const dimensions = key === 'length'
+      ? { lengthMm: valueMm }
+      : key === 'width'
+        ? { widthMm: valueMm }
+        : { heightMm: valueMm };
+    updateSelectedPartGeometry({ dimensions }, `${selectedPart.name} ${key} set to ${rawValue} ${design.units}.`);
+  };
+
+  const createPartFromPalette = (kind: CADPrimitiveShape) => {
+    if (!design || !activeAssembly) return;
+    const created = createPrimitivePart(design.backendProject, activeAssembly.id, kind, selectedPart?.id ?? null);
+    if (!created.partId) return;
+    commitAuthoredProject(created.project, {
+      selectedPartId: created.partId,
+      message: `Created ${kind.replaceAll('_', ' ')} primitive on the XYZ workspace. It is editable visual geometry, not generated parametric CAD.`,
+    });
+    markDemoStep('select-part');
+  };
+
+  const createAssemblyFromPalette = () => {
+    if (!design) return;
+    const created = createAssemblyWithBase(design.backendProject);
+    commitAuthoredProject(created.project, {
+      selectedAssemblyId: created.assemblyId,
+      selectedPartId: created.partId,
+      message: 'Created a new visual assembly with a base plate on the XYZ grid. Add links, joints, motors, and wires from the palette.',
+    });
+  };
+
+  const duplicateSelectedPart = () => {
+    if (!design || !activeAssembly || !selectedPart) return;
+    const duplicated = duplicatePart(design.backendProject, activeAssembly.id, selectedPart.id);
+    if (!duplicated.partId) return;
+    commitAuthoredProject(duplicated.project, {
+      selectedPartId: duplicated.partId,
+      message: `Duplicated ${selectedPart.name} as a safe local visual primitive copy.`,
+    });
+  };
+
+  const deleteSelectedPart = () => {
+    if (!design || !activeAssembly || !selectedPart) return;
+    const deleted = deleteVisualPart(design.backendProject, activeAssembly.id, selectedPart.id);
+    commitAuthoredProject(deleted.project, {
+      selectedPartId: deleted.nextPartId,
+      message: deleted.deleted
+        ? `Deleted ${selectedPart.name} from the active visual assembly.`
+        : 'Delete is limited to visual-authoring parts with no wiring or electronics links so seeded demo evidence is not corrupted.',
+    });
+  };
+
+  const connectSelectedPart = (parentPartId: string | null, jointType: CADJointType) => {
+    if (!design || !selectedPart) return;
+    commitAuthoredProject(connectPartToParent(design.backendProject, selectedPart.id, parentPartId, jointType), {
+      selectedPartId: selectedPart.id,
+      message: parentPartId
+        ? `${selectedPart.name} is connected to ${activeAssembly?.parts.find((part) => part.id === parentPartId)?.name ?? parentPartId} with a ${jointType} joint marker.`
+        : `${selectedPart.name} is no longer parented in the simple assembly chain.`,
+    });
+  };
+
+  const routeWireToTarget = () => {
+    if (!design || !activeAssembly || !selectedPart || !wireRouteTargetId) return;
+    const routed = createWireRoute(design.backendProject, activeAssembly.id, selectedPart.id, wireRouteTargetId);
+    if (!routed.routeId) {
+      setAuthoringMessage('Choose two different parts in the active assembly before routing a wire harness segment.');
+      return;
+    }
+    commitAuthoredProject(routed.project, {
+      selectedPartId: selectedPart.id,
+      message: `Created visible wire route ${routed.routeId}. The route is a polyline with heuristic clearance and bend data, not exact electrical validation.`,
+    });
+    markDownstreamPanelReviewed('wiring');
+  };
+
   const createProjectFromIntent = (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     const trimmedIntent = intentText.trim();
@@ -455,7 +612,8 @@ function App() {
     const conceptTask = taskFromDesignIntent(conceptDesign.task, trimmedIntent);
     const localBackend = { ...conceptDesign.backend };
     delete localBackend.apiBaseUrl;
-    const nextDesign: ReferenceDesign = isolateOfflineDesign({
+    const intentUnits = inferUnitsFromIntent(trimmedIntent, conceptDesign.units);
+    const isolatedDesign: ReferenceDesign = isolateOfflineDesign({
       ...conceptDesign,
       id: 'local-design-intent-concept',
       name: 'New mechanism concept from prompt',
@@ -463,22 +621,46 @@ function App() {
       license: 'Local concept seed, no external CAD asset',
       formats: ['Prompt intent', 'Reference images metadata', 'Proxy 3D viewport'],
       task: conceptTask,
+      backendProject: {
+        ...conceptDesign.backendProject,
+        id: 'local-design-intent-concept',
+        name: 'New mechanism concept from prompt',
+        reference_design_id: null,
+        active_task: {
+          ...(conceptDesign.backendProject.active_task ?? {
+            id: 'task-local-design-intent',
+            kind: 'lift_payload',
+            description: conceptTask.label,
+            validation_method: 'heuristic',
+            assumptions: [],
+          }),
+          description: conceptTask.label,
+          target_value: conceptTask.targetPayloadLb,
+          unit: conceptTask.targetPayloadLb == null ? null : 'lb',
+        },
+        units: intentUnits,
+        analysis_jobs: [],
+        reports: [],
+      },
+      units: intentUnits,
+      analysisJobs: [],
+      reports: [],
+      wiringReview: null,
       backend: {
         ...localBackend,
         projectId: 'local-design-intent-concept',
         source: 'bundled-mock',
-        endpoint: 'local prompt concept, proxy geometry reused from bundled mock data',
+        endpoint: 'local visual prompt concept persisted through browser project file export',
         advisoryNotice: 'This project was started from typed design intent. The viewport is an interactive concept proxy until real CAD generation, reconstruction, and FEA workers are connected.',
       },
-      analysisJobs: [],
-      reports: [],
-      wiringReview: null,
     }, 'local-design-intent-concept');
+    const promptedProject = applyIntentToProjectGeometry(isolatedDesign.backendProject, trimmedIntent, conceptTask.reachMeters, intentUnits);
+    const nextDesign = remapDesignFromProject(isolatedDesign, promptedProject);
     applyLoadedDesign(nextDesign);
     rememberRecentProject(nextDesign, trimmedIntent, referenceImages);
     setWorkspaceMode('design');
     setSubstitutionPreview(null);
-    setIntentMessage('Started a concept workspace from your prompt. The 3D viewport is a proxy rendering, not generated CAD or photo reconstruction.');
+    setIntentMessage('Started a concept workspace from your prompt. Units and reach prefilled visible geometry on the XYZ grid; this is not generated parametric CAD or photo reconstruction.');
   };
 
   const loadReadyExample = async (exampleId: ReadyExampleId) => {
@@ -697,15 +879,12 @@ function App() {
   };
 
   const exportCurrentProjectFile = async () => {
-    if (!design?.backend.apiBaseUrl) {
-      setProjectFileMessage('Start the desktop demo with a local backend or mock API to export a portable project file.');
-      return;
-    }
+    if (!design) return;
     const requestVersion = projectLoadVersion.current;
     setProjectFilePending(true);
-    setProjectFileMessage('Preparing portable MechaFlow project file...');
+    setProjectFileMessage('Preparing portable MechaFlow project file from the current visual model...');
     try {
-      const projectFile = await exportProjectFile(design.backend.apiBaseUrl, design.backend.projectId);
+      const projectFile = buildLocalProjectFile(design);
       const blob = new Blob([JSON.stringify(projectFile, null, 2)], { type: 'application/json' });
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -722,12 +901,13 @@ function App() {
           artifactIds: projectFile.project.analysis_jobs.flatMap((job) => job.artifacts.flatMap((artifact) => (artifact.id ? [artifact.id] : []))),
           artifactContent: evidenceArtifactSignature(projectFile.project.analysis_jobs.flatMap((job) => job.artifacts)),
         });
-        setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}. Re-import it to complete the round trip.`);
+        setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}. Re-import it to verify units, visual parts, assemblies, equipment, wiring, and analysis evidence.`);
+        markDemoStep('export-import');
       }
     } catch (error) {
       console.warn('Project export failed.', error);
       if (projectLoadVersion.current === requestVersion) {
-        setProjectFileMessage('Project export failed. Check that the backend supports MechaFlow project files.');
+        setProjectFileMessage('Project export failed. Check the current local visual project state.');
       }
     } finally {
       if (projectLoadVersion.current === requestVersion) setProjectFilePending(false);
@@ -923,12 +1103,8 @@ function App() {
     {
       id: 'export-import',
       label: 'Export or reopen evidence',
-      status: hasExportOrImport
-        ? 'complete'
-        : design.backend.apiBaseUrl ? 'available' : 'unavailable',
-      summary: design.backend.apiBaseUrl
-        ? 'Export a .mfcad.json evidence package, then import it again to prove the round trip.'
-        : 'Project file import and export need a local API connection.',
+      status: hasExportOrImport ? 'complete' : 'available',
+      summary: 'Export a .mfcad.json visual project package, then import it again to prove units, parts, assemblies, wiring, and evidence survive the round trip.',
       anchor: '#project-file-controls',
       actionLabel: 'Open file controls',
     },
@@ -955,10 +1131,10 @@ function App() {
           <span className="app-mark" aria-hidden="true">MF</span>
           <div>
             <p className="eyebrow">MechaFlow CAD</p>
-            <h1>Start with intent, then refine the model.</h1>
+            <h1>Author a visual robot or machine on the XYZ grid.</h1>
             <p>
-              A robotics CAD cockpit with the 3D view first. Type a prompt, add reference images, open a project,
-              or load a ready local example before switching into analysis and manufacturing tools.
+              Choose units, create editable 3D primitives, assemble a robot arm or machine, place motors and connectors,
+              route visible wiring, then export or import the authored project data.
             </p>
           </div>
         </div>
@@ -988,11 +1164,11 @@ function App() {
         <aside className="panel cad-sidebar project-browser" id="project-browser" aria-label="Project and example browser">
           <p className="eyebrow">Project browser</p>
           <h2>Start small</h2>
-          <p className="sidebar-copy">Choose one path. Everything else stays tucked into tool modes until the model needs it.</p>
+          <p className="sidebar-copy">Create from a prompt, open a saved .mfcad file, or load a local seed, then keep authoring directly on the canvas.</p>
           <div className="quick-start-stack">
             <button className="primary-start" onClick={() => createProjectFromIntent()} type="button">
               <span>New from prompt</span>
-              <small>Uses the command line below and keeps the first render as a proxy concept.</small>
+              <small>Parses units and reach, then pre-fills editable visual geometry.</small>
             </button>
             <label className={`open-project-button ${projectFilePending ? 'disabled' : ''}`}>
               <span>Open local project</span>
@@ -1048,12 +1224,12 @@ function App() {
         </aside>
 
         <section className="canvas-column" aria-label="3D workspace and command line">
-          <section className="viewer-card panel primary-viewer" id="assembly-viewer" aria-label="Interactive 3D rendering workspace">
+          <section className="viewer-card panel primary-viewer" id="assembly-viewer" aria-label="Interactive visual CAD authoring workspace">
             <div className="viewer-toolbar">
               <div>
-                <p className="eyebrow">Interactive 3D rendering</p>
+                <p className="eyebrow">Visual CAD authoring workspace</p>
                 <h2>{activeAssembly.name}</h2>
-                <small>Orbit the proxy assembly, explode the view, or select a part to update the inspector.</small>
+                <small>Author visible primitives on an XYZ grid: select geometry, edit dimensions, place motors, and route harnesses.</small>
               </div>
               <div className="viewer-controls" aria-label="3D view controls">
                 <button type="button" onClick={() => setExplodePercent((value) => (value > 0 ? 0 : 100))}>
@@ -1087,61 +1263,59 @@ function App() {
                   <span>Pitch</span>
                   <input
                     aria-label="Assembly orbit pitch"
-                    max="42"
-                    min="-18"
+                    max="68"
+                    min="8"
                     onChange={(event) => setOrbitPitchDeg(Number(event.target.value))}
                     type="range"
                     value={orbitPitchDeg}
                   />
                 </label>
+                <label>
+                  <span>Zoom</span>
+                  <input
+                    aria-label="Canvas zoom"
+                    max="1.9"
+                    min="0.55"
+                    onChange={(event) => setViewZoom(Number(event.target.value))}
+                    step="0.05"
+                    type="range"
+                    value={viewZoom}
+                  />
+                </label>
+                <button type="button" onClick={() => setViewPan((value) => ({ ...value, x: value.x - 32 }))}>Pan left</button>
+                <button type="button" onClick={() => setViewPan((value) => ({ ...value, x: value.x + 32 }))}>Pan right</button>
+                <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); }}>Reset view</button>
               </div>
             </div>
-            <div className="viewer-stage" role="img" aria-label="Interactive exploded view of a robot arm assembly">
-              <div className="reach-envelope" aria-hidden="true" />
-              <div
-                className="assembly-rotor"
-                style={{
-                  '--rotation-deg': `${rotationDeg}deg`,
-                  '--orbit-pitch-deg': `${orbitPitchDeg}deg`,
-                } as CSSProperties}
-              >
-                <div className="wire wire-main" />
-                <div className="wire wire-left" />
-                <div className="wire wire-wrist" />
-                {activeAssembly.parts.map((part) => {
-                  const explodeScale = explodePercent / 100;
-                  return (
-                    <button
-                      aria-pressed={part.id === selectedPart.id}
-                      className={`part-shape shape-${part.visual.shape ?? 'plate'} risk-${part.stressRisk} ${part.id === selectedPart.id ? 'selected' : ''}`}
-                      key={part.id}
-                      onClick={() => selectPart(part.id)}
-                      style={{
-                        '--x': `${part.visual.x}%`,
-                        '--y': `${part.visual.y}%`,
-                        '--w': `${part.visual.width}%`,
-                        '--h': `${part.visual.height}%`,
-                        '--tx': `${part.visual.explodeX * explodeScale}%`,
-                        '--ty': `${part.visual.explodeY * explodeScale}%`,
-                        '--part-color': part.visual.color,
-                        '--part-rotation': `${part.visual.rotationDeg ?? 0}deg`,
-                        '--part-z': part.visual.zIndex ?? 2,
-                      } as CSSProperties}
-                      type="button"
-                    >
-                      <span>{part.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <VisualCadWorkspace
+              explodePercent={explodePercent}
+              onNudgeSelected={(delta) => updateSelectedPartGeometry({
+                position: {
+                  x: selectedPart.authoring.positionMm.x + delta.x,
+                  y: selectedPart.authoring.positionMm.y + delta.y,
+                  z: Math.max(0, selectedPart.authoring.positionMm.z + delta.z),
+                },
+              }, `${selectedPart.name} moved on the XYZ grid.`)}
+              onSelectPart={selectPart}
+              onViewChange={(nextView) => {
+                setRotationDeg(nextView.yawDeg);
+                setOrbitPitchDeg(nextView.pitchDeg);
+                setViewZoom(nextView.zoom);
+                setViewPan({ x: nextView.panX, y: nextView.panY });
+              }}
+              parts={activeAssembly.parts}
+              selectedPartId={selectedPart.id}
+              units={design.units}
+              view={{ yawDeg: rotationDeg, pitchDeg: orbitPitchDeg, zoom: viewZoom, panX: viewPan.x, panY: viewPan.y }}
+              wiringRoutes={visibleDesign.wiringRoutes}
+            />
             <div className="viewer-footer">
               <span>
-                Exploded-view data:{' '}
-                {activeAssembly.explodedProgress == null ? 'review required' : `${activeAssembly.explodedProgress}% demo transforms ready`} - explode {explodePercent}%
+                Visual model: {activeAssembly.parts.length} primitives, {visibleDesign.wiringRoutes.length} harness route{visibleDesign.wiringRoutes.length === 1 ? '' : 's'}, units {design.units}.
               </span>
-              <span>Orbit yaw {rotationDeg} degrees, pitch {orbitPitchDeg} degrees. Harness routes are visual references under review.</span>
+              <span>Explode {explodePercent}%, orbit yaw {rotationDeg} degrees, pitch {orbitPitchDeg} degrees, zoom {viewZoom.toFixed(2)}. MVP visual primitives are not a parametric CAD kernel.</span>
             </div>
+            {authoringMessage ? <p className="authoring-message" aria-live="polite">{authoringMessage}</p> : null}
           </section>
 
           <section className="command-dock panel" aria-label="Design intent command line">
@@ -1227,23 +1401,253 @@ function App() {
           </section>
 
           {workspaceMode === 'design' ? (
-            <section className="panel design-overview" aria-label="Design mode summary">
-              <p className="eyebrow">Design mode</p>
-              <h2>Model first, tools when needed</h2>
-              <div className="mode-summary-grid">
-                <div>
-                  <strong>{activeAssembly.parts.length}</strong>
-                  <span>selectable parts</span>
+            <section className="visual-authoring-dock" aria-label="Visual CAD authoring tools">
+              <section className="panel design-overview" aria-label="Design mode summary">
+                <p className="eyebrow">Design mode</p>
+                <h2>Build the model visually</h2>
+                <div className="mode-summary-grid">
+                  <div>
+                    <strong>{activeAssembly.parts.length}</strong>
+                    <span>selectable primitives</span>
+                  </div>
+                  <div>
+                    <strong>{visibleDesign.wiringRoutes.length}</strong>
+                    <span>visible wiring routes</span>
+                  </div>
+                  <div>
+                    <strong>{formatLength(selectedPart.authoring.dimensionsMm.lengthMm ?? 0, design.units)}</strong>
+                    <span>selected length</span>
+                  </div>
                 </div>
-                <div>
-                  <strong>{materialOptions.length}</strong>
-                  <span>material options for selected part</span>
+              </section>
+
+              <section className="panel authoring-panel units-panel" aria-label="Project units and targets">
+                <div className="section-heading-row">
+                  <div>
+                    <p className="eyebrow">Units and targets</p>
+                    <h2>Choose working units</h2>
+                  </div>
+                  <span className="status-pill status-review_required">local</span>
                 </div>
-                <div>
-                  <strong>{referenceImages.length}</strong>
-                  <span>reference images</span>
+                <label className="field-row compact-field">
+                  <span>Units</span>
+                  <select aria-label="Project authoring units" onChange={(event) => changeProjectUnits(event.target.value as AuthoringUnit)} value={design.units}>
+                    {unitOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </label>
+                <div className="authoring-grid two-col">
+                  <label className="field-row compact-field">
+                    <span>Reach target</span>
+                    <input
+                      aria-label="Reach target in selected units"
+                      min="0"
+                      onChange={(event) => commitAuthoredProject(updateProjectTargets(design.backendProject, { reachMm: lengthToMm(Number(event.target.value), design.units) }), {
+                        selectedPartId: selectedPart.id,
+                        message: `Reach target set to ${event.target.value} ${design.units}.`,
+                      })}
+                      step="0.01"
+                      type="number"
+                      value={Number(lengthFromMm(design.task.reachMeters == null ? 0 : design.task.reachMeters * 1000, design.units).toFixed(3))}
+                    />
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Payload lb</span>
+                    <input
+                      aria-label="Payload target in pounds"
+                      min="0"
+                      onChange={(event) => commitAuthoredProject(updateProjectTargets(design.backendProject, { payloadLb: Number(event.target.value) }), {
+                        selectedPartId: selectedPart.id,
+                        message: `Payload target set to ${event.target.value} lb.`,
+                      })}
+                      step="1"
+                      type="number"
+                      value={design.task.targetPayloadLb ?? 0}
+                    />
+                  </label>
                 </div>
-              </div>
+                <p className="microcopy">Display units are user-selectable; portable project files still store numeric geometry in millimeters for backend consistency.</p>
+              </section>
+
+              <section className="panel authoring-panel" aria-label="Create parts and equipment">
+                <div className="section-heading-row">
+                  <div>
+                    <p className="eyebrow">Create geometry</p>
+                    <h2>Primitive palette</h2>
+                  </div>
+                  <button type="button" onClick={createAssemblyFromPalette}>New assembly</button>
+                </div>
+                <div className="primitive-palette" aria-label="Visual CAD primitive palette">
+                  {([
+                    ['base_plate', 'Base'],
+                    ['beam', 'Beam'],
+                    ['cylinder_joint', 'Joint'],
+                    ['bracket', 'Bracket'],
+                    ['motor_block', 'Motor'],
+                    ['connector', 'Connector'],
+                    ['electronics', 'Electronics'],
+                    ['tool', 'Tool'],
+                  ] as Array<[CADPrimitiveShape, string]>).map(([kind, label]) => (
+                    <button key={kind} onClick={() => createPartFromPalette(kind)} type="button">
+                      <span className={`primitive-icon primitive-${kind}`} aria-hidden="true" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="authoring-actions">
+                  <button type="button" onClick={duplicateSelectedPart}>Duplicate selected</button>
+                  <button type="button" onClick={deleteSelectedPart}>Delete visual part</button>
+                  <button type="button" onClick={exportCurrentProjectFile}>Export .mfcad</button>
+                </div>
+              </section>
+
+              <section className="panel authoring-panel part-inspector" aria-label="Selected geometry inspector">
+                <div className="section-heading-row">
+                  <div>
+                    <p className="eyebrow">Selected geometry</p>
+                    <strong className="panel-title-like">{selectedPart.name}</strong>
+                  </div>
+                  <span className={`status-pill status-${selectedPart.analysisReadiness.state.replace(/_/g, '-')}`}>{selectedPart.analysisReadiness.state.replaceAll('_', ' ')}</span>
+                </div>
+                <div className="authoring-grid three-col">
+                  {[
+                    ['length', selectedPart.authoring.dimensionsMm.lengthMm ?? 0],
+                    ['width', selectedPart.authoring.dimensionsMm.widthMm ?? 0],
+                    ['height', selectedPart.authoring.dimensionsMm.heightMm ?? 0],
+                  ].map(([key, value]) => (
+                    <label className="field-row compact-field" key={key}>
+                      <span>{key}</span>
+                      <input
+                        aria-label={`${key} in ${design.units}`}
+                        min="0.001"
+                        onChange={(event) => updateSelectedDimension(key as 'length' | 'width' | 'height', event.target.value)}
+                        step="0.1"
+                        type="number"
+                        value={dimensionDrafts[`${selectedPart.id}:${design.units}:${key}`] ?? Number(lengthFromMm(Number(value), design.units).toFixed(3))}
+                      />
+                    </label>
+                  ))}
+                  <label className="field-row compact-field">
+                    <span>X</span>
+                    <input
+                      aria-label={`Selected part X position in ${design.units}`}
+                      onChange={(event) => updateSelectedPartGeometry({ position: { x: lengthToMm(Number(event.target.value), design.units) } }, `${selectedPart.name} X position updated.`)}
+                      step="0.1"
+                      type="number"
+                      value={Number(lengthFromMm(selectedPart.authoring.positionMm.x, design.units).toFixed(3))}
+                    />
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Y</span>
+                    <input
+                      aria-label={`Selected part Y position in ${design.units}`}
+                      onChange={(event) => updateSelectedPartGeometry({ position: { y: lengthToMm(Number(event.target.value), design.units) } }, `${selectedPart.name} Y position updated.`)}
+                      step="0.1"
+                      type="number"
+                      value={Number(lengthFromMm(selectedPart.authoring.positionMm.y, design.units).toFixed(3))}
+                    />
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Z</span>
+                    <input
+                      aria-label={`Selected part Z position in ${design.units}`}
+                      min="0"
+                      onChange={(event) => updateSelectedPartGeometry({ position: { z: lengthToMm(Number(event.target.value), design.units) } }, `${selectedPart.name} Z position updated.`)}
+                      step="0.1"
+                      type="number"
+                      value={Number(lengthFromMm(selectedPart.authoring.positionMm.z, design.units).toFixed(3))}
+                    />
+                  </label>
+                </div>
+                <div className="authoring-grid two-col">
+                  <label className="field-row compact-field">
+                    <span>Shape</span>
+                    <input readOnly value={selectedPart.authoring.primitive.replaceAll('_', ' ')} />
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Rotation Z</span>
+                    <input
+                      aria-label="Selected part Z rotation in degrees"
+                      max="180"
+                      min="-180"
+                      onChange={(event) => updateSelectedPartGeometry({ rotationZDeg: Number(event.target.value) }, `${selectedPart.name} rotation updated.`)}
+                      step="1"
+                      type="number"
+                      value={selectedPart.authoring.rotationDeg.z}
+                    />
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Material</span>
+                    <select
+                      aria-label="Selected part material"
+                      onChange={(event) => updateSelectedPartGeometry({ materialId: event.target.value }, `${selectedPart.name} material set to ${event.target.options[event.target.selectedIndex]?.text ?? event.target.value}.`)}
+                      value={selectedPart.authoring.materialId ?? ''}
+                    >
+                      {design.backendProject.materials.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Process</span>
+                    <select
+                      aria-label="Selected part manufacturing process"
+                      onChange={(event) => updateSelectedPartGeometry({ manufacturingProcess: event.target.value }, `${selectedPart.name} manufacturing process set to ${event.target.value.replaceAll('_', ' ')}.`)}
+                      value={selectedPartProcessValue}
+                    >
+                      {selectedPartProcessOptions.map((option) => <option key={option.id} value={option.process}>{option.process.replaceAll('_', ' ')}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <p className="microcopy">Live dimensions and XYZ coordinates update authored project metadata immediately. Strength, tolerance, mass, and manufacturability remain review-required until real CAD and solver integrations run.</p>
+              </section>
+
+              <section className="panel authoring-panel assembly-authoring-panel" aria-label="Assembly and wiring authoring">
+                <div className="section-heading-row">
+                  <div>
+                    <p className="eyebrow">Assembly and wiring</p>
+                    <h2>Connect the robot</h2>
+                  </div>
+                  <span>{activeAssembly.parts.length} parts</span>
+                </div>
+                <div className="authoring-grid two-col">
+                  <label className="field-row compact-field">
+                    <span>Parent</span>
+                    <select
+                      aria-label="Selected part parent"
+                      onChange={(event) => connectSelectedPart(event.target.value || null, selectedPart.authoring.jointType)}
+                      value={selectedPart.authoring.parentPartId ?? ''}
+                    >
+                      <option value="">Unassigned</option>
+                      {activeAssembly.parts.filter((part) => part.id !== selectedPart.id).map((part) => <option key={part.id} value={part.id}>{part.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Joint</span>
+                    <select
+                      aria-label="Selected part joint type"
+                      onChange={(event) => connectSelectedPart(selectedPart.authoring.parentPartId, event.target.value as CADJointType)}
+                      value={selectedPart.authoring.jointType}
+                    >
+                      {(['fixed', 'revolute', 'prismatic', 'tool_mount', 'unassigned'] as CADJointType[]).map((joint) => <option key={joint} value={joint}>{joint.replaceAll('_', ' ')}</option>)}
+                    </select>
+                  </label>
+                  <label className="field-row compact-field">
+                    <span>Wire to</span>
+                    <select aria-label="Wire route target part" onChange={(event) => setWireRouteTargetId(event.target.value)} value={wireRouteTargetId}>
+                      <option value="">Choose part</option>
+                      {activeAssembly.parts.filter((part) => part.id !== selectedPart.id).map((part) => <option key={part.id} value={part.id}>{part.name}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" onClick={routeWireToTarget}>Route visible wire</button>
+                </div>
+                <ul className="wire-route-list" aria-label="Visible wire routes">
+                  {visibleDesign.wiringRoutes.slice(0, 5).map((route) => (
+                    <li key={route.id}>
+                      <strong>{route.name}</strong>
+                      <small>{route.wireSegmentIds.length} segment{route.wireSegmentIds.length === 1 ? '' : 's'} - {route.reviewStatus.replaceAll('_', ' ')}</small>
+                    </li>
+                  ))}
+                </ul>
+                <p className="microcopy">Wiring routes are intentionally visible in the canvas and portable project JSON. Bend radius, service loops, current, EMI, and collision checks are marked review-required.</p>
+              </section>
             </section>
           ) : (
             <section className="mode-deck" aria-label={`${activeMode.label} tools`}>
@@ -1274,12 +1678,12 @@ function App() {
                 <>
                   <ReportPanel reports={visibleDesign.reports} selectedOption={substitutionPreview?.option ?? selectedOption} />
                   <ProjectFilePanel
-                    canUseProjectFiles={Boolean(design.backend.apiBaseUrl)}
+                    canUseProjectFiles={true}
                     message={projectFileMessage}
                     onExport={exportCurrentProjectFile}
                     onImport={importCurrentProjectFile}
                     pending={projectFilePending}
-                    projectId={design.backend.projectId}
+                    projectId={design.backendProject.id}
                   />
                   <DemoGuidePanel onOpenStep={openDemoGuideStep} steps={demoGuideSteps} onMarkReviewed={markDemoStep} />
                 </>
@@ -1297,7 +1701,7 @@ function App() {
             <div>
               <dt>Material</dt>
               <dd>
-                {selectedPart.material}
+                <span>{selectedPart.material}</span>
                 <small className="criterion-source">
                   {materialCriterion?.status ?? 'review-required'} - {materialCriterion?.sourceConfidence ?? 'review-required source'}
                 </small>
@@ -1455,7 +1859,7 @@ function ProjectFilePanel({
     <section className="project-file-panel" id="project-file-controls" aria-label="Project file import and export">
       <div>
         <strong>Portable project file</strong>
-        <small>JSON v1 preserves project {projectId}, assemblies, wiring, materials, analysis readiness, and artifacts.</small>
+        <small>JSON v1 preserves project {projectId}, units, visual primitives, assemblies, wiring, materials, analysis readiness, and artifacts.</small>
       </div>
       <div className="project-file-actions">
         <button disabled={!canUseProjectFiles || pending} onClick={onExport} type="button">
@@ -1474,8 +1878,8 @@ function ProjectFilePanel({
       </div>
       <small className="project-file-help">
         {canUseProjectFiles
-          ? 'Use this to save, share, and reopen the local desktop demo project.'
-          : 'Bundled offline mock data is read-only. Start the backend or desktop mock API for import and export.'}
+          ? 'Use this to save, share, and reopen the current browser-authored visual model. A backend connection is optional.'
+          : 'Project import or export is temporarily unavailable while the file operation is pending.'}
       </small>
       {message ? <p className="project-file-message" aria-live="polite">{message}</p> : null}
     </section>

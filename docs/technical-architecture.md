@@ -43,17 +43,20 @@ Use the React cockpit in `src/` for product UI work. Use `frontend/` only when t
 
 Owner files:
 
-- `src/App.tsx` and `src/App.css` for the application shell, 3D workspace, sidebars, mode deck, project paths, reference image intake, material tools, analysis, manufacturing, reports, and backend handoff UI.
+- `src/App.tsx` and `src/App.css` for the application shell, visual CAD workspace shell, sidebars, mode deck, project paths, reference image intake, authoring tools, material tools, analysis, manufacturing, reports, and backend handoff UI.
+- `src/VisualCadWorkspace.tsx` for the SVG XYZ grid, isometric primitives, orbit, pan, zoom, selection, dimensions, joint lines, and visible wiring polylines.
 - `src/lib/api.ts` for backend and mock API calls.
 - `src/lib/backendMapper.ts` for mapping backend panel data into cockpit state.
+- `src/lib/visualAuthoring.ts` for browser-side unit conversion, primitive creation, geometry mutation, assembly metadata, visible wire-route creation, local project-file export projection, and remapping authored backend project data into React state.
 - `src/lib/designIntent.ts` for local design-intent chip extraction.
 - `src/data/backendPanelData.json`, `src/data/mockDesign.ts`, and `src/data/readyExamples.ts` for local fallback demo state.
 - `src/*.test.tsx`, `src/lib/*.test.ts`, and `src/data/*.test.ts` for frontend behavior coverage.
 
 Current behavior:
 
-- Opens directly into a 3D-first cockpit with compact CAD-style sidebars.
-- Supports new prompt concepts, local project import, recent project reopen, reference catalog path, and repository-local ready examples.
+- Opens directly into a visual CAD authoring cockpit with compact CAD-style sidebars.
+- Supports unit selection, primitive creation, selected geometry edits, motor and connector placement, parent and joint metadata, orbit, pan, zoom, explode, and visible wire routing.
+- Supports new prompt concepts, local project import/export, recent project reopen, reference catalog path, and repository-local ready examples.
 - Treats reference images as local metadata only.
 - Groups advanced panels by Design, Analysis, Manufacturing, Reports, and Backend modes.
 - Connects to the FastAPI backend when `VITE_API_BASE_URL` is set, otherwise falls back to bundled or Node mock data.
@@ -89,7 +92,7 @@ Current behavior:
 
 - Exposes project, catalog, material, task, panel-data, BOM, manufacturing, wiring, report, readiness, job queue, project-file, and integration metadata endpoints.
 - Uses an in-memory store for local MVP state. Restarting the API clears user-created projects and jobs except seeded fixtures.
-- Validates project imports through backend schemas and rejects malformed envelopes, invalid references, non-finite numbers, unsupported cached artifacts, and impossible download URLs.
+- Validates project imports through backend schemas and rejects malformed envelopes, invalid references, non-finite numbers, unsupported units, unsupported cached artifacts, and impossible download URLs.
 - Keeps local pre-solver runs and solver-readiness fixtures distinct from full project FEA.
 - Produces cloud recommendations only as planning estimates. It does not configure providers, credentials, billing, budgets, or remote execution.
 
@@ -106,7 +109,7 @@ Seed records are demo and planning inputs. They must preserve license status, so
 
 ## Business rules encoded in the implementation
 
-- The active engineering task remains visible while users inspect or edit parts.
+- The active engineering task remains visible while users inspect, create, route, or edit parts.
 - Material substitution is two-step: preview first, then validated apply. Incompatible material/process intersections return clear errors and do not mutate the project.
 - Effective material or dimension changes clear stored part mass until a CAD worker recalculates it.
 - BOM, manufacturing, readiness, reports, and queue panels are derived from project state and seed manufacturing options. Cost and lead-time values are ranges, not exact quotes.
@@ -140,9 +143,9 @@ Future production services should use the same contracts already exercised by th
 
 The frontend should provide:
 
-- Input-first opening path.
+- Visual-authoring-first opening path.
 - Project dashboard, import/export, recent, reference, and ready-example paths.
-- 3D assembly viewer with explode and part selection.
+- SVG 3D assembly viewer with XYZ grid, orbit, pan, zoom, explode, part selection, primitive creation, selected geometry editing, parent/joint metadata, and visible wire routing.
 - CAD-style contextual sidebars.
 - Part inspector, material and dimension editor, and active task context.
 - Analysis readiness, job queue, local/cloud recommendation, manufacturing, wiring, report, and backend handoff panels.

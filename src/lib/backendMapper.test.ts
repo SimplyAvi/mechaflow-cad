@@ -32,6 +32,37 @@ describe('mapProjectPanelDataToReferenceDesign', () => {
     expect(design.assembly.parts.find((part) => part.id === 'part-palm-plate')?.stressRisk).toBe('high');
   });
 
+  it('maps visual authoring units, dimensions, and part metadata', () => {
+    const panelData = structuredClone(mockProjectPanelData);
+    panelData.project.units = 'in';
+    panelData.project.metadata = { visual_authoring: { reach_mm: 711.2 } };
+    panelData.task_requirements = panelData.project.active_task ? [panelData.project.active_task] : [];
+    const part = panelData.project.assemblies[0]!.parts[0]!;
+    part.dimensions.diameter_mm = 31.75;
+    part.metadata.visual_authoring = {
+      primitive: 'motor_block',
+      position_mm: { x: 10, y: 20, z: 30 },
+      rotation_deg: { x: 0, y: 0, z: 45 },
+      joint_type: 'revolute',
+      parent_part_id: 'part-shoulder-yoke',
+      color: '#ff00ff',
+      authored: true,
+    };
+
+    const design = mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata);
+    const mapped = design.assembly.parts[0];
+
+    expect(design.units).toBe('in');
+    expect(design.task.reachMeters).toBeCloseTo(0.7112);
+    expect(mapped?.authoring.primitive).toBe('motor_block');
+    expect(mapped?.authoring.dimensionsMm.diameterMm).toBe(31.75);
+    expect(mapped?.authoring.positionMm).toEqual({ x: 10, y: 20, z: 30 });
+    expect(mapped?.authoring.rotationDeg.z).toBe(45);
+    expect(mapped?.authoring.parentPartId).toBe('part-shoulder-yoke');
+    expect(mapped?.authoring.materialId).toBe(part.material_id);
+    expect(mapped?.authoring.authored).toBe(true);
+  });
+
   it('maps explicit service-loop and route review evidence without claiming exact validation', () => {
     const design = mapProjectPanelDataToReferenceDesign(mockProjectPanelData, mockBackendMetadata);
 

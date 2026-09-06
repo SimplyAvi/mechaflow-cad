@@ -2059,3 +2059,816 @@ small,
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+
+/* Visual CAD authoring MVP overrides */
+.input-first-shell .workspace-topbar {
+  grid-template-columns: minmax(380px, 1.15fr) minmax(430px, max-content) minmax(300px, 390px);
+}
+
+.input-first-shell .project-cockpit {
+  grid-template-columns: minmax(250px, 0.78fr) minmax(680px, 1.7fr) minmax(300px, 0.92fr);
+}
+
+.viewer-card.primary-viewer {
+  overflow: hidden;
+}
+
+.primary-viewer .viewer-toolbar {
+  align-items: start;
+}
+
+.primary-viewer .viewer-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  max-width: 760px;
+}
+
+.primary-viewer .viewer-controls label {
+  background: rgba(2, 6, 23, 0.4);
+  border: 1px solid rgba(125, 211, 252, 0.14);
+  border-radius: 999px;
+  color: #bae6fd;
+  display: grid;
+  gap: 2px;
+  min-width: 110px;
+  padding: 6px 10px;
+}
+
+.primary-viewer .viewer-controls label span {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.primary-viewer .viewer-controls input[type='range'] {
+  accent-color: #38bdf8;
+  max-width: 120px;
+}
+
+.visual-cad-stage {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(56, 189, 248, 0.18), transparent 34%),
+    linear-gradient(145deg, rgba(2, 6, 23, 0.94), rgba(8, 47, 73, 0.7));
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 22px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 -40px 90px rgba(2, 6, 23, 0.72);
+  height: clamp(420px, 52vh, 660px);
+  margin: 14px 18px 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.visual-cad-canvas {
+  cursor: grab;
+  display: block;
+  height: 100%;
+  touch-action: none;
+  width: 100%;
+}
+
+.visual-cad-canvas:active {
+  cursor: grabbing;
+}
+
+.visual-cad-grid-line {
+  stroke: rgba(125, 211, 252, 0.13);
+  stroke-width: 1;
+}
+
+.visual-cad-axis-line {
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.18));
+  stroke-linecap: round;
+  stroke-width: 2.6;
+}
+
+.axis-x,
+.axis-y,
+.axis-z {
+  font-size: 15px;
+  font-weight: 900;
+  paint-order: stroke;
+  stroke: rgba(2, 6, 23, 0.8);
+  stroke-width: 3px;
+}
+
+.visual-cad-origin {
+  fill: #e0f2fe;
+  filter: drop-shadow(0 0 10px rgba(224, 242, 254, 0.7));
+}
+
+.visual-cad-connection {
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.visual-cad-connection.fixed {
+  stroke: rgba(148, 163, 184, 0.5);
+}
+
+.visual-cad-connection.revolute {
+  stroke: rgba(167, 139, 250, 0.7);
+}
+
+.visual-cad-connection.prismatic,
+.visual-cad-connection.linear {
+  stroke: rgba(34, 197, 94, 0.7);
+  stroke-dasharray: 7 5;
+}
+
+.visual-cad-connection.tool_mount {
+  stroke: rgba(244, 114, 182, 0.78);
+}
+
+.wire-route-visual {
+  fill: none;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.72));
+  stroke: #22d3ee;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.wire-point {
+  fill: #cffafe;
+  stroke: rgba(8, 47, 73, 0.8);
+  stroke-width: 2;
+}
+
+.wire-route-label,
+.dimension-label,
+.part-label {
+  fill: #e0f2fe;
+  font-weight: 900;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: rgba(2, 6, 23, 0.88);
+  stroke-width: 4px;
+}
+
+.wire-route-label {
+  fill: #a5f3fc;
+  font-size: 12px;
+}
+
+.dimension-line {
+  stroke: rgba(226, 232, 240, 0.52);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.4;
+}
+
+.dimension-label {
+  fill: #cbd5e1;
+  font-size: 11px;
+}
+
+.part-label {
+  font-size: 12px;
+}
+
+.visual-cad-part {
+  cursor: pointer;
+  filter: drop-shadow(0 20px 18px rgba(0, 0, 0, 0.34));
+  outline: none;
+}
+
+.visual-cad-part:hover .part-top,
+.visual-cad-part:focus-visible .part-top,
+.visual-cad-part.selected .part-top {
+  stroke: #fef08a;
+  stroke-width: 3;
+}
+
+.visual-cad-part:hover .part-label,
+.visual-cad-part.selected .part-label {
+  fill: #fef3c7;
+}
+
+.part-top,
+.part-side-a,
+.part-side-b {
+  stroke: rgba(15, 23, 42, 0.76);
+  stroke-width: 1.4;
+}
+
+.part-side-a {
+  opacity: 0.62;
+}
+
+.part-side-b {
+  opacity: 0.8;
+}
+
+.cylinder-body {
+  opacity: 0.78;
+  stroke: rgba(15, 23, 42, 0.74);
+  stroke-width: 1.4;
+}
+
+.cylinder-ring {
+  fill: rgba(255, 255, 255, 0.18);
+  stroke: rgba(2, 6, 23, 0.7);
+  stroke-width: 1.2;
+}
+
+.part-base {
+  opacity: 0.28;
+}
+
+.part-motor-hub {
+  fill: rgba(255, 255, 255, 0.24);
+  stroke: rgba(2, 6, 23, 0.7);
+  stroke-width: 1.5;
+}
+
+.connector-pin,
+.electronics-chip,
+.bracket-hole,
+.tool-tip {
+  fill: rgba(255, 255, 255, 0.26);
+  stroke: rgba(2, 6, 23, 0.64);
+  stroke-width: 1;
+}
+
+.bracket-hole {
+  fill: rgba(2, 6, 23, 0.36);
+}
+
+.visual-cad-hud {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  left: 16px;
+  pointer-events: none;
+  position: absolute;
+  right: 16px;
+  top: 14px;
+  z-index: 3;
+}
+
+.visual-cad-hud-card {
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 16px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
+  display: grid;
+  gap: 4px;
+  max-width: 320px;
+  padding: 10px 12px;
+}
+
+.visual-cad-hud-card strong {
+  color: #f8fafc;
+  font-size: 0.9rem;
+}
+
+.visual-cad-hud-card span,
+.visual-cad-hud-card small {
+  color: #b7d7ea;
+  font-size: 0.76rem;
+}
+
+.visual-cad-nudge-pad {
+  background: rgba(2, 6, 23, 0.76);
+  border: 1px solid rgba(125, 211, 252, 0.26);
+  border-radius: 18px;
+  bottom: 14px;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  position: absolute;
+  right: 14px;
+  width: 180px;
+  z-index: 4;
+}
+
+.visual-cad-nudge-pad span {
+  color: #bae6fd;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nudge-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.nudge-grid button,
+.visual-cad-nudge-pad button,
+.primitive-palette button,
+.authoring-actions button,
+.assembly-authoring-panel button {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 999px;
+  color: #e0f2fe;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.nudge-grid button,
+.visual-cad-nudge-pad button {
+  min-height: 34px;
+}
+
+.visual-authoring-dock {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.visual-authoring-dock .design-overview,
+.part-inspector {
+  grid-column: 1 / -1;
+}
+
+.authoring-panel,
+.design-overview {
+  padding: 18px;
+}
+
+.authoring-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.authoring-grid.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.authoring-grid.three-col {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field-row.compact-field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-row.compact-field span {
+  color: #a7cfe8;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.field-row.compact-field input,
+.field-row.compact-field select {
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  color: #f8fafc;
+  font: inherit;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.field-row.compact-field input[readonly] {
+  color: #bae6fd;
+}
+
+.primitive-palette {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.primitive-palette button {
+  align-items: center;
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  min-height: 74px;
+  padding: 10px;
+}
+
+.primitive-icon {
+  background: linear-gradient(135deg, #38bdf8, #8b5cf6);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(56, 189, 248, 0.18);
+  display: block;
+  height: 26px;
+  transform: skew(-16deg) rotate(-10deg);
+  width: 38px;
+}
+
+.primitive-cylinder_joint,
+.primitive-motor_block {
+  border-radius: 999px;
+}
+
+.primitive-bracket {
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+}
+
+.primitive-connector {
+  background: linear-gradient(135deg, #fb923c, #f97316);
+  width: 30px;
+}
+
+.primitive-electronics {
+  background: linear-gradient(135deg, #22c55e, #14b8a6);
+}
+
+.primitive-tool {
+  background: linear-gradient(135deg, #f472b6, #a78bfa);
+}
+
+.authoring-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.authoring-actions button,
+.assembly-authoring-panel button {
+  min-height: 40px;
+  padding: 8px 13px;
+}
+
+.microcopy,
+.authoring-message {
+  color: #b7d7ea;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin: 12px 0 0;
+}
+
+.authoring-message {
+  background: rgba(2, 6, 23, 0.46);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 14px;
+  margin: 10px 18px 18px;
+  padding: 10px 12px;
+}
+
+.wire-route-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.wire-route-list li {
+  background: rgba(2, 6, 23, 0.42);
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 14px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.wire-route-list small {
+  color: #a5f3fc;
+}
+
+.status-pill {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  color: #e2e8f0;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 6px 9px;
+  text-transform: uppercase;
+}
+
+.status-review-required,
+.status-review_required,
+.status-blocked-missing-inputs {
+  border-color: rgba(245, 158, 11, 0.44);
+  color: #fde68a;
+}
+
+.status-pre-solver-ready,
+.status-solver-result-available {
+  border-color: rgba(34, 197, 94, 0.44);
+  color: #bbf7d0;
+}
+
+@media (max-width: 1220px) {
+  .visual-authoring-dock,
+  .authoring-grid.two-col,
+  .authoring-grid.three-col {
+    grid-template-columns: 1fr;
+  }
+
+  .primitive-palette {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .visual-cad-stage {
+    margin-inline: 10px;
+  }
+}
+
+@media (max-width: 760px) {
+  .visual-cad-stage {
+    height: 420px;
+  }
+
+  .visual-cad-hud {
+    flex-direction: column;
+    right: auto;
+  }
+
+  .visual-cad-nudge-pad {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+}
+
+.panel-title-like {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 900;
+  margin-bottom: 14px;
+}
+
+.cad-workspace-frame {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(56, 189, 248, 0.18), transparent 34%),
+    linear-gradient(145deg, rgba(2, 6, 23, 0.94), rgba(8, 47, 73, 0.7));
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 22px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 -40px 90px rgba(2, 6, 23, 0.72);
+  display: grid;
+  grid-template-rows: auto minmax(420px, 1fr) auto;
+  margin: 14px 18px 0;
+  min-height: clamp(520px, 62vh, 760px);
+  overflow: hidden;
+  position: relative;
+}
+
+.canvas-hint-strip,
+.canvas-status-row {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.62);
+  border-bottom: 1px solid rgba(125, 211, 252, 0.14);
+  color: #bae6fd;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.canvas-hint-strip span,
+.canvas-status-row span {
+  background: rgba(15, 23, 42, 0.66);
+  border: 1px solid rgba(125, 211, 252, 0.14);
+  border-radius: 999px;
+  color: #b7d7ea;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 6px 9px;
+  text-transform: uppercase;
+}
+
+.canvas-status-row {
+  border-bottom: 0;
+  border-top: 1px solid rgba(125, 211, 252, 0.14);
+  justify-content: flex-start;
+}
+
+.canvas-status-row strong {
+  color: #f8fafc;
+  margin-right: auto;
+}
+
+.visual-cad-canvas {
+  cursor: grab;
+  display: block;
+  height: 100%;
+  min-height: 420px;
+  touch-action: none;
+  width: 100%;
+}
+
+.visual-cad-canvas:active {
+  cursor: grabbing;
+}
+
+.canvas-backplate {
+  fill: rgba(2, 6, 23, 0.18);
+}
+
+.cad-grid-line {
+  stroke: rgba(125, 211, 252, 0.15);
+  stroke-width: 1;
+}
+
+.cad-axis-lines line {
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.18));
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.cad-axis-lines .axis-x {
+  stroke: #38bdf8;
+}
+
+.cad-axis-lines .axis-y {
+  stroke: #22c55e;
+}
+
+.cad-axis-lines .axis-z {
+  stroke: #f97316;
+}
+
+.axis-label {
+  fill: #f8fafc;
+  font-size: 16px;
+  font-weight: 900;
+  paint-order: stroke;
+  stroke: rgba(2, 6, 23, 0.88);
+  stroke-width: 4px;
+}
+
+.joint-connection line {
+  stroke-linecap: round;
+  stroke-width: 2.2;
+}
+
+.joint-connection circle {
+  fill: #e0f2fe;
+  stroke: rgba(2, 6, 23, 0.8);
+  stroke-width: 2;
+}
+
+.joint-connection text {
+  fill: #c4d7e8;
+  font-size: 11px;
+  font-weight: 900;
+  paint-order: stroke;
+  stroke: rgba(2, 6, 23, 0.88);
+  stroke-width: 4px;
+}
+
+.joint-fixed line {
+  stroke: rgba(148, 163, 184, 0.5);
+}
+
+.joint-revolute line {
+  stroke: rgba(167, 139, 250, 0.74);
+}
+
+.joint-prismatic line,
+.joint-linear line {
+  stroke: rgba(34, 197, 94, 0.76);
+  stroke-dasharray: 7 5;
+}
+
+.joint-tool_mount line {
+  stroke: rgba(244, 114, 182, 0.78);
+}
+
+.wire-route polyline {
+  fill: none;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.72));
+  stroke: #22d3ee;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.wire-route circle {
+  fill: #cffafe;
+  stroke: rgba(8, 47, 73, 0.8);
+  stroke-width: 2;
+}
+
+.wire-route text,
+.dimension-overlay text,
+.cad-part-label {
+  fill: #e0f2fe;
+  font-weight: 900;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: rgba(2, 6, 23, 0.88);
+  stroke-width: 4px;
+}
+
+.wire-route text {
+  fill: #a5f3fc;
+  font-size: 12px;
+}
+
+.dimension-overlay line {
+  stroke: rgba(226, 232, 240, 0.52);
+  stroke-dasharray: 5 4;
+  stroke-width: 1.4;
+}
+
+.dimension-overlay text {
+  fill: #cbd5e1;
+  font-size: 11px;
+}
+
+.cad-part {
+  cursor: pointer;
+  filter: drop-shadow(0 20px 18px rgba(0, 0, 0, 0.34));
+  outline: none;
+}
+
+.cad-part:hover .cad-part-top,
+.cad-part:focus-visible .cad-part-top,
+.cad-part.selected .cad-part-top,
+.cad-part.selected .cad-cylinder-face {
+  stroke: #fef08a;
+  stroke-width: 3;
+}
+
+.cad-part:hover .cad-part-label,
+.cad-part.selected .cad-part-label {
+  fill: #fef3c7;
+}
+
+.cad-part-top,
+.cad-part-side-a,
+.cad-part-side-b,
+.cad-cylinder-body,
+.cad-cylinder-face {
+  stroke: rgba(15, 23, 42, 0.76);
+  stroke-width: 1.4;
+}
+
+.cad-part-side-a,
+.cad-cylinder-body {
+  opacity: 0.64;
+}
+
+.cad-part-side-b {
+  opacity: 0.82;
+}
+
+.cad-equipment-hub,
+.cad-connector-pin,
+.cad-electronics-chip,
+.cad-bracket-hole,
+.cad-tool-tip {
+  fill: rgba(255, 255, 255, 0.26);
+  stroke: rgba(2, 6, 23, 0.64);
+  stroke-width: 1;
+}
+
+.cad-bracket-hole {
+  fill: rgba(2, 6, 23, 0.36);
+}
+
+.cad-part-base-shadow {
+  fill: rgba(2, 6, 23, 0.45);
+}
+
+.canvas-nudge-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.canvas-nudge-controls button {
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 999px;
+  color: #e0f2fe;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.canvas-nudge-controls button:hover,
+.primitive-palette button:hover,
+.authoring-actions button:hover,
+.assembly-authoring-panel button:hover {
+  border-color: rgba(125, 211, 252, 0.78);
+  transform: translateY(-1px);
+}
+
+.inspector-panel .criterion-source {
+  display: block;
+  line-height: 1.35;
+  margin-top: 3px;
+}
+
+.inspector-panel .meta-grid dd > span {
+  display: block;
+}

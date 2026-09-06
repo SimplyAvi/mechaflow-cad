@@ -13,7 +13,7 @@ The current `main` includes:
 - Root planning docs and validation policy.
 - Reference design catalog schema and seed data.
 - FastAPI backend with schemas, in-memory project store, project-file import/export, panel-data, material substitution, wiring/electronics, reports, analysis readiness, job queue, local pre-solver runner, and CalculiX solver-readiness fixture boundary.
-- Vite React cockpit with an input-first opening, immediate 3D workspace, compact CAD sidebars, new/open/recent/example/reference paths, reference-image intake, material tools, progressive modes, and backend/mock connectivity.
+- Vite React cockpit with a visual-authoring-first opening, SVG XYZ grid, orbit/pan/zoom/explode controls, selectable and editable primitives, motor and connector placement, visible wire routing, compact CAD sidebars, new/open/recent/example/reference paths, reference-image intake, material tools, progressive modes, local project import/export, and backend/mock connectivity.
 - Electron desktop-openable workflow with `npm start`, macOS command launcher, desktop smoke, and captain smoke.
 - Local and GitHub Actions checks for Python, catalog, frontend, smoke, desktop, and captain paths.
 
@@ -21,15 +21,16 @@ The current `main` includes:
 
 The captain demo should show a user who:
 
-1. Opens the desktop cockpit directly into the robot arm 3D workspace.
-2. Types design intent and sees extracted chips.
-3. Adds reference images that are clearly labeled as local context only.
-4. Opens or imports a `.mfcad.json` project, reopens a recent project, or loads a local ready example.
-5. Explodes, orbits, and selects parts in the assembly.
-6. Previews a compatible material/process substitution.
-7. Applies the validated substitution and sees downstream panels update.
-8. Reviews BOM, manufacturing, wiring/electronics, analysis readiness, queue recommendations, reports, and project file export/import.
-9. Runs local-safe pre-solver and solver-readiness fixture paths while seeing not-FEA and solver-unavailable labels where appropriate.
+1. Opens the desktop cockpit directly into the robot arm visual CAD workspace.
+2. Chooses units, creates or edits a primitive, places a motor or connector, connects a joint, and routes a visible wire.
+3. Types design intent and sees extracted chips.
+4. Adds reference images that are clearly labeled as local context only.
+5. Opens or imports a `.mfcad.json` project, reopens a recent project, or loads a local ready example.
+6. Explodes, orbits, pans, zooms, and selects parts in the assembly.
+7. Previews a compatible material/process substitution.
+8. Applies the validated substitution and sees downstream panels update.
+9. Reviews BOM, manufacturing, wiring/electronics, analysis readiness, queue recommendations, reports, and project file export/import.
+10. Runs local-safe pre-solver and solver-readiness fixture paths while seeing not-FEA and solver-unavailable labels where appropriate.
 
 ## Milestone status
 
@@ -89,15 +90,18 @@ Acceptance criteria:
 
 - Visual and copy avoid fake payload, FEA, quote, electrical, or CAD-generation claims.
 
-### Milestone 4: interactive 3D cockpit
+### Milestone 4: visual CAD authoring cockpit
 
 Status: complete for the local seed MVP.
 
 Deliverables:
 
-- Input-first opening with immediate 3D workspace.
+- Visual-authoring-first opening with immediate XYZ grid workspace.
 - Robot arm and wrist gripper visual seed.
-- Explode toggle, scrubber, yaw, pitch, part selection, and inspector.
+- Explode toggle, scrubber, yaw, pitch, pan, zoom, part selection, and inspector.
+- Primitive palette for base plates, beams, joints, brackets, motors, connectors, electronics, and tools.
+- Unit selector and editable dimensions, XYZ position, rotation, material, process, parent, and joint type.
+- Visible wire routing between parts with persisted route, connector, wire segment, and harness BOM data.
 - CAD-style sidebars and progressive mode deck.
 - New prompt concept, open/import, recent, ready example, and reference paths.
 - Reference image intake as local metadata.
@@ -155,7 +159,7 @@ Deliverables:
 
 Acceptance criteria:
 
-- Project files preserve assemblies, parts, materials, task requirements, modifications, analysis jobs, job recommendations, cached references, reports, wiring/electronics, and analysis artifacts.
+- Project files preserve units, authored geometry metadata, assemblies, parts, materials, task requirements, modifications, analysis jobs, job recommendations, cached references, reports, wiring/electronics, and analysis artifacts.
 - Invalid envelopes fail without erasing current state.
 
 ### Milestone 8: wiring and electronics pass

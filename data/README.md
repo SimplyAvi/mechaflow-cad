@@ -16,7 +16,7 @@ Values are seed data for advisory workflows. Verify material properties, cable r
 
 `backend-frontend-handoff.seed.json` maps catalog reference designs, materials, tasks, manufacturing methods, capability ratings, and adapters to the names exposed by the backend project panel and frontend cockpit. It is metadata only and keeps the same license gate as the referenced catalog entry.
 
-`ready-examples.seed.json` defines the compact ready-example cards for the input-first opening flow. The current examples are repository-local MIT seed data and explicitly avoid internet-sourced CAD, mesh, or photo assets.
+`ready-examples.seed.json` defines the compact ready-example cards for the visual-authoring opening flow. The current examples are repository-local MIT seed data and explicitly avoid internet-sourced CAD, mesh, or photo assets.
 
 `captain-demo-project.mfcad.json` is a portable demo import fixture for the desktop captain flow. It includes the robot arm visual project, material substitution paths, BOM/manufacturing/wiring data, solver-readiness previews, job queue artifacts, and advisory reports. It is not FEA, a supplier quote, or electrical validation.
 

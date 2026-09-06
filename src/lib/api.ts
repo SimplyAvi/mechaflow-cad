@@ -1,5 +1,6 @@
 import { mockBackendMetadata, mockProjectPanelData, mockReferenceDesign } from '../data/mockDesign';
 import { mapBackendAnalysisJob, mapProjectPanelDataToReferenceDesign } from './backendMapper';
+import { panelDataFromProject } from './visualAuthoring';
 import type {
   AnalysisJob,
   BackendAnalysisJob,
@@ -87,19 +88,7 @@ export function importLocalProjectFile(projectFile: unknown): ReferenceDesign {
     throw new Error('unsupported project file');
   }
   const project = file.project;
-  const panelData: BackendProjectPanelData = {
-    project,
-    task_requirements: project.active_task ? [project.active_task] : [],
-    bom_items: [],
-    manufacturing_options: [],
-    electronics_components: project.electronics_components ?? [],
-    wire_segments: project.wire_segments ?? [],
-    wiring_rules: project.wiring_rules ?? [],
-    wiring_routes: project.assemblies.flatMap((assembly) => assembly.wiring_routes ?? []),
-    wiring_review: null,
-    reports: [],
-    analysis_readiness_previews: file.analysis_readiness_previews ?? [],
-  };
+  const panelData: BackendProjectPanelData = panelDataFromProject(project, file.analysis_readiness_previews ?? []);
   return mapProjectPanelDataToReferenceDesign(panelData, mockBackendMetadata);
 }
 
