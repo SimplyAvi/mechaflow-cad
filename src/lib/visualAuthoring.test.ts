@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { mockReferenceDesign } from '../data/mockDesign';
 import {
   buildLocalProjectFile,
+  connectPartToParent,
+  createAssemblyWithBase,
   createPrimitivePart,
   createWireRoute,
+  deleteVisualPart,
   remapDesignFromProject,
   updateProjectUnits,
 } from './visualAuthoring';
@@ -39,5 +42,35 @@ describe('visual authoring project helpers', () => {
     expect(design.wiringRoutes.find((route) => route.id === routed.routeId)?.connectedParts)
       .toEqual(expect.arrayContaining([created.partId, 'part-palm-plate']));
     expect(routed.project.wire_segments.some((segment) => segment.from_endpoint?.part_id === created.partId || segment.to_endpoint?.part_id === created.partId)).toBe(true);
+  });
+
+  it('rejects parent links that would create an assembly cycle', () => {
+    const createdAssembly = createAssemblyWithBase(mockReferenceDesign.backendProject);
+    const child = createPrimitivePart(createdAssembly.project, createdAssembly.assemblyId, 'beam', createdAssembly.partId);
+    const linkedChild = connectPartToParent(child.project, child.partId, createdAssembly.partId, 'fixed');
+
+    const rejected = connectPartToParent(linkedChild, createdAssembly.partId, child.partId, 'revolute');
+    const base = rejected.assemblies.find((assembly) => assembly.id === createdAssembly.assemblyId)?.parts
+      .find((part) => part.id === createdAssembly.partId);
+    const visual = base?.metadata.visual_authoring as Record<string, unknown>;
+
+    expect(visual.parent_part_id).toBeNull();
+  });
+
+  it('clears child parent metadata when an authored parent is deleted', () => {
+    const createdAssembly = createAssemblyWithBase(mockReferenceDesign.backendProject);
+    const child = createPrimitivePart(createdAssembly.project, createdAssembly.assemblyId, 'beam', createdAssembly.partId);
+    const grandchild = createPrimitivePart(child.project, createdAssembly.assemblyId, 'bracket', child.partId);
+    const linkedChild = connectPartToParent(child.project, child.partId, createdAssembly.partId, 'fixed');
+    const linkedGrandchild = connectPartToParent(linkedChild, grandchild.partId, child.partId, 'revolute');
+
+    const deleted = deleteVisualPart(linkedGrandchild, createdAssembly.assemblyId, child.partId);
+    const remaining = deleted.project.assemblies.find((assembly) => assembly.id === createdAssembly.assemblyId)?.parts
+      .find((part) => part.id === grandchild.partId);
+    const visual = remaining?.metadata.visual_authoring as Record<string, unknown>;
+
+    expect(deleted.deleted).toBe(true);
+    expect(visual.parent_part_id).toBeNull();
+    expect(visual.joint_type).toBe('unassigned');
   });
 });

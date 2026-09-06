@@ -614,6 +614,15 @@ export const deleteVisualPart = (project: BackendProject, assemblyId: string, pa
   if (!authored || hasWiring || hasElectronics || assembly.parts.length <= 1) {
     return { project: next, deleted: false, nextPartId: partId };
   }
+  for (const candidateAssembly of next.assemblies) {
+    for (const candidate of candidateAssembly.parts) {
+      const visual = isRecord(candidate.metadata?.visual_authoring) ? candidate.metadata.visual_authoring : null;
+      if (visual?.parent_part_id !== partId) continue;
+      const normalized = normalizePartVisualAuthoring(candidate);
+      normalized.parent_part_id = null;
+      normalized.joint_type = 'unassigned';
+    }
+  }
   assembly.parts = assembly.parts.filter((candidate) => candidate.id !== partId);
   assembly.nodes = assembly.nodes.filter((node) => node.part_id !== partId && !node.part_ids.includes(partId));
   next.updated_at = new Date().toISOString();
@@ -627,6 +636,18 @@ export const connectPartToParent = (
   jointType: CADJointType,
 ): BackendProject => {
   const next = cloneProject(project);
+  const part = findPart(next, partId);
+  const parent = parentPartId ? findPart(next, parentPartId) : null;
+  if (!part || (parentPartId && !parent)) return next;
+  const visited = new Set<string>();
+  let current = parent;
+  while (current) {
+    if (current.id === partId || visited.has(current.id)) return next;
+    visited.add(current.id);
+    const visual = isRecord(current.metadata?.visual_authoring) ? current.metadata.visual_authoring : null;
+    const ancestorId = typeof visual?.parent_part_id === 'string' ? visual.parent_part_id : null;
+    current = ancestorId ? findPart(next, ancestorId) : null;
+  }
   return setPartInProject(next, partId, (part) => {
     const visual = normalizePartVisualAuthoring(part);
     visual.parent_part_id = parentPartId;
