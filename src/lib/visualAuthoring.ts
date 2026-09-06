@@ -462,8 +462,11 @@ export const createPrimitivePart = (
   parentPartId: string | null,
 ): { project: BackendProject; partId: string } => {
   const next = cloneProject(project);
-  const assembly = findAssembly(next, assemblyId) ?? next.assemblies[0];
+  const assembly = findAssembly(next, assemblyId);
   if (!assembly) return { project: next, partId: '' };
+  if (parentPartId && !assembly.parts.some((part) => part.id === parentPartId)) {
+    return { project: next, partId: '' };
+  }
   const existingIds = new Set([
     ...next.assemblies.map((candidate) => candidate.id),
     ...flattenParts(next).map((part) => part.id),
@@ -617,10 +620,13 @@ export const deleteVisualPart = (project: BackendProject, assemblyId: string, pa
   for (const candidateAssembly of next.assemblies) {
     for (const candidate of candidateAssembly.parts) {
       const visual = isRecord(candidate.metadata?.visual_authoring) ? candidate.metadata.visual_authoring : null;
-      if (visual?.parent_part_id !== partId) continue;
+      if (!visual || (visual.parent_part_id !== partId && visual.assigned_to_part_id !== partId)) continue;
       const normalized = normalizePartVisualAuthoring(candidate);
-      normalized.parent_part_id = null;
-      normalized.joint_type = 'unassigned';
+      if (normalized.parent_part_id === partId) {
+        normalized.parent_part_id = null;
+        normalized.joint_type = 'unassigned';
+      }
+      if (normalized.assigned_to_part_id === partId) normalized.assigned_to_part_id = null;
     }
   }
   assembly.parts = assembly.parts.filter((candidate) => candidate.id !== partId);

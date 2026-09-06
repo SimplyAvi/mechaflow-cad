@@ -60,7 +60,7 @@ describe('visual authoring project helpers', () => {
   it('clears child parent metadata when an authored parent is deleted', () => {
     const createdAssembly = createAssemblyWithBase(mockReferenceDesign.backendProject);
     const child = createPrimitivePart(createdAssembly.project, createdAssembly.assemblyId, 'beam', createdAssembly.partId);
-    const grandchild = createPrimitivePart(child.project, createdAssembly.assemblyId, 'bracket', child.partId);
+    const grandchild = createPrimitivePart(child.project, createdAssembly.assemblyId, 'motor_block', child.partId);
     const linkedChild = connectPartToParent(child.project, child.partId, createdAssembly.partId, 'fixed');
     const linkedGrandchild = connectPartToParent(linkedChild, grandchild.partId, child.partId, 'revolute');
 
@@ -72,6 +72,7 @@ describe('visual authoring project helpers', () => {
     expect(deleted.deleted).toBe(true);
     expect(visual.parent_part_id).toBeNull();
     expect(visual.joint_type).toBe('unassigned');
+    expect(visual.assigned_to_part_id).toBeNull();
   });
 
   it('rejects parent links and wire routes across assemblies', () => {
@@ -88,5 +89,17 @@ describe('visual authoring project helpers', () => {
     expect(visual.parent_part_id).toBeNull();
     expect(rejectedRoute.routeId).toBe('');
     expect(firstAssembly?.wiring_routes).toHaveLength(0);
+  });
+
+  it('requires an existing target assembly and same-assembly parent when creating parts', () => {
+    const first = createAssemblyWithBase(mockReferenceDesign.backendProject);
+    const second = createAssemblyWithBase(first.project);
+
+    const crossAssembly = createPrimitivePart(second.project, second.assemblyId, 'beam', first.partId);
+    const invalidAssembly = createPrimitivePart(second.project, 'missing-assembly', 'beam', null);
+
+    expect(crossAssembly.partId).toBe('');
+    expect(invalidAssembly.partId).toBe('');
+    expect(invalidAssembly.project.assemblies).toHaveLength(second.project.assemblies.length);
   });
 });
