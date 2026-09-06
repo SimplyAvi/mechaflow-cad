@@ -120,7 +120,31 @@ interface ExportedEvidenceSignature {
   projectId: string;
   jobIds: string[];
   artifactIds: string[];
+  artifactContent: string;
 }
+
+type EvidenceArtifact = {
+  id?: string;
+  kind: string;
+  title: string;
+  summary?: string;
+  confidence?: string;
+  generated_by?: string;
+  generatedBy?: string;
+};
+
+const evidenceArtifactSignature = (artifacts: EvidenceArtifact[]): string => JSON.stringify(
+  artifacts
+    .map((artifact) => ({
+      id: artifact.id ?? null,
+      kind: artifact.kind,
+      title: artifact.title,
+      summary: artifact.summary ?? null,
+      confidence: artifact.confidence ?? null,
+      generatedBy: artifact.generated_by ?? artifact.generatedBy ?? null,
+    }))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+);
 
 const demoGuideStatusLabel: Record<DemoGuideStatus, string> = {
   complete: 'Complete',
@@ -378,6 +402,7 @@ function App() {
           projectId: projectFile.project.id,
           jobIds: projectFile.project.analysis_jobs.map((job) => job.id),
           artifactIds: projectFile.project.analysis_jobs.flatMap((job) => job.artifacts.map((artifact) => artifact.id)),
+          artifactContent: evidenceArtifactSignature(projectFile.project.analysis_jobs.flatMap((job) => job.artifacts)),
         });
         setProjectFileMessage(`Exported ${projectFile.project.name} as ${link.download}. Re-import it to complete the round trip.`);
       }
@@ -409,13 +434,15 @@ function App() {
       const importedDesign = await importProjectFile(design.backend.apiBaseUrl, projectFile);
       if (importRequestVersion.current !== requestVersion) return;
       const importedJobIds = new Set(importedDesign.analysisJobs.map((job) => job.id));
-      const importedArtifactIds = new Set(importedDesign.analysisJobs.flatMap((job) => job.artifacts.map((artifact) => artifact.id)));
+      const importedArtifacts = importedDesign.analysisJobs.flatMap((job) => job.artifacts);
+      const importedArtifactIds = new Set(importedArtifacts.map((artifact) => artifact.id));
       const roundTripVerified = exportedEvidence != null
         && exportedEvidence.projectId === importedDesign.backend.projectId
         && exportedEvidence.jobIds.length > 0
         && exportedEvidence.artifactIds.length > 0
         && exportedEvidence.jobIds.every((jobId) => importedJobIds.has(jobId))
-        && exportedEvidence.artifactIds.every((artifactId) => importedArtifactIds.has(artifactId));
+        && exportedEvidence.artifactIds.every((artifactId) => importedArtifactIds.has(artifactId))
+        && exportedEvidence.artifactContent === evidenceArtifactSignature(importedArtifacts);
       applyLoadedDesign(importedDesign);
       setProjectFileMessage(`Opened ${importedDesign.name} from ${file.name}.`);
       if (roundTripVerified) markDemoStep('export-import');
@@ -471,7 +498,7 @@ function App() {
   const hasLocalAnalysisRun = design.analysisJobs.some((job) => (
     isSuccessfulLocalAnalysisJob(job)
   ));
-  const hasExportOrImport = projectFileMessage != null && /Exported|Opened/.test(projectFileMessage);
+  const hasExportOrImport = demoStepReviews.has('export-import');
   const demoGuideSteps: DemoGuideStep[] = [
     {
       id: 'open-reference',
