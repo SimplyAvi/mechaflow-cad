@@ -506,12 +506,16 @@ class InMemoryProjectStore:
                 raise ValueError("analysis artifact IDs must be unique within a job")
             existing_artifact_ids = {
                 artifact.id
-                for existing_project in self._projects.values()
-                for existing_job in existing_project.analysis_jobs
+                for existing_job in project.analysis_jobs
                 for artifact in existing_job.artifacts
             }
             if set(incoming_artifact_ids) & existing_artifact_ids:
                 raise ValueError("analysis artifact ID already exists")
+            candidate = project.model_copy(
+                update={"analysis_jobs": [*project.analysis_jobs, job]},
+                deep=True,
+            )
+            self._ensure_artifact_ids_available(project.id, candidate)
             stored = normalize_analysis_job(
                 project.id,
                 job,
@@ -541,6 +545,16 @@ class InMemoryProjectStore:
                         reports=project.reports,
                         artifact_file_exists=self._artifact_file_exists,
                     )
+                    candidate = project.model_copy(
+                        update={
+                            "analysis_jobs": [
+                                stored if candidate_job.id == job.id else candidate_job
+                                for candidate_job in project.analysis_jobs
+                            ],
+                        },
+                        deep=True,
+                    )
+                    self._ensure_artifact_ids_available(project_id, candidate)
                     jobs = list(project.analysis_jobs)
                     jobs[index] = stored
                     self._projects[project_id] = project.model_copy(update={"analysis_jobs": jobs}, deep=True)

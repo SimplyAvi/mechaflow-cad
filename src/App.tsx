@@ -123,6 +123,12 @@ const demoGuideStatusLabel: Record<DemoGuideStatus, string> = {
   unavailable: 'Unavailable',
 };
 
+const isSuccessfulLocalAnalysisJob = (job: ReferenceDesign['analysisJobs'][number]): boolean => (
+  (job.worker === 'local-pre-solver-runner' || job.worker === 'local-calculix-fixture-runner')
+  && (job.status === 'complete' || job.status === 'solver-unavailable')
+  && (job.artifacts.length > 0 || job.cachedArtifactRefs.length > 0)
+);
+
 function App() {
   const [design, setDesign] = useState<ReferenceDesign | null>(null);
   const [selectedAssemblyId, setSelectedAssemblyId] = useState('');
@@ -285,7 +291,7 @@ function App() {
         analysisJobs: [job, ...current.analysisJobs.filter((candidate) => candidate.id !== job.id)],
       });
       setAnalysisRunMessage('Local pre-solver job completed. Artifact is review-required and not FEA.');
-      markDemoStep('local-analysis');
+      if (isSuccessfulLocalAnalysisJob(job)) markDemoStep('local-analysis');
     } catch (error) {
       console.warn('Local pre-solver run failed.', error);
       if (projectLoadVersion.current === requestVersion) {
@@ -325,8 +331,10 @@ function App() {
             ? 'Solver-readiness fixture completed with real CalculiX execution. It is still not project FEA.'
             : 'Solver-readiness fixture needs review. Inspect logs and artifact manifests below.',
       );
-      markDemoStep('solver-readiness');
-      markDemoStep('local-analysis');
+      if (isSuccessfulLocalAnalysisJob(job)) {
+        markDemoStep('solver-readiness');
+        markDemoStep('local-analysis');
+      }
     } catch (error) {
       console.warn('Local solver-readiness fixture failed.', error);
       if (projectLoadVersion.current === requestVersion) {
@@ -440,9 +448,7 @@ function App() {
     || job.artifacts.length > 0
   )) || visibleDesign.reports.length > 0;
   const hasLocalAnalysisRun = design.analysisJobs.some((job) => (
-    (job.worker === 'local-pre-solver-runner' || job.worker === 'local-calculix-fixture-runner')
-    && (job.status === 'complete' || job.status === 'solver-unavailable')
-    && (job.artifacts.length > 0 || job.cachedArtifactRefs.length > 0)
+    isSuccessfulLocalAnalysisJob(job)
   ));
   const hasExportOrImport = projectFileMessage != null && /Exported|Opened/.test(projectFileMessage);
   const demoGuideSteps: DemoGuideStep[] = [
