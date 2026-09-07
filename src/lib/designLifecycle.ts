@@ -88,20 +88,30 @@ const materialProvenance = (part: Part): CADValueProvenance => {
   return part.authoring.provenance?.material ?? (part.authoring.authored ? 'user-defined' : 'inferred');
 };
 
+const provenancePriority: Record<CADValueProvenance, number> = {
+  invalid: 6,
+  unresolved: 5,
+  estimated: 4,
+  'user-defined': 3,
+  defaulted: 2,
+  inferred: 1,
+};
+
+const aggregateProvenance = (values: Array<CADValueProvenance | undefined>, fallback: CADValueProvenance): CADValueProvenance => {
+  const definedValues = values.filter((value): value is CADValueProvenance => value != null);
+  return definedValues.reduce((current, value) => provenancePriority[value] > provenancePriority[current] ? value : current, definedValues[0] ?? fallback);
+};
+
 const dimensionProvenance = (part: Part): CADValueProvenance => {
   const values = requiredDimensionKeys(part).map((key) => part.authoring.provenance?.dimensions?.[key]);
-  if (values.includes('invalid')) return 'invalid';
-  if (values.includes('user-defined')) return 'user-defined';
-  if (values.includes('defaulted')) return 'defaulted';
-  return part.authoring.authored ? 'user-defined' : 'inferred';
+  return aggregateProvenance(values, part.authoring.authored ? 'user-defined' : 'inferred');
 };
 
 const featureProvenance = (part: Part): CADValueProvenance => {
   const feature = part.authoring.featureRecipe;
   if (!feature) return 'unresolved';
   const stepValues = feature.history.map((step) => part.authoring.provenance?.featureSteps?.[step.id] ?? step.provenance);
-  if (stepValues.includes('user-defined') || part.authoring.provenance?.featureRecipe === 'user-defined') return 'user-defined';
-  return part.authoring.provenance?.featureRecipe ?? 'inferred';
+  return aggregateProvenance([...stepValues, part.authoring.provenance?.featureRecipe], 'inferred');
 };
 
 const holeProvenance = (part: Part): CADValueProvenance => {

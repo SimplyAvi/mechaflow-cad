@@ -38,4 +38,42 @@ describe('buildPartLifecycleEvidence', () => {
       provenance: 'user-defined',
     }));
   });
+
+  it.each([
+    ['estimated', 'estimated'],
+    ['unresolved', 'unresolved'],
+    ['invalid', 'invalid'],
+    ['defaulted', 'defaulted'],
+    ['user-defined', 'user-defined'],
+    ['inferred', 'inferred'],
+  ] as const)('preserves %s dimension provenance', (provenance, expected) => {
+    const part = {
+      ...selectedPart,
+      authoring: {
+        ...selectedPart.authoring,
+        authored: true,
+        provenance: { dimensions: { lengthMm: provenance } },
+      },
+    };
+    expect(buildPartLifecycleEvidence(part, 'mm', mockReferenceDesign.task).items.find((item) => item.id === 'dimension-definition')?.provenance).toBe(expected);
+  });
+
+  it('surfaces the highest-impact feature-step provenance', () => {
+    const part = {
+      ...selectedPart,
+      authoring: {
+        ...selectedPart.authoring,
+        featureRecipe: {
+          id: 'recipe-test',
+          name: 'Test recipe',
+          plane: 'Front plane',
+          profile: 'Test profile',
+          history: [{ id: 'step-invalid', label: 'Invalid step', value: 'Needs review', kind: 'finish' as const }],
+          callouts: [],
+        },
+        provenance: { featureRecipe: 'defaulted' as const, featureSteps: { 'step-invalid': 'invalid' as const } },
+      },
+    };
+    expect(buildPartLifecycleEvidence(part, 'mm', mockReferenceDesign.task).items.find((item) => item.id === 'feature-history')?.provenance).toBe('invalid');
+  });
 });
