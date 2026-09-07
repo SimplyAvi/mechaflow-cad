@@ -2536,9 +2536,9 @@ function SynchronizedCanvasValueInspector({
             <span>{dimensionKey} from canvas</span>
             <input
               aria-label={`Synchronized canvas ${dimensionKey} dimension in ${units}`}
-              min="0.001"
+              min={units === 'mm' ? '0.1' : '0.001'}
               onChange={(event) => onDimensionChange(dimensionKey, event.target.value)}
-              step="0.1"
+              step={units === 'mm' ? '0.1' : '0.001'}
               type="number"
               value={dimensionDrafts[`${part.id}:${units}:${dimensionKey}`] ?? Number(lengthFromMm(dimensionValueMm, units).toFixed(3))}
             />
@@ -2598,9 +2598,9 @@ function SynchronizedCanvasValueInspector({
               <span>Hole offset</span>
               <input
                 aria-label={`Synchronized canvas hole offset in ${units}`}
-                min="0.001"
+                min={units === 'mm' ? '0.1' : '0.001'}
                 onChange={(event) => onHolePatternChange({ offsetFromBottomMm: lengthToMm(Number(event.target.value), units), centeredOnWidth: true, source: 'viewport-user-defined' })}
-                step="0.1"
+                step={units === 'mm' ? '0.1' : '0.001'}
                 type="number"
                 value={Number(lengthFromMm(holePattern.offsetFromBottomMm, units).toFixed(3))}
               />
@@ -2742,9 +2742,9 @@ function ViewportAnchoredPartEditor({
               <span>{key}</span>
               <input
                 aria-label={`Viewport ${key} dimension in ${units}`}
-                min="0.001"
+                min={units === 'mm' ? '0.1' : '0.001'}
                 onChange={(event) => onDimensionChange(key, event.target.value)}
-                step="0.1"
+                step={units === 'mm' ? '0.1' : '0.001'}
                 type="number"
                 value={dimensionDrafts[`${part.id}:${units}:${key}`] ?? Number(lengthFromMm(Number(value), units).toFixed(3))}
               />
@@ -2774,12 +2774,12 @@ function ViewportAnchoredPartEditor({
           <span>Extrude depth</span>
           <input
             aria-label={`Viewport extrude depth in ${units}`}
-            min="0.001"
+            min={units === 'mm' ? '0.1' : '0.001'}
             onChange={(event) => {
               const nextDepth = Number(event.target.value);
               if (Number.isFinite(nextDepth) && nextDepth > 0) onSketchStateChange({ extrudeDepthMm: lengthToMm(nextDepth, units), operation: 'extrude' });
             }}
-            step="0.1"
+            step={units === 'mm' ? '0.1' : '0.001'}
             type="number"
             value={sketchDepthValue}
           />
@@ -2834,12 +2834,12 @@ function ViewportAnchoredPartEditor({
           <span>Bottom offset</span>
           <input
             aria-label={`Viewport hole offset from bottom in ${units}`}
-            min="0.001"
+            min={units === 'mm' ? '0.1' : '0.001'}
             onChange={(event) => {
               const nextOffset = Number(event.target.value);
               if (Number.isFinite(nextOffset) && nextOffset > 0) onHolePatternChange({ offsetFromBottomMm: lengthToMm(nextOffset, units), centeredOnWidth: true });
             }}
-            step="0.1"
+            step={units === 'mm' ? '0.1' : '0.001'}
             type="number"
             value={Number(lengthFromMm(holePattern.offsetFromBottomMm, units).toFixed(3))}
           />
