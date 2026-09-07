@@ -246,7 +246,7 @@ function PrimitiveSurfaceDetails({ part, faces }: { part: Part; faces: BoxFace[]
   return null;
 }
 
-function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect }: {
+function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect, showLabel }: {
   part: Part;
   selected: boolean;
   focused: boolean;
@@ -255,6 +255,7 @@ function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadS
   loadStatus?: RobotArmLoadFindingStatus;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
+  showLabel: boolean;
 }) {
   const faces = boxFaces(part, explodePercent, project, focused);
   const offset = focusOffset(focused);
@@ -285,14 +286,14 @@ function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadS
       <PrimitiveSurfaceDetails faces={faces} part={part} />
       {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={labelPoint.x} cy={labelPoint.y - 22} r="20" /> : null}
       {selected ? <circle className="selected-part-pulse" cx={labelPoint.x} cy={labelPoint.y - 22} r="18" /> : null}
-      <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text>
+      {showLabel ? <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text> : null}
       {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={labelPoint.x} y={labelPoint.y - 36}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
       {selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
     </g>
   );
 }
 
-function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect }: {
+function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect, showLabel }: {
   part: Part;
   selected: boolean;
   focused: boolean;
@@ -301,6 +302,7 @@ function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, 
   loadStatus?: RobotArmLoadFindingStatus;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
+  showLabel: boolean;
 }) {
   const dims = primitiveDimensions(part);
   const explode = explodePercent / 100;
@@ -347,7 +349,7 @@ function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, 
       ) : <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />}
       {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={top.x} cy={top.y} r={Math.max(22, rx * 0.82)} /> : null}
       {selected ? <circle className="selected-part-pulse" cx={top.x} cy={top.y} r={Math.max(18, rx * 0.72)} /> : null}
-      <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text>
+      {showLabel ? <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text> : null}
       {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={top.x} y={top.y - ry - 28}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
       {selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
     </g>
@@ -519,6 +521,7 @@ export function VisualCadWorkspace({
   const partsById = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts]);
   const selectedPart = partsById.get(selectedPartId) ?? parts[0];
   const effectiveFocusedPartId = focusedPartId && partsById.has(focusedPartId) ? focusedPartId : null;
+  const annotationPartIds = new Set([selectedPartId, effectiveFocusedPartId].filter((partId): partId is string => partId != null));
   const sortedParts = useMemo(() => [...parts].sort((left, right) => {
     const leftDepth = project(left.authoring.positionMm).depth + (left.visual.zIndex ?? 0);
     const rightDepth = project(right.authoring.positionMm).depth + (right.visual.zIndex ?? 0);
@@ -617,7 +620,9 @@ export function VisualCadWorkspace({
               <g className={`joint-connection joint-${part.authoring.jointType}`} key={`${part.id}-joint`}>
                 <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
                 <circle cx={end.x} cy={end.y} r="6" />
-                <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{part.authoring.jointType}</text>
+                {annotationPartIds.has(part.id) || (part.authoring.parentPartId != null && annotationPartIds.has(part.authoring.parentPartId))
+                  ? <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{part.authoring.jointType}</text>
+                  : null}
               </g>
             );
           })}
@@ -630,7 +635,9 @@ export function VisualCadWorkspace({
               <g className={`wire-route status-${route.reviewStatus}`} key={route.id}>
                 <polyline points={pointString(points)} />
                 {points.map((point, pointIndex) => <circle key={`${route.id}-${pointIndex}`} cx={point.x} cy={point.y} r={pointIndex === 0 || pointIndex === points.length - 1 ? 5 : 3} />)}
-                <text x={points[Math.min(1, points.length - 1)]!.x + 8} y={points[Math.min(1, points.length - 1)]!.y - 8}>{index + 1}. {route.name}</text>
+                {route.connectedParts.some((partId) => annotationPartIds.has(partId))
+                  ? <text x={points[Math.min(1, points.length - 1)]!.x + 8} y={points[Math.min(1, points.length - 1)]!.y - 8}>{index + 1}. {route.name}</text>
+                  : null}
               </g>
             );
           })}
@@ -652,6 +659,7 @@ export function VisualCadWorkspace({
                   part={part}
                   project={project}
                   selected={part.id === selectedPartId}
+                  showLabel={annotationPartIds.has(part.id)}
                 />
               )
               : (
@@ -665,6 +673,7 @@ export function VisualCadWorkspace({
                   part={part}
                   project={project}
                   selected={part.id === selectedPartId}
+                  showLabel={annotationPartIds.has(part.id)}
                 />
               );
           })}
