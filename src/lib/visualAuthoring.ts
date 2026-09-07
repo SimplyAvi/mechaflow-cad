@@ -5,6 +5,7 @@ import type {
   BackendBOMItem,
   BackendElectronicsComponent,
   BackendManufacturingOption,
+  BackendMaterial,
   BackendPart,
   BackendProject,
   BackendProjectFile,
@@ -16,8 +17,16 @@ import type {
   BackendWiringRoute,
   CADJointType,
   CADPrimitiveShape,
+  Part,
+  PartAuthoringFeatureRecipe,
+  PartAuthoringFeatureStep,
+  PartAuthoringHolePattern,
+  PartAuthoringSketchState,
   ReferenceDesign,
 } from '../types';
+import type { LocalPartCatalogItem, LocalPartCatalogMatch } from '../data/localPartCatalog';
+import { buildCadLifecycleExportMap } from './cadLifecycleMap';
+import { buildAllPartOutputPreviews } from './partOutputs';
 import { mapProjectPanelDataToReferenceDesign } from './backendMapper';
 
 export const unitOptions: Array<{ value: AuthoringUnit; label: string; factorToMm: number }> = [
@@ -36,6 +45,29 @@ export const lengthToMm = (value: number, unit: AuthoringUnit): number => value 
 export const formatLength = (valueMm: number, unit: AuthoringUnit, maximumFractionDigits = unit === 'm' ? 3 : 2): string => (
   `${new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(lengthFromMm(valueMm, unit))} ${unit}`
 );
+
+export const formatFeatureRecipeCallout = (part: Part, callout: PartAuthoringFeatureStep, units: AuthoringUnit): string => {
+  const dimensions = part.authoring.dimensionsMm;
+  const outerDiameter = dimensions.diameterMm ?? dimensions.widthMm ?? dimensions.lengthMm ?? 50;
+  const height = dimensions.heightMm ?? dimensions.thicknessMm ?? dimensions.diameterMm ?? Math.max(12, (dimensions.widthMm ?? 36) * 0.55);
+  const numberFromCallout = (id: string, fallback: number): number => {
+    const value = part.authoring.featureRecipe?.callouts.find((candidate) => candidate.id === id)?.value;
+    const match = value?.match(/[0-9]+(?:\.[0-9]+)?/);
+    return match ? Number(match[0]) : fallback;
+  };
+  if (callout.id === 'od') return formatLength(outerDiameter, units);
+  if (callout.id === 'id') return formatLength(numberFromCallout('id', outerDiameter) * outerDiameter / numberFromCallout('od', outerDiameter), units);
+  if (callout.id === 'height') return formatLength(height, units);
+  if (callout.id === 'chamfer') return formatLength(numberFromCallout('chamfer', 0) * height / numberFromCallout('height', height), units);
+  if (callout.id === 'slot') {
+    const values = callout.value.match(/[0-9]+(?:\.[0-9]+)?/g)?.slice(0, 2).map(Number) ?? [];
+    return values.length === 2
+      ? `${formatLength(values[0]!, units)} x ${formatLength(values[1]!, units)}${callout.value.includes(' at ') ? ` at ${callout.value.split(' at ')[1]}` : ''}`
+      : callout.value;
+  }
+  const value = numberFromCallout(callout.id, Number.NaN);
+  return Number.isFinite(value) ? formatLength(value, units) : callout.value;
+};
 
 const cloneProject = (project: BackendProject): BackendProject => structuredClone(project);
 
@@ -59,6 +91,12 @@ const normalizePartVisualAuthoring = (part: BackendPart): Record<string, unknown
   metadata.visual_authoring = visual;
   part.metadata = metadata;
   return visual;
+};
+
+const provenanceRecord = (visual: Record<string, unknown>): Record<string, unknown> => {
+  const provenance = isRecord(visual.provenance) ? { ...visual.provenance } : {};
+  visual.provenance = provenance;
+  return provenance;
 };
 
 const flattenParts = (project: BackendProject): BackendPart[] => project.assemblies.flatMap((assembly) => assembly.parts);
@@ -225,6 +263,9 @@ const projectWithDesignAuthoring = (design: ReferenceDesign): BackendProject => 
       joint_type: source.authoring.jointType,
       assigned_to_part_id: source.authoring.assignedToPartId,
       connector_id: source.authoring.connectorId,
+      feature_recipe: source.authoring.featureRecipe,
+      hole_pattern: source.authoring.holePattern,
+      sketch_state: source.authoring.sketchState,
     });
     part.dimensions = {
       ...part.dimensions,
@@ -233,6 +274,11 @@ const projectWithDesignAuthoring = (design: ReferenceDesign): BackendProject => 
       height_mm: source.authoring.dimensionsMm.heightMm ?? part.dimensions.height_mm,
       diameter_mm: source.authoring.dimensionsMm.diameterMm ?? part.dimensions.diameter_mm,
       thickness_mm: source.authoring.dimensionsMm.thicknessMm ?? part.dimensions.thickness_mm,
+      metadata: {
+        ...(isRecord(part.dimensions.metadata) ? part.dimensions.metadata : {}),
+        visual_hole_pattern: source.authoring.holePattern,
+        viewport_sketch_state: source.authoring.sketchState,
+      },
     };
   }
   return next;
@@ -257,6 +303,8 @@ export const buildLocalProjectFile = (design: ReferenceDesign): BackendProjectFi
     visual_authoring_mvp: {
       renderer: 'react-svg-xyz-grid',
       limitation: 'MVP visual primitives only. Future FreeCAD workers must replace this with real CAD geometry artifacts.',
+      part_outputs: buildAllPartOutputPreviews(design),
+      cad_lifecycle_map: buildCadLifecycleExportMap(),
     },
   },
 });
@@ -272,15 +320,23 @@ export const updateProjectUnits = (project: BackendProject, units: AuthoringUnit
 
 export const updateProjectTargets = (
   project: BackendProject,
-  updates: { payloadLb?: number | null; reachMm?: number | null },
+  updates: { payloadLb?: number | null; reachMm?: number | null; safetyFactor?: number | null },
 ): BackendProject => {
   const next = cloneProject(project);
   if (updates.payloadLb != null && next.active_task) {
     next.active_task = {
       ...next.active_task,
       kind: 'lift_payload',
+      description: `Lift and place a ${updates.payloadLb} lb payload while preserving reach, self-weight, and safety-factor review criteria.`,
       target_value: updates.payloadLb,
       unit: 'lb',
+      validation_method: next.active_task.validation_method ?? 'heuristic',
+    };
+  }
+  if (updates.safetyFactor != null && next.active_task && Number.isFinite(updates.safetyFactor) && updates.safetyFactor > 0) {
+    next.active_task = {
+      ...next.active_task,
+      safety_factor_min: updates.safetyFactor,
       validation_method: next.active_task.validation_method ?? 'heuristic',
     };
   }
@@ -311,6 +367,10 @@ export const updatePartGeometry = (
     materialId?: string;
     manufacturingProcess?: string;
     label?: string;
+    holePattern?: PartAuthoringHolePattern | null;
+    sketchState?: PartAuthoringSketchState | null;
+    featureRecipe?: PartAuthoringFeatureRecipe | null;
+    fasteners?: string[];
   },
 ): BackendProject => {
   const next = cloneProject(project);
@@ -328,16 +388,46 @@ export const updatePartGeometry = (
         z: updates.rotationZDeg,
       };
     }
-    const nextDimensions = { ...part.dimensions };
+    const nextDimensions = {
+      ...part.dimensions,
+      metadata: { ...(isRecord(part.dimensions.metadata) ? part.dimensions.metadata : {}) },
+    };
     if (updates.dimensions) {
       if (positiveFiniteValue(updates.dimensions.lengthMm)) nextDimensions.length_mm = updates.dimensions.lengthMm;
       if (positiveFiniteValue(updates.dimensions.widthMm)) nextDimensions.width_mm = updates.dimensions.widthMm;
       if (positiveFiniteValue(updates.dimensions.heightMm)) nextDimensions.height_mm = updates.dimensions.heightMm;
       if (positiveFiniteValue(updates.dimensions.diameterMm)) nextDimensions.diameter_mm = updates.dimensions.diameterMm;
       if (positiveFiniteValue(updates.dimensions.thicknessMm)) nextDimensions.thickness_mm = updates.dimensions.thicknessMm;
+      const provenance = provenanceRecord(visual);
+      const dimensionProvenance = isRecord(provenance.dimensions) ? { ...provenance.dimensions } : {};
+      for (const key of Object.keys(updates.dimensions)) dimensionProvenance[key] = 'user-defined';
+      provenance.dimensions = dimensionProvenance;
     }
     const metadata = { ...(isRecord(part.metadata) ? part.metadata : {}) };
-    if (updates.manufacturingProcess) metadata.preferred_manufacturing_process = updates.manufacturingProcess;
+    if (updates.manufacturingProcess) {
+      metadata.preferred_manufacturing_process = updates.manufacturingProcess;
+    }
+    if (updates.materialId) provenanceRecord(visual).material = 'user-defined';
+    if (updates.holePattern !== undefined) {
+      visual.hole_pattern = updates.holePattern;
+      nextDimensions.metadata.visual_hole_pattern = updates.holePattern;
+      metadata.viewport_hole_pattern = updates.holePattern;
+    }
+    if (updates.sketchState !== undefined) {
+      visual.sketch_state = updates.sketchState;
+      nextDimensions.metadata.viewport_sketch_state = updates.sketchState;
+      metadata.visual_sketch_state = updates.sketchState;
+    }
+    if (updates.featureRecipe !== undefined) {
+      visual.feature_recipe = updates.featureRecipe;
+      metadata.feature_recipe = updates.featureRecipe;
+      if (updates.featureRecipe) {
+        const provenance = provenanceRecord(visual);
+        provenance.featureRecipe = updates.featureRecipe.provenance ?? 'user-defined';
+        const existingFeatureSteps = isRecord(provenance.featureSteps) ? provenance.featureSteps : {};
+        provenance.featureSteps = Object.fromEntries(updates.featureRecipe.history.map((step) => [step.id, step.provenance ?? existingFeatureSteps[step.id] ?? provenance.featureRecipe]));
+      }
+    }
     const nextName = typeof updates.label === 'string' && updates.label.trim() !== ''
       ? updates.label.trim()
       : part.name;
@@ -347,6 +437,111 @@ export const updatePartGeometry = (
       material_id: updates.materialId ?? part.material_id,
       dimensions: nextDimensions,
       mass_kg: updates.dimensions || updates.materialId ? null : part.mass_kg,
+      related_fasteners: updates.fasteners ?? part.related_fasteners,
+      metadata,
+    };
+  });
+};
+
+const catalogFallbackMaterial = (item: LocalPartCatalogItem): BackendMaterial => ({
+  id: item.defaultMaterialId,
+  name: item.materialSummary,
+  family: item.category.includes('actuator') ? 'mechatronic_actuator' : item.category.replaceAll(' ', '_'),
+  properties: {},
+  compatible_processes: [item.manufacturing.process],
+  cost: null,
+  source: { label: item.source.label, license: item.source.license },
+  confidence: item.source.confidence,
+  notes: ['Created from the local part catalog so matched visual-authoring parts keep a resolvable material reference.'],
+});
+
+const catalogManufacturingOption = (item: LocalPartCatalogItem): BackendManufacturingOption => ({
+  id: `mfg-${item.id}-${item.manufacturing.process}`,
+  process: item.manufacturing.process,
+  description: item.manufacturing.description,
+  cost: item.manufacturing.cost,
+  lead_time_days_min: item.manufacturing.leadTimeDaysMin,
+  lead_time_days_max: item.manufacturing.leadTimeDaysMax,
+  supplier_url: null,
+  risk_notes: item.manufacturing.riskNotes,
+  confidence: item.manufacturing.confidence,
+});
+
+export const applyCatalogMatchToPart = (
+  project: BackendProject,
+  partId: string,
+  catalogItem: LocalPartCatalogItem,
+  match: Pick<LocalPartCatalogMatch, 'score' | 'confidence' | 'matchedTerms' | 'reasoning'> & { query: string },
+): BackendProject => {
+  const next = cloneProject(project);
+  if (!next.materials.some((material) => material.id === catalogItem.defaultMaterialId)) {
+    next.materials = [...next.materials, catalogFallbackMaterial(catalogItem)];
+  }
+  return setPartInProject(next, partId, (part) => {
+    const existingSource = typeof part.source_file === 'string' ? part.source_file.trim() : null;
+    const visual = normalizePartVisualAuthoring(part);
+    visual.authored = true;
+    visual.primitive = catalogItem.primitive;
+    visual.color = catalogItem.color;
+    visual.catalog_item_id = catalogItem.id;
+    visual.feature_recipe = catalogItem.featureRecipe ?? null;
+    const provenance = provenanceRecord(visual);
+    provenance.dimensions = Object.fromEntries(Object.keys(catalogItem.defaultDimensionsMm).map((key) => [key, 'defaulted']));
+    provenance.material = 'defaulted';
+    provenance.featureRecipe = catalogItem.featureRecipe ? 'defaulted' : undefined;
+    provenance.featureSteps = catalogItem.featureRecipe
+      ? Object.fromEntries(catalogItem.featureRecipe.history.map((step) => [step.id, 'defaulted']))
+      : undefined;
+    const option = catalogManufacturingOption(catalogItem);
+    const existingOptions = part.manufacturing_options.filter((candidate) => candidate.id !== option.id && candidate.process !== option.process);
+    const metadata = {
+      ...(isRecord(part.metadata) ? part.metadata : {}),
+      preferred_manufacturing_process: catalogItem.manufacturing.process,
+      created_by_visual_authoring: true,
+      local_catalog_match: {
+        catalog_item_id: catalogItem.id,
+        catalog_item_name: catalogItem.name,
+        query: match.query,
+        score: match.score,
+        confidence: match.confidence,
+        matched_terms: match.matchedTerms,
+        reasoning: match.reasoning,
+        editable: true,
+        catalog_uri: `local-catalog://${catalogItem.id}`,
+        source: catalogItem.source,
+        recipe_id: catalogItem.featureRecipe?.id ?? null,
+      },
+      feature_recipe: catalogItem.featureRecipe ?? null,
+      catalog_role_criteria: catalogItem.criteria,
+      visual_authoring: visual,
+      demo_design_criteria: {
+        ...(isRecord(part.metadata?.demo_design_criteria) ? part.metadata.demo_design_criteria : {}),
+        load_capacity_status: 'review-required',
+        load_capacity_note: `Catalog match ${catalogItem.name} supplies type, dimensions, material, and process metadata. Strength, torque, fatigue, tolerances, and sourcing remain review-required.`,
+      },
+    };
+    return {
+      ...part,
+      name: catalogItem.name,
+      category: catalogItem.category,
+      purpose: `${catalogItem.assemblyRole} ${catalogItem.description}`,
+      material_id: catalogItem.defaultMaterialId,
+      dimensions: {
+        ...part.dimensions,
+        length_mm: catalogItem.defaultDimensionsMm.lengthMm,
+        width_mm: catalogItem.defaultDimensionsMm.widthMm,
+        height_mm: catalogItem.defaultDimensionsMm.heightMm,
+        diameter_mm: catalogItem.defaultDimensionsMm.diameterMm,
+        thickness_mm: catalogItem.defaultDimensionsMm.thicknessMm,
+        metadata: {
+          ...(isRecord(part.dimensions.metadata) ? part.dimensions.metadata : {}),
+          local_catalog_item_id: catalogItem.id,
+          units: 'mm',
+        },
+      },
+      mass_kg: null,
+      manufacturing_options: [option, ...existingOptions],
+      source_file: existingSource && !existingSource.startsWith('local-catalog://') ? existingSource : null,
       metadata,
     };
   });

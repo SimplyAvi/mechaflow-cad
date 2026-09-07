@@ -27,9 +27,15 @@ import type {
   MaterialOption,
   CADJointType,
   CADPrimitiveShape,
+  CADValueProvenance,
   ElectronicsComponent,
   WireSegment,
   Part,
+  PartAuthoringFeatureRecipe,
+  PartAuthoringFeatureStep,
+  PartAuthoringProvenance,
+  PartAuthoringHolePattern,
+  PartAuthoringSketchState,
   PartVisual,
   ReferenceDesign,
   RiskLevel,
@@ -323,6 +329,95 @@ const vectorFrom = (value: unknown, fallback: { x: number; y: number; z: number 
   };
 };
 
+const featureStepFromMetadata = (value: unknown): PartAuthoringFeatureStep | null => {
+  const record = metadataRecord(value);
+  const kind = record.kind;
+  if (kind !== 'sketch' && kind !== 'extrude' && kind !== 'cut' && kind !== 'finish' && kind !== 'placement' && kind !== 'revolve' && kind !== 'chamfer' && kind !== 'fillet') return null;
+  const id = stringMetadata(record.id);
+  const label = stringMetadata(record.label);
+  const stepValue = stringMetadata(record.value);
+  if (!id || !label || !stepValue) return null;
+  const provenance = record.provenance;
+  return { id, label, value: stepValue, kind, ...(typeof provenance === 'string' ? { provenance: provenance as PartAuthoringFeatureStep['provenance'] } : {}) };
+};
+
+const featureRecipeFromMetadata = (value: unknown): PartAuthoringFeatureRecipe | null => {
+  const record = metadataRecord(value);
+  const id = stringMetadata(record.id);
+  const name = stringMetadata(record.name);
+  const plane = stringMetadata(record.plane);
+  const profile = stringMetadata(record.profile);
+  if (!id || !name || !plane || !profile) return null;
+  const history = Array.isArray(record.history)
+    ? record.history.map(featureStepFromMetadata).filter((step): step is PartAuthoringFeatureStep => step != null)
+    : [];
+  const callouts = Array.isArray(record.callouts)
+    ? record.callouts.map(featureStepFromMetadata).filter((step): step is PartAuthoringFeatureStep => step != null)
+    : [];
+  const provenance = record.provenance;
+  return { id, name, plane, profile, history, callouts, ...(typeof provenance === 'string' ? { provenance: provenance as PartAuthoringFeatureRecipe['provenance'] } : {}) };
+};
+
+const authoringProvenanceFromMetadata = (value: unknown): PartAuthoringProvenance => {
+  const record = metadataRecord(value);
+  const dimensions = metadataRecord(record.dimensions);
+  const featureSteps = metadataRecord(record.featureSteps ?? record.feature_steps);
+  return {
+    dimensions: Object.fromEntries(Object.entries(dimensions).filter(([, provenance]) => typeof provenance === 'string')) as PartAuthoringProvenance['dimensions'],
+    material: typeof record.material === 'string' ? record.material as PartAuthoringProvenance['material'] : undefined,
+    featureRecipe: typeof record.featureRecipe === 'string' ? record.featureRecipe as PartAuthoringProvenance['featureRecipe'] : undefined,
+    featureSteps: Object.fromEntries(Object.entries(featureSteps).filter(([, provenance]) => typeof provenance === 'string')) as Record<string, CADValueProvenance>,
+  };
+};
+
+const holePatternFromMetadata = (value: unknown): PartAuthoringHolePattern | null => {
+  const record = metadataRecord(value);
+  const id = stringMetadata(record.id);
+  const label = stringMetadata(record.label);
+  const fastenerId = stringMetadata(record.fastenerId ?? record.fastener_id);
+  const fastenerLabel = stringMetadata(record.fastenerLabel ?? record.fastener_label);
+  const fastenerSpec = stringMetadata(record.fastenerSpec ?? record.fastener_spec);
+  const holeDiameterMm = numberMetadata(record.holeDiameterMm ?? record.hole_diameter_mm);
+  const offsetFromBottomMm = numberMetadata(record.offsetFromBottomMm ?? record.offset_from_bottom_mm);
+  if (!id || !label || !fastenerId || !fastenerLabel || !fastenerSpec || holeDiameterMm == null || offsetFromBottomMm == null) return null;
+  const notes = Array.isArray(record.notes) ? record.notes.filter((note): note is string => typeof note === 'string') : [];
+  return {
+    id,
+    label,
+    fastenerId,
+    fastenerLabel,
+    fastenerSpec,
+    holeDiameterMm,
+    offsetFromBottomMm,
+    centeredOnWidth: Boolean(record.centeredOnWidth ?? record.centered_on_width),
+    count: numberMetadata(record.count) ?? 1,
+    source: stringMetadata(record.source) ?? 'viewport-fastener-default',
+    notes,
+  };
+};
+
+const sketchStateFromMetadata = (value: unknown): PartAuthoringSketchState | null => {
+  const record = metadataRecord(value);
+  const plane = stringMetadata(record.plane);
+  const profile = stringMetadata(record.profile);
+  const constraintSummary = stringMetadata(record.constraintSummary ?? record.constraint_summary);
+  const operation = record.operation;
+  if (!plane || !profile || !constraintSummary) return null;
+  const notes = Array.isArray(record.notes) ? record.notes.filter((note): note is string => typeof note === 'string') : [];
+  const definitionState = stringMetadata(record.definitionState ?? record.definition_state);
+  const provenance = stringMetadata(record.provenance);
+  return {
+    plane,
+    profile,
+    constraintSummary,
+    extrudeDepthMm: numberMetadata(record.extrudeDepthMm ?? record.extrude_depth_mm),
+    operation: operation === 'extrude' || operation === 'cut' || operation === 'finish' ? operation : 'sketch',
+    ...(definitionState === 'under-defined' || definitionState === 'fully-defined' || definitionState === 'over-defined' || definitionState === 'provisional' || definitionState === 'requirements-incomplete' ? { definitionState } : {}),
+    ...(provenance === 'user-defined' || provenance === 'inferred' || provenance === 'defaulted' || provenance === 'estimated' || provenance === 'unresolved' || provenance === 'invalid' ? { provenance } : {}),
+    notes,
+  };
+};
+
 const defaultPositionFromVisual = (visual: PartVisual, index: number) => ({
   x: Math.round((visual.x - 50) * 10),
   y: Math.round((50 - visual.y) * 8),
@@ -356,6 +451,10 @@ const authoringFor = (part: BackendPart, index: number, visual: PartVisual) => {
     assignedToPartId: stringMetadata(visualAuthoring.assigned_to_part_id) ?? null,
     connectorId: stringMetadata(visualAuthoring.connector_id) ?? null,
     authored: Boolean(visualAuthoring.authored ?? part.metadata.created_by_visual_authoring),
+    featureRecipe: featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe),
+    holePattern: holePatternFromMetadata(visualAuthoring.hole_pattern ?? part.dimensions.metadata.visual_hole_pattern),
+    sketchState: sketchStateFromMetadata(visualAuthoring.sketch_state ?? part.metadata.visual_sketch_state),
+    provenance: authoringProvenanceFromMetadata(visualAuthoring.provenance),
   };
 };
 
@@ -394,7 +493,20 @@ const buildDesignCriteria = (
   const stiffnessGpa = material?.properties.elastic_modulus_gpa ?? null;
   const yieldMpa = material?.properties.yield_strength_mpa ?? null;
   const heatLimitC = material?.properties.heat_deflection_temp_c ?? material?.properties.max_service_temp_c ?? null;
-  return [
+  const catalogMatch = metadataRecord(part.metadata.local_catalog_match);
+  const catalogScore = numberMetadata(catalogMatch.score);
+  const catalogName = stringMetadata(catalogMatch.catalog_item_name);
+  const catalogConfidence = stringMetadata(catalogMatch.confidence);
+  const catalogReasoning = stringMetadata(catalogMatch.reasoning);
+  const visualAuthoring = metadataRecord(part.metadata.visual_authoring);
+  const featureRecipe = featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe);
+  const dimensionMetadata = metadataRecord(part.dimensions.metadata);
+  const holePattern = holePatternFromMetadata(visualAuthoring.hole_pattern ?? dimensionMetadata.visual_hole_pattern);
+  const sketchState = sketchStateFromMetadata(visualAuthoring.sketch_state ?? part.metadata.visual_sketch_state);
+  const actuatorTorqueNm = numberMetadata(demoCriteria.actuator_torque_nm) ?? numberMetadata(dimensionMetadata.nominal_output_torque_nm);
+  const sizingUpgrade = metadataRecord(part.metadata.requirement_sizing_upgrade);
+  const sizingUpgradeName = stringMetadata(sizingUpgrade.upgrade_name);
+  const criteria: DesignCriterion[] = [
     {
       id: 'load-capacity',
       label: 'Intended load or lift role',
@@ -445,6 +557,67 @@ const buildDesignCriteria = (
       sourceConfidence: criterionSource('Manufacturing option seed', manufacturingOption?.confidence),
     },
   ];
+  if (actuatorTorqueNm != null) {
+    criteria.push({
+      id: 'actuator-torque',
+      label: 'Actuator torque seed',
+      value: `${formatMeasurement(actuatorTorqueNm)} N-m nominal output torque`,
+      status: criterionStatus(demoCriteria.actuator_torque_status ?? 'estimated_from_heuristic'),
+      plainEnglish: 'Nominal torque is local catalog or seed metadata for requirement triage. Supplier curves, thermal derating, gearbox life, and controller current remain review-required.',
+      sourceConfidence: criterionSource('Local actuator catalog metadata', demoCriteria.actuator_torque_status ?? 'estimated_from_heuristic'),
+    });
+  }
+  if (sizingUpgradeName) {
+    criteria.push({
+      id: 'requirement-sizing-upgrade',
+      label: 'Requirement sizing upgrade',
+      value: `${sizingUpgradeName} - review-required local fix`,
+      status: 'estimated',
+      plainEnglish: `${sizingUpgradeName} was applied from the deterministic local upgrade catalog. It updates visible dimensions, fastener callouts, material or actuator metadata for review, but it is not FEA or production certification.`,
+      sourceConfidence: criterionSource('Local requirement sizing upgrade catalog', metadataRecord(sizingUpgrade.source).confidence),
+    });
+  }
+  if (featureRecipe) {
+    criteria.push({
+      id: 'feature-recipe',
+      label: 'Sketch-first feature recipe',
+      value: `${featureRecipe.name} on ${featureRecipe.plane}`,
+      status: 'estimated',
+      plainEnglish: `${featureRecipe.profile}. Feature history: ${featureRecipe.history.map((step) => `${step.label} ${step.value}`).join('; ')}. These are editable visual authoring steps, not solved CAD features yet.`,
+      sourceConfidence: criterionSource('Local guided part recipe', 'estimated_from_heuristic'),
+    });
+  }
+  if (sketchState) {
+    criteria.push({
+      id: 'viewport-sketch-operation',
+      label: 'Viewport sketch operation',
+      value: `${sketchState.operation} on ${sketchState.plane}`,
+      status: 'estimated',
+      plainEnglish: `${sketchState.profile}. Constraints: ${sketchState.constraintSummary}. Extrude depth ${sketchState.extrudeDepthMm == null ? 'review required' : `${formatMeasurement(sketchState.extrudeDepthMm)} mm`}.`,
+      sourceConfidence: criterionSource('Viewport-anchored visual CAD operation metadata', 'estimated_from_heuristic'),
+    });
+  }
+  if (holePattern) {
+    criteria.push({
+      id: 'hole-fastener-placement',
+      label: 'Hole and fastener placement',
+      value: `${holePattern.count}x ${formatMeasurement(holePattern.holeDiameterMm)} mm clearance hole for ${holePattern.fastenerLabel}`,
+      status: 'estimated',
+      plainEnglish: `Hole center is ${formatMeasurement(holePattern.offsetFromBottomMm)} mm from the bottom${holePattern.centeredOnWidth ? ' and centered on width' : ''}. Fastener source: ${holePattern.source}. Verify edge distance, fit, preload, and tolerance before release.`,
+      sourceConfidence: criterionSource('Viewport fastener placement rule', 'estimated_from_heuristic'),
+    });
+  }
+  if (catalogName) {
+    criteria.push({
+      id: 'catalog-match',
+      label: 'Catalog or database match',
+      value: `${catalogName}${catalogScore == null ? '' : ` - ${catalogScore}%`} ${catalogConfidence ?? 'review-required'} confidence`,
+      status: catalogScore != null && catalogScore >= 45 ? 'estimated' : 'review-required',
+      plainEnglish: `${catalogReasoning ?? 'Local catalog matching supplied editable part metadata.'} The user can still edit the label, dimensions, material, process, and assembly placement before release.`,
+      sourceConfidence: criterionSource('Local deterministic part catalog', catalogConfidence),
+    });
+  }
+  return criteria;
 };
 
 const buildFallbackAnalysisReadiness = (
@@ -455,8 +628,14 @@ const buildFallbackAnalysisReadiness = (
 ): AnalysisReadinessPreview => {
   const demoCriteria = demoDesignCriteria(part);
   const demoLoadCapacityLb = numberMetadata(demoCriteria.load_capacity_lb);
+  const visualAuthoring = metadataRecord(part.metadata.visual_authoring);
+  const dimensionMetadata = metadataRecord(part.dimensions.metadata);
+  const holePattern = holePatternFromMetadata(visualAuthoring.hole_pattern ?? dimensionMetadata.visual_hole_pattern);
+  const sketchState = sketchStateFromMetadata(visualAuthoring.sketch_state ?? part.metadata.visual_sketch_state);
   const hasPayloadTask = task.kind === 'lift_payload' && typeof task.target_value === 'number';
-  const hasGeometry = typeof part.source_file === 'string' && part.source_file.trim() !== '';
+  const hasGeometry = typeof part.source_file === 'string'
+    && part.source_file.trim() !== ''
+    && !part.source_file.trim().startsWith('local-catalog://');
   const hasMaterial = Boolean(material);
   const dimensionsReady = Object.values(part.dimensions).some((value) => typeof value === 'number' && Number.isFinite(value));
   const blockingReview = [
@@ -500,7 +679,7 @@ const buildFallbackAnalysisReadiness = (
       name: 'Fixture and fastener support set',
       constraint_type: 'pinned',
       target_part_ids: [part.id],
-      region: part.related_fasteners.join(', ') || 'fixture faces need CAD naming',
+      region: part.related_fasteners.join(', ') || holePattern?.fastenerSpec || 'fixture faces need CAD naming',
       degrees_of_freedom: ['translation_x', 'translation_y', 'translation_z'],
       confidence: 'estimated_from_heuristic',
       review_required: true,
@@ -529,7 +708,11 @@ const buildFallbackAnalysisReadiness = (
       freecad_document: 'future FreeCAD document or STEP import path',
       gmsh_model: 'future Gmsh .geo or API-generated mesh model',
       calculix_input_deck: 'future CalculiX .inp deck',
-      notes: ['Units and coordinate frames must be normalized by the worker before solve.'],
+      notes: [
+        'Units and coordinate frames must be normalized by the worker before solve.',
+        ...(sketchState ? [`Viewport sketch operation: ${sketchState.operation} on ${sketchState.plane}; ${sketchState.profile}.`] : []),
+        ...(holePattern ? [`Viewport hole pattern: ${holePattern.count}x ${holePattern.holeDiameterMm} mm clearance for ${holePattern.fastenerLabel}, ${holePattern.offsetFromBottomMm} mm from bottom.`] : []),
+      ],
     },
     expected_result_artifacts: [
       { kind: 'geometry_prep', title: 'FreeCAD analysis geometry package', file_format: 'STEP or BREP plus part-map JSON', produced_by: 'freecad-fea-prep-worker', replaces_demo_estimate: true, review_required_before_release: true },
@@ -549,6 +732,7 @@ const buildFallbackAnalysisReadiness = (
     review_required: [
       'Named faces, contact regions, and fixture assumptions must be reviewed in CAD before solving.',
       'A qualified reviewer must approve any factor-of-safety interpretation before release.',
+      ...(holePattern ? ['Viewport hole and fastener metadata must be confirmed against edge distance, tolerance, preload, and supplier specifications.'] : []),
       ...blockingReview,
     ],
     recommended_job_request: {
@@ -572,7 +756,9 @@ const buildFallbackAssemblyReadiness = (
   const aggregateMaterialId = materialIds.size === 1 ? [...materialIds][0] : undefined;
   const aggregateMaterial = aggregateMaterialId ? materialsById.get(aggregateMaterialId) : undefined;
   const allGeometryReady = assembly.parts.length > 0 && assembly.parts.every(
-    (part) => typeof part.source_file === 'string' && part.source_file.trim() !== '',
+    (part) => typeof part.source_file === 'string'
+      && part.source_file.trim() !== ''
+      && !part.source_file.trim().startsWith('local-catalog://'),
   );
   const allDimensionsReady = assembly.parts.length > 0 && assembly.parts.every(
     (part) => Object.values(part.dimensions).some((value) => typeof value === 'number' && Number.isFinite(value)),

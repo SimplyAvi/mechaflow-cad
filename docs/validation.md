@@ -31,7 +31,7 @@ npm run smoke
 xvfb-run -a npm run captain:smoke
 ```
 
-These commands cover TypeScript compilation, Vite production build, React unit and component tests, frontend lint, the mock API plus built frontend smoke, and the captain demo smoke. React tests include visual authoring coverage for unit selection, primitive creation, dimension editing, parent and joint metadata, and visible wire routing. `captain:smoke` includes the Electron desktop launcher smoke, fixture import, material substitution preview, local-safe analysis endpoints, solver-unavailable boundary, and project-file export round trip.
+These commands cover TypeScript compilation, Vite production build, React unit and component tests, frontend lint, the mock API plus built frontend smoke, and the captain demo smoke. React tests include visual authoring coverage for unit selection, primitive creation, contextual full-canvas drawers, blank part-plane startup, clickable on-model annotations, synchronized left-inspector editing, viewport-anchored dimension editing, sketch and hole metadata, machinist drawing, lifecycle evidence, FEA-input and CAD lifecycle previews, parent and joint metadata, and visible wire routing. `captain:smoke` includes the Electron desktop launcher smoke, fixture import, material substitution preview, local-safe analysis endpoints, solver-unavailable boundary, and project-file export round trip.
 
 ## Local validation before handoff
 
