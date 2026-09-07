@@ -557,7 +557,7 @@ function App() {
     });
   };
 
-  const updateSelectedDimension = (key: 'length' | 'width' | 'height', rawValue: string) => {
+  const updateSelectedDimension = (key: 'length' | 'width' | 'height' | 'diameter', rawValue: string) => {
     if (!design || !selectedPart) return;
     const draftKey = `${selectedPart.id}:${design.units}:${key}`;
     setDimensionDrafts((current) => ({ ...current, [draftKey]: rawValue }));
@@ -569,7 +569,9 @@ function App() {
       ? { lengthMm: valueMm }
       : key === 'width'
         ? { widthMm: valueMm }
-        : { heightMm: valueMm };
+        : key === 'height'
+          ? { heightMm: valueMm }
+          : { diameterMm: valueMm };
     updateSelectedPartGeometry({ dimensions }, `${selectedPart.name} ${key} set to ${rawValue} ${design.units}.`);
   };
 
@@ -1733,13 +1735,16 @@ function App() {
                     ['length', selectedPart.authoring.dimensionsMm.lengthMm ?? 0],
                     ['width', selectedPart.authoring.dimensionsMm.widthMm ?? 0],
                     ['height', selectedPart.authoring.dimensionsMm.heightMm ?? 0],
+                    ...(selectedPart.authoring.primitive === 'cylinder_joint'
+                      ? [['diameter', selectedPart.authoring.dimensionsMm.diameterMm ?? 0]]
+                      : []),
                   ].map(([key, value]) => (
                     <label className="field-row compact-field" key={key}>
                       <span>{key}</span>
                       <input
                         aria-label={`${key} in ${design.units}`}
                         min="0.001"
-                        onChange={(event) => updateSelectedDimension(key as 'length' | 'width' | 'height', event.target.value)}
+                        onChange={(event) => updateSelectedDimension(key as 'length' | 'width' | 'height' | 'diameter', event.target.value)}
                         step="0.1"
                         type="number"
                         value={dimensionDrafts[`${selectedPart.id}:${design.units}:${key}`] ?? Number(lengthFromMm(Number(value), design.units).toFixed(3))}

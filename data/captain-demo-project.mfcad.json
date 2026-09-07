@@ -448,10 +448,11 @@
             "wiring_route_ids": [
               "route-shoulder-servo-power"
             ],
-            "source_file": "local-catalog://catalog-shoulder-servo-actuator-80mm",
+            "source_file": null,
             "metadata": {
               "preferred_manufacturing_process": "off_the_shelf",
               "catalog_item_id": "catalog-shoulder-servo-actuator-80mm",
+              "catalog_uri": "local-catalog://catalog-shoulder-servo-actuator-80mm",
               "demo_design_criteria": {
                 "load_capacity_lb": null,
                 "load_capacity_status": "review-required",

@@ -377,13 +377,21 @@ function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; p
   const dims = primitiveDimensions(part);
   const editableDimensions = part.authoring.dimensionsMm;
   const outerDiameter = editableDimensions.diameterMm ?? editableDimensions.widthMm ?? dims.width;
-  const innerDiameter = Math.max(0, outerDiameter - 2 * (editableDimensions.thicknessMm ?? 0));
+  const recipeDimension = (callout: typeof recipe.callouts[number]): number | null => {
+    const match = callout.value.match(/[0-9]+(?:\.[0-9]+)?/);
+    return match ? Number(match[0]) : null;
+  };
   const calloutValue = (callout: typeof recipe.callouts[number]): string => {
     if (callout.id === 'od') return formatLength(outerDiameter, units);
-    if (callout.id === 'id' && editableDimensions.thicknessMm != null) return formatLength(innerDiameter, units);
-    if (callout.id === 'slot') return `${formatLength(dims.length, units)} x ${formatLength(dims.width, units)}`;
+    if (callout.id === 'slot') {
+      const slotDimensions = callout.value.match(/[0-9]+(?:\.[0-9]+)?/g)?.slice(0, 2).map(Number) ?? [];
+      return slotDimensions.length === 2
+        ? `${formatLength(slotDimensions[0]!, units)} x ${formatLength(slotDimensions[1]!, units)}${callout.value.includes(' at ') ? ` at ${callout.value.split(' at ')[1]}` : ''}`
+        : callout.value;
+    }
     if (callout.id === 'height') return formatLength(dims.height, units);
-    return callout.value;
+    const value = recipeDimension(callout);
+    return value == null ? callout.value : formatLength(value, units);
   };
   const offset = focusOffset(focused);
   const center = {
@@ -403,7 +411,7 @@ function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; p
     <g className="feature-recipe-overlay" aria-hidden="true">
       <polygon className="sketch-plane" points={pointString(plane)} />
       <text className="sketch-plane-label" x={anchor.x} y={anchor.y}>{recipe.plane}: sketch profile</text>
-      {recipe.callouts.slice(0, 4).map((callout, index) => {
+      {recipe.callouts.slice(0, 5).map((callout, index) => {
         const target = project({
           x: center.x + [-0.4, 0.1, 0.42, 0.66][index]! * dims.length,
           y: planeY,
