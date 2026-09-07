@@ -45,6 +45,7 @@ Owner files:
 
 - `src/App.tsx` and `src/App.css` for the application shell, visual CAD workspace shell, sidebars, mode deck, project paths, reference image intake, authoring tools, material tools, analysis, manufacturing, reports, and backend handoff UI.
 - `src/VisualCadWorkspace.tsx` for the SVG XYZ grid, isometric primitives, orbit, pan, zoom, selection, dimensions, joint lines, and visible wiring polylines.
+- `src/data/localPartCatalog.ts` for deterministic local robot-arm matching and catalog recipe metadata.
 - `src/lib/api.ts` for backend and mock API calls.
 - `src/lib/backendMapper.ts` for mapping backend panel data into cockpit state.
 - `src/lib/visualAuthoring.ts` for browser-side unit conversion, primitive creation, geometry mutation, assembly metadata, visible wire-route creation, local project-file export projection, and remapping authored backend project data into React state.
@@ -56,6 +57,7 @@ Current behavior:
 
 - Opens directly into a visual CAD authoring cockpit with compact CAD-style sidebars.
 - Supports unit selection, primitive creation, selected geometry edits, motor and connector placement, parent and joint metadata, orbit, pan, zoom, explode, and visible wire routing.
+- Supports a guided sketch-first part flow, local catalog matching, editable feature recipes, focus-selected inspection, and assembly placement metadata.
 - Supports new prompt concepts, local project import/export, recent project reopen, reference catalog path, and repository-local ready examples.
 - Treats reference images as local metadata only.
 - Groups advanced panels by Design, Analysis, Manufacturing, Reports, and Backend modes.
