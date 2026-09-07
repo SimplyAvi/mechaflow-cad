@@ -34,6 +34,7 @@ import {
   updatePartGeometry,
   updateProjectTargets,
   updateProjectUnits,
+  formatFeatureRecipeCallout,
 } from './lib/visualAuthoring';
 import type { AuthoringUnit, BackendProject, CADJointType, CADPrimitiveShape } from './types';
 import './App.css';
@@ -2290,7 +2291,7 @@ function SelectedPartCanvasCard({
         <h3>Selected: {part.name}</h3>
         <p>{part.purpose}</p>
         <small>Primitive proxy: {primitiveLabel(part.authoring.primitive)} in {part.subassembly}. This is authored visual geometry and project metadata, not a full parametric CAD kernel.</small>
-        {part.authoring.featureRecipe ? <small>Sketch recipe: {part.authoring.featureRecipe.name}. {part.authoring.featureRecipe.plane} includes {part.authoring.featureRecipe.callouts.map((callout) => `${callout.label} ${callout.value}`).join(', ')}.</small> : null}
+        {part.authoring.featureRecipe ? <small>Sketch recipe: {part.authoring.featureRecipe.name}. {part.authoring.featureRecipe.plane} includes {part.authoring.featureRecipe.callouts.map((callout) => `${callout.label} ${formatFeatureRecipeCallout(part, callout, units)}`).join(', ')}.</small> : null}
         {catalogMatchCriterion ? <small>Local catalog match: {catalogMatchCriterion.value}. {catalogMatchCriterion.plainEnglish}</small> : null}
       </div>
       <dl className="selected-part-stat-grid">

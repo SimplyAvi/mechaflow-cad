@@ -17,6 +17,8 @@ import type {
   BackendWiringRoute,
   CADJointType,
   CADPrimitiveShape,
+  Part,
+  PartAuthoringFeatureStep,
   ReferenceDesign,
 } from '../types';
 import type { LocalPartCatalogItem, LocalPartCatalogMatch } from '../data/localPartCatalog';
@@ -38,6 +40,29 @@ export const lengthToMm = (value: number, unit: AuthoringUnit): number => value 
 export const formatLength = (valueMm: number, unit: AuthoringUnit, maximumFractionDigits = unit === 'm' ? 3 : 2): string => (
   `${new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(lengthFromMm(valueMm, unit))} ${unit}`
 );
+
+export const formatFeatureRecipeCallout = (part: Part, callout: PartAuthoringFeatureStep, units: AuthoringUnit): string => {
+  const dimensions = part.authoring.dimensionsMm;
+  const outerDiameter = dimensions.diameterMm ?? dimensions.widthMm ?? dimensions.lengthMm ?? 50;
+  const height = dimensions.heightMm ?? dimensions.thicknessMm ?? dimensions.diameterMm ?? Math.max(12, (dimensions.widthMm ?? 36) * 0.55);
+  const numberFromCallout = (id: string, fallback: number): number => {
+    const value = part.authoring.featureRecipe?.callouts.find((candidate) => candidate.id === id)?.value;
+    const match = value?.match(/[0-9]+(?:\.[0-9]+)?/);
+    return match ? Number(match[0]) : fallback;
+  };
+  if (callout.id === 'od') return formatLength(outerDiameter, units);
+  if (callout.id === 'id') return formatLength(numberFromCallout('id', outerDiameter) * outerDiameter / numberFromCallout('od', outerDiameter), units);
+  if (callout.id === 'height') return formatLength(height, units);
+  if (callout.id === 'chamfer') return formatLength(numberFromCallout('chamfer', 0) * height / numberFromCallout('height', height), units);
+  if (callout.id === 'slot') {
+    const values = callout.value.match(/[0-9]+(?:\.[0-9]+)?/g)?.slice(0, 2).map(Number) ?? [];
+    return values.length === 2
+      ? `${formatLength(values[0]!, units)} x ${formatLength(values[1]!, units)}${callout.value.includes(' at ') ? ` at ${callout.value.split(' at ')[1]}` : ''}`
+      : callout.value;
+  }
+  const value = numberFromCallout(callout.id, Number.NaN);
+  return Number.isFinite(value) ? formatLength(value, units) : callout.value;
+};
 
 const cloneProject = (project: BackendProject): BackendProject => structuredClone(project);
 

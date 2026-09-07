@@ -1,6 +1,6 @@
 import { useMemo, useRef, type CSSProperties, type PointerEvent, type WheelEvent } from 'react';
 import type { AuthoringUnit, Part, PartAuthoringData, PartAuthoringDimensions, WiringRoute } from './types';
-import { formatLength, lengthFromMm } from './lib/visualAuthoring';
+import { formatFeatureRecipeCallout, formatLength, lengthFromMm } from './lib/visualAuthoring';
 
 interface ViewState {
   yawDeg: number;
@@ -375,36 +375,6 @@ function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; p
   const recipe = part.authoring.featureRecipe;
   if (!recipe) return null;
   const dims = primitiveDimensions(part);
-  const editableDimensions = part.authoring.dimensionsMm;
-  const outerDiameter = editableDimensions.diameterMm ?? editableDimensions.widthMm ?? dims.width;
-  const recipeDimension = (callout: typeof recipe.callouts[number]): number | null => {
-    const match = callout.value.match(/[0-9]+(?:\.[0-9]+)?/);
-    return match ? Number(match[0]) : null;
-  };
-  const recipeDimensionById = (id: string, fallback: number): number => {
-    const callout = recipe.callouts.find((candidate) => candidate.id === id);
-    return callout == null ? fallback : recipeDimension(callout) ?? fallback;
-  };
-  const recipeOuterDiameter = recipeDimensionById('od', outerDiameter);
-  const recipeInnerDiameter = recipeDimensionById('id', outerDiameter);
-  const currentBore = Math.max(0, outerDiameter - 2 * (recipeOuterDiameter - recipeInnerDiameter));
-  const recipeHeight = recipeDimensionById('height', dims.height);
-  const recipeChamfer = recipeDimensionById('chamfer', 0);
-  const currentChamfer = recipeHeight > 0 ? recipeChamfer * (dims.height / recipeHeight) : recipeChamfer;
-  const calloutValue = (callout: typeof recipe.callouts[number]): string => {
-    if (callout.id === 'od') return formatLength(outerDiameter, units);
-    if (callout.id === 'id') return formatLength(currentBore, units);
-    if (callout.id === 'slot') {
-      const slotDimensions = callout.value.match(/[0-9]+(?:\.[0-9]+)?/g)?.slice(0, 2).map(Number) ?? [];
-      return slotDimensions.length === 2
-        ? `${formatLength(slotDimensions[0]!, units)} x ${formatLength(slotDimensions[1]!, units)}${callout.value.includes(' at ') ? ` at ${callout.value.split(' at ')[1]}` : ''}`
-        : callout.value;
-    }
-    if (callout.id === 'height') return formatLength(dims.height, units);
-    if (callout.id === 'chamfer') return formatLength(currentChamfer, units);
-    const value = recipeDimension(callout);
-    return value == null ? callout.value : formatLength(value, units);
-  };
   const offset = focusOffset(focused);
   const center = {
     x: part.authoring.positionMm.x + offset.x,
@@ -441,7 +411,7 @@ function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; p
         return (
           <g className={`feature-callout kind-${callout.kind}`} key={callout.id}>
             <line x1={label.x} y1={label.y} x2={target.x} y2={target.y} />
-            <text x={label.x} y={label.y}>{callout.label}: {calloutValue(callout)}</text>
+            <text x={label.x} y={label.y}>{callout.label}: {formatFeatureRecipeCallout(part, callout, units)}</text>
           </g>
         );
       })}
