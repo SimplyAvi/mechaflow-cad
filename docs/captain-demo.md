@@ -34,6 +34,16 @@ For the selected part, confirm the card and inspector explain:
 10. Route a visible wire to another part. Confirm the cyan route appears in the canvas, the route list updates, and the route remains labeled review-required for real electrical and CAD checks.
 11. Export the `.mfcad.json` project, import it again, and confirm the new label, dimensions, parent or joint metadata, recipe metadata, and visible wiring survive the round trip.
 
+## Requirements-driven resizing proof
+
+1. In Design mode, open Requirement sizing triage.
+2. Confirm the panel states the deterministic MVP boundary: target payload plus assembly self-weight, safety factor, local catalog estimates, and review-required uncertainty.
+3. Confirm the 50 lb requirement shows working load, review load, effective shoulder torque, watch items, and highlighted affected parts in the viewport.
+4. Click `Set demo target to 75 lb` and confirm the active task, selected-part card, and component findings update.
+5. Confirm undersized or affected items include actuator torque, hinges or joints, sleeves or couplers when present, arm links, brackets or end-effector parts, and screws or fasteners.
+6. Apply one deterministic fix or `Apply all deterministic fixes` and confirm the selected part updates with local upgrade catalog metadata, larger fastener callouts, stronger material or geometry, or a stronger actuator class.
+7. Confirm remaining warnings still say review-required and do not claim FEA, certification, supplier warranty, or production release approval.
+
 ## Local catalog matching proof
 
 1. In the deterministic local catalog panel, type an unknown description such as `80 mm shoulder joint motor`, `servo thing`, `round arm connector`, `pocketed aluminum arm link`, or `sheet metal gripper bracket`.

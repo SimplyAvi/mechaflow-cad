@@ -431,6 +431,10 @@ const buildDesignCriteria = (
   const catalogReasoning = stringMetadata(catalogMatch.reasoning);
   const visualAuthoring = metadataRecord(part.metadata.visual_authoring);
   const featureRecipe = featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe);
+  const dimensionMetadata = metadataRecord(part.dimensions.metadata);
+  const actuatorTorqueNm = numberMetadata(demoCriteria.actuator_torque_nm) ?? numberMetadata(dimensionMetadata.nominal_output_torque_nm);
+  const sizingUpgrade = metadataRecord(part.metadata.requirement_sizing_upgrade);
+  const sizingUpgradeName = stringMetadata(sizingUpgrade.upgrade_name);
   const criteria: DesignCriterion[] = [
     {
       id: 'load-capacity',
@@ -482,6 +486,26 @@ const buildDesignCriteria = (
       sourceConfidence: criterionSource('Manufacturing option seed', manufacturingOption?.confidence),
     },
   ];
+  if (actuatorTorqueNm != null) {
+    criteria.push({
+      id: 'actuator-torque',
+      label: 'Actuator torque seed',
+      value: `${formatMeasurement(actuatorTorqueNm)} N-m nominal output torque`,
+      status: criterionStatus(demoCriteria.actuator_torque_status ?? 'estimated_from_heuristic'),
+      plainEnglish: 'Nominal torque is local catalog or seed metadata for requirement triage. Supplier curves, thermal derating, gearbox life, and controller current remain review-required.',
+      sourceConfidence: criterionSource('Local actuator catalog metadata', demoCriteria.actuator_torque_status ?? 'estimated_from_heuristic'),
+    });
+  }
+  if (sizingUpgradeName) {
+    criteria.push({
+      id: 'requirement-sizing-upgrade',
+      label: 'Requirement sizing upgrade',
+      value: `${sizingUpgradeName} - review-required local fix`,
+      status: 'estimated',
+      plainEnglish: `${sizingUpgradeName} was applied from the deterministic local upgrade catalog. It updates visible dimensions, fastener callouts, material or actuator metadata for review, but it is not FEA or production certification.`,
+      sourceConfidence: criterionSource('Local requirement sizing upgrade catalog', metadataRecord(sizingUpgrade.source).confidence),
+    });
+  }
   if (featureRecipe) {
     criteria.push({
       id: 'feature-recipe',

@@ -84,6 +84,7 @@ The user can:
 - Route visible wire harness polylines between parts and persist the route as connector, wire segment, route, and harness BOM data.
 - Play, toggle, or scrub exploded-view state.
 - Orbit with yaw and pitch controls, shift-drag to pan, and wheel or slider to zoom.
+- Run requirement sizing triage for payload plus assembly self-weight, safety factor, reach, actuator torque, fasteners, hinges, sleeves, arm links, brackets, and end-effector parts.
 - Select a concrete part in the visual model.
 - Select a part from the model tree or by keyboard focus on canvas geometry.
 - See selected-part highlighting in the canvas, model tree, near-canvas detail card, and inspector.
@@ -111,6 +112,8 @@ The near-canvas selected-part card and inspector should show:
 
 The user can compare or change:
 
+- Requirement payload, self-weight estimate, reach, and safety-factor assumptions.
+- Deterministic local upgrade suggestions for undersized actuator, fastener, joint, sleeve, bracket, link, and end-effector checks.
 - Material.
 - Thickness.
 - Length.
@@ -151,6 +154,8 @@ The system should not only say pass or fail.
 
 It should suggest alternatives:
 
+- Use a stronger actuator class when torque is undersized.
+- Increase fastener size or fastener material class.
 - Use stronger material.
 - Increase thickness.
 - Change fastener pattern.

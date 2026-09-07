@@ -117,6 +117,8 @@ Example tasks:
 
 When a part changes, the system should re-check available evidence against the task instead of treating the edit as isolated geometry.
 
+Current frontend MVP behavior includes deterministic robot-arm load triage for a 50 lb to 75 lb upsize path. It accounts for payload plus visible assembly self-weight, safety factor, and reach, then highlights undersized or affected actuator, fastener, joint, sleeve, bracket, link, and end-effector checks with editable local upgrade suggestions. These checks remain seeded heuristics and review-required, not FEA, certification, supplier warranty, or a production rating.
+
 ### Material and manufacturing substitution
 
 The platform should let users compare compatible material and process options.

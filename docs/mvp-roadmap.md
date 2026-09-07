@@ -13,7 +13,7 @@ The current `main` includes:
 - Root planning docs and validation policy.
 - Reference design catalog schema and seed data.
 - FastAPI backend with schemas, in-memory project store, project-file import/export, panel-data, material substitution, wiring/electronics, reports, analysis readiness, job queue, local pre-solver runner, and CalculiX solver-readiness fixture boundary.
-- Vite React cockpit with a visual-authoring-first opening, SVG XYZ grid, orbit/pan/zoom/explode controls, selectable and editable primitives, motor and connector placement, visible wire routing, compact CAD sidebars, new/open/recent/example/reference paths, reference-image intake, material tools, progressive modes, local project import/export, and backend/mock connectivity.
+- Vite React cockpit with a visual-authoring-first opening, SVG XYZ grid, orbit/pan/zoom/explode controls, selectable and editable primitives, guided sketch-first part recipes, deterministic local catalog matching, 50 lb to 75 lb requirements-driven load resizing with local upgrade suggestions, motor and connector placement, visible wire routing, compact CAD sidebars, new/open/recent/example/reference paths, reference-image intake, material tools, progressive modes, local project import/export, and backend/mock connectivity.
 - Electron desktop-openable workflow with `npm start`, macOS command launcher, desktop smoke, and captain smoke.
 - Local and GitHub Actions checks for Python, catalog, frontend, smoke, desktop, and captain paths.
 
@@ -23,14 +23,16 @@ The captain demo should show a user who:
 
 1. Opens the desktop cockpit directly into the robot arm visual CAD workspace.
 2. Chooses units, creates or edits a primitive, places a motor or connector, connects a joint, and routes a visible wire.
-3. Types design intent and sees extracted chips.
-4. Adds reference images that are clearly labeled as local context only.
-5. Opens or imports a `.mfcad.json` project, reopens a recent project, or loads a local ready example.
-6. Explodes, orbits, pans, zooms, and selects parts in the assembly.
-7. Previews a compatible material/process substitution.
-8. Applies the validated substitution and sees downstream panels update.
-9. Reviews BOM, manufacturing, wiring/electronics, analysis readiness, queue recommendations, reports, and project file export/import.
-10. Runs local-safe pre-solver and solver-readiness fixture paths while seeing not-FEA and solver-unavailable labels where appropriate.
+3. Uses the guided sleeve or coupler recipe and local catalog matching to place an authored part in the robot-arm assembly.
+4. Changes the lift requirement from 50 lb to 75 lb, sees payload plus self-weight and safety-factor assumptions, highlights undersized components, and applies deterministic catalog-backed fixes without claiming certification.
+5. Types design intent and sees extracted chips.
+6. Adds reference images that are clearly labeled as local context only.
+7. Opens or imports a `.mfcad.json` project, reopens a recent project, or loads a local ready example.
+8. Explodes, orbits, pans, zooms, and selects parts in the assembly.
+9. Previews a compatible material/process substitution.
+10. Applies the validated substitution and sees downstream panels update.
+11. Reviews BOM, manufacturing, wiring/electronics, analysis readiness, queue recommendations, reports, and project file export/import.
+12. Runs local-safe pre-solver and solver-readiness fixture paths while seeing not-FEA and solver-unavailable labels where appropriate.
 
 ## Milestone status
 

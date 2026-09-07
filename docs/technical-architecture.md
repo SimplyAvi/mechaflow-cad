@@ -58,6 +58,7 @@ Current behavior:
 - Opens directly into a visual CAD authoring cockpit with compact CAD-style sidebars.
 - Supports unit selection, primitive creation, selected geometry edits, motor and connector placement, parent and joint metadata, orbit, pan, zoom, explode, and visible wire routing.
 - Supports a guided sketch-first part flow, local catalog matching, editable feature recipes, focus-selected inspection, and assembly placement metadata.
+- Supports deterministic requirement resizing for the robot-arm demo: payload plus assembly self-weight, safety factor, reach, actuator torque, fastener, joint, sleeve, bracket, link, and end-effector checks with local upgrade catalog fixes that remain review-required.
 - Supports new prompt concepts, local project import/export, recent project reopen, reference catalog path, and repository-local ready examples.
 - Treats reference images as local metadata only.
 - Groups advanced panels by Design, Analysis, Manufacturing, Reports, and Backend modes.

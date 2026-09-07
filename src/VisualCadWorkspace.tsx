@@ -1,4 +1,5 @@
 import { useMemo, useRef, type CSSProperties, type PointerEvent, type WheelEvent } from 'react';
+import type { RobotArmLoadFindingStatus } from './lib/loadSizing';
 import type { AuthoringUnit, Part, PartAuthoringData, PartAuthoringDimensions, WiringRoute } from './types';
 import { formatFeatureRecipeCallout, formatLength, lengthFromMm } from './lib/visualAuthoring';
 
@@ -17,6 +18,7 @@ interface VisualCadWorkspaceProps {
   focusedPartId: string | null;
   units: AuthoringUnit;
   explodePercent: number;
+  loadHighlights?: Record<string, RobotArmLoadFindingStatus>;
   view: ViewState;
   onViewChange: (view: ViewState) => void;
   onSelectPart: (partId: string) => void;
@@ -243,12 +245,13 @@ function PrimitiveSurfaceDetails({ part, faces }: { part: Part; faces: BoxFace[]
   return null;
 }
 
-function VisualBox({ part, selected, focused, focusDimmed, explodePercent, project, onSelect }: {
+function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect }: {
   part: Part;
   selected: boolean;
   focused: boolean;
   focusDimmed: boolean;
   explodePercent: number;
+  loadStatus?: RobotArmLoadFindingStatus;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
 }) {
@@ -263,7 +266,7 @@ function VisualBox({ part, selected, focused, focusDimmed, explodePercent, proje
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-${part.authoring.primitive} risk-${part.stressRisk} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
+      className={`cad-primitive primitive-${part.authoring.primitive} risk-${part.stressRisk} ${loadStatus ? `load-highlight-${loadStatus}` : ''} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -279,19 +282,22 @@ function VisualBox({ part, selected, focused, focusDimmed, explodePercent, proje
       <title>{`${part.name}: ${part.purpose}`}</title>
       {faces.map((face) => <polygon className={face.className} key={face.className} points={pointString(face.points)} />)}
       <PrimitiveSurfaceDetails faces={faces} part={part} />
+      {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={labelPoint.x} cy={labelPoint.y - 22} r="20" /> : null}
       {selected ? <circle className="selected-part-pulse" cx={labelPoint.x} cy={labelPoint.y - 22} r="18" /> : null}
       <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text>
+      {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={labelPoint.x} y={labelPoint.y - 36}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
       {selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
     </g>
   );
 }
 
-function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, project, onSelect }: {
+function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect }: {
   part: Part;
   selected: boolean;
   focused: boolean;
   focusDimmed: boolean;
   explodePercent: number;
+  loadStatus?: RobotArmLoadFindingStatus;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
 }) {
@@ -313,7 +319,7 @@ function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, 
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-cylinder_joint risk-${part.stressRisk} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
+      className={`cad-primitive primitive-cylinder_joint risk-${part.stressRisk} ${loadStatus ? `load-highlight-${loadStatus}` : ''} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -338,8 +344,10 @@ function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, 
           <ellipse className="chamfer-ring" cx={top.x} cy={top.y} rx={rx * 0.92} ry={ry * 0.92} />
         </g>
       ) : <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />}
+      {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={top.x} cy={top.y} r={Math.max(22, rx * 0.82)} /> : null}
       {selected ? <circle className="selected-part-pulse" cx={top.x} cy={top.y} r={Math.max(18, rx * 0.72)} /> : null}
       <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text>
+      {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={top.x} y={top.y - ry - 28}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
       {selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
     </g>
   );
@@ -426,6 +434,7 @@ export function VisualCadWorkspace({
   focusedPartId,
   units,
   explodePercent,
+  loadHighlights = {},
   view,
   onViewChange,
   onSelectPart,
@@ -555,6 +564,7 @@ export function VisualCadWorkspace({
           {sortedParts.map((part) => {
             const focused = effectiveFocusedPartId === part.id;
             const focusDimmed = effectiveFocusedPartId != null && !focused;
+            const loadStatus = loadHighlights[part.id];
             return part.authoring.primitive === 'cylinder_joint'
               ? (
                 <VisualCylinder
@@ -562,6 +572,7 @@ export function VisualCadWorkspace({
                   focused={focused}
                   focusDimmed={focusDimmed}
                   key={part.id}
+                  loadStatus={loadStatus}
                   onSelect={() => onSelectPart(part.id)}
                   part={part}
                   project={project}
@@ -574,6 +585,7 @@ export function VisualCadWorkspace({
                   focused={focused}
                   focusDimmed={focusDimmed}
                   key={part.id}
+                  loadStatus={loadStatus}
                   onSelect={() => onSelectPart(part.id)}
                   part={part}
                   project={project}

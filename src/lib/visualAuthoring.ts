@@ -300,15 +300,23 @@ export const updateProjectUnits = (project: BackendProject, units: AuthoringUnit
 
 export const updateProjectTargets = (
   project: BackendProject,
-  updates: { payloadLb?: number | null; reachMm?: number | null },
+  updates: { payloadLb?: number | null; reachMm?: number | null; safetyFactor?: number | null },
 ): BackendProject => {
   const next = cloneProject(project);
   if (updates.payloadLb != null && next.active_task) {
     next.active_task = {
       ...next.active_task,
       kind: 'lift_payload',
+      description: `Lift and place a ${updates.payloadLb} lb payload while preserving reach, self-weight, and safety-factor review criteria.`,
       target_value: updates.payloadLb,
       unit: 'lb',
+      validation_method: next.active_task.validation_method ?? 'heuristic',
+    };
+  }
+  if (updates.safetyFactor != null && next.active_task && Number.isFinite(updates.safetyFactor) && updates.safetyFactor > 0) {
+    next.active_task = {
+      ...next.active_task,
+      safety_factor_min: updates.safetyFactor,
       validation_method: next.active_task.validation_method ?? 'heuristic',
     };
   }

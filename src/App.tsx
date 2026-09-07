@@ -11,6 +11,14 @@ import {
   type MaterialSubstitutionResult,
 } from './lib/api';
 import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
+import {
+  applyRobotArmLoadFixesToProject,
+  assessRobotArmLoadRequirement,
+  estimateAssemblySelfWeightLb,
+  type RobotArmLoadFindingStatus,
+  type RobotArmLoadSizingFinding,
+  type RobotArmLoadSizingResult,
+} from './lib/loadSizing';
 import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
 import { localRobotArmPartCatalog, matchLocalPartCatalog, type LocalPartCatalogMatch } from './data/localPartCatalog';
 import { mockReferenceDesign } from './data/mockDesign';
@@ -397,6 +405,7 @@ function App() {
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
   const [dimensionDrafts, setDimensionDrafts] = useState<Record<string, string>>({});
   const [labelDrafts, setLabelDrafts] = useState<Record<string, string>>({});
+  const [assemblySelfWeightDraftLb, setAssemblySelfWeightDraftLb] = useState('');
   const projectLoadVersion = useRef(0);
   const importRequestVersion = useRef(0);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -419,6 +428,7 @@ function App() {
     setAnalysisRunPending(false);
     setFocusedPartId(null);
     setDownstreamPanelsReviewed({ bom: false, manufacturing: false, wiring: false });
+    setAssemblySelfWeightDraftLb('');
     setDemoStepReviews(new Set());
     setExportedEvidence(null);
     setDesign(loadedDesign);
@@ -506,6 +516,39 @@ function App() {
   const selectedCatalogMatch = catalogMatches.find((match) => match.item.id === selectedCatalogMatchId) ?? catalogMatches[0];
   const guidedCatalogMatches = useMemo(() => matchLocalPartCatalog(guidedPartQuery, localRobotArmPartCatalog, 4), [guidedPartQuery]);
   const selectedGuidedMatch = guidedCatalogMatches.find((match) => match.item.id === guidedCatalogMatchId) ?? guidedCatalogMatches[0];
+  const automaticAssemblySelfWeightLb = useMemo(
+    () => estimateAssemblySelfWeightLb(activeAssembly?.parts ?? []),
+    [activeAssembly?.parts],
+  );
+  const assemblySelfWeightOverrideLb = Number(assemblySelfWeightDraftLb);
+  const sizingSelfWeightLb = assemblySelfWeightDraftLb.trim() !== '' && Number.isFinite(assemblySelfWeightOverrideLb) && assemblySelfWeightOverrideLb >= 0
+    ? assemblySelfWeightOverrideLb
+    : automaticAssemblySelfWeightLb;
+  const loadSizingResult = useMemo(() => {
+    if (!design || !activeAssembly) return null;
+    return assessRobotArmLoadRequirement(activeAssembly.parts, {
+      payloadLb: design.task.targetPayloadLb ?? 0,
+      assemblySelfWeightLb: sizingSelfWeightLb,
+      reachMeters: design.task.reachMeters ?? 0.65,
+      safetyFactor: design.task.safetyFactorMin ?? 2,
+    });
+  }, [activeAssembly, design, sizingSelfWeightLb]);
+  const loadSizingHighlights = useMemo(() => {
+    const rank: Record<RobotArmLoadFindingStatus, number> = { ok: 0, watch: 1, undersized: 2 };
+    const highlights: Record<string, RobotArmLoadFindingStatus> = {};
+    for (const finding of loadSizingResult?.findings ?? []) {
+      if (!finding.partId) continue;
+      const current = highlights[finding.partId];
+      if (!current || rank[finding.status] > rank[current]) highlights[finding.partId] = finding.status;
+    }
+    return highlights;
+  }, [loadSizingResult]);
+  const selectedLoadSizingFinding = useMemo(() => {
+    const rank: Record<RobotArmLoadFindingStatus, number> = { ok: 0, watch: 1, undersized: 2 };
+    return loadSizingResult?.findings
+      .filter((finding) => finding.partId === selectedPart?.id)
+      .sort((left, right) => rank[right.status] - rank[left.status] || (right.utilization ?? 0) - (left.utilization ?? 0))[0];
+  }, [loadSizingResult, selectedPart?.id]);
 
   const selectPart = (partId: string) => {
     setSelectedPartId(partId);
@@ -669,6 +712,58 @@ function App() {
     } else {
       setAuthoringMessage('Focus cleared. Use explode, orbit, pan, and zoom to inspect the complete assembly context.');
     }
+  };
+
+  const changeRequirementPayload = (payloadLb: number) => {
+    if (!design || !selectedPart) return;
+    commitAuthoredProject(updateProjectTargets(design.backendProject, { payloadLb }), {
+      selectedPartId: selectedPart.id,
+      message: `Payload requirement set to ${payloadLb} lb. MechaFlow recalculated payload plus machine self-weight and highlighted affected components for review.`,
+    });
+    markDemoStep('load-resizing');
+  };
+
+  const changeRequirementSafetyFactor = (safetyFactor: number) => {
+    if (!design || !selectedPart || !Number.isFinite(safetyFactor) || safetyFactor <= 0) return;
+    commitAuthoredProject(updateProjectTargets(design.backendProject, { safetyFactor }), {
+      selectedPartId: selectedPart.id,
+      message: `Safety factor guidance set to ${safetyFactor}. Requirement sizing remains deterministic triage, not certification.`,
+    });
+    markDemoStep('load-resizing');
+  };
+
+  const applyLoadSizingFinding = (finding: RobotArmLoadSizingFinding) => {
+    if (!design || !loadSizingResult) return;
+    const upgradedProject = applyRobotArmLoadFixesToProject(design.backendProject, [finding], loadSizingResult.requirement);
+    commitAuthoredProject(upgradedProject, {
+      selectedPartId: finding.partId ?? selectedPart?.id,
+      message: finding.fix
+        ? `Applied ${finding.fix.label} from the deterministic local upgrade catalog. The part is highlighted for review with updated geometry, fastener, material, or actuator metadata.`
+        : `${finding.partName} has no direct local fix. Inspect assumptions and route to engineering review.`,
+    });
+    if (finding.partId) {
+      setFocusedPartId(finding.partId);
+      setExplodePercent((value) => Math.max(value, 72));
+    }
+    markDemoStep('load-resizing');
+  };
+
+  const applyAllLoadSizingFixes = () => {
+    if (!design || !loadSizingResult || !selectedPart) return;
+    const actionable = loadSizingResult.findings.filter((finding) => finding.status === 'undersized' && finding.fix && finding.partId);
+    if (actionable.length === 0) {
+      setAuthoringMessage('No undersized components have deterministic local fixes for the current requirement. Watch items remain review-required.');
+      return;
+    }
+    const upgradedProject = applyRobotArmLoadFixesToProject(design.backendProject, actionable, loadSizingResult.requirement);
+    const firstPartId = actionable[0]?.partId ?? selectedPart.id;
+    commitAuthoredProject(upgradedProject, {
+      selectedPartId: firstPartId,
+      message: `Applied ${actionable.length} deterministic local upgrade${actionable.length === 1 ? '' : 's'} for the ${loadSizingResult.requirement.payloadLb} lb requirement. Recalculate and review remaining watch items before release.`,
+    });
+    setFocusedPartId(firstPartId);
+    setExplodePercent((value) => Math.max(value, 78));
+    markDemoStep('load-resizing');
   };
 
   const applySelectedCatalogMatch = () => {
@@ -1195,6 +1290,17 @@ function App() {
       canMarkReviewed: true,
     },
     {
+      id: 'load-resizing',
+      label: 'Resize from 50 lb to 75 lb',
+      status: demoStepReviews.has('load-resizing') ? 'complete' : loadSizingResult?.summaryStatus === 'undersized' ? 'available' : 'review',
+      summary: loadSizingResult
+        ? `Payload plus ${loadSizingResult.requirement.assemblySelfWeightLb} lb self-weight creates a ${loadSizingResult.designReviewLoadLb} lb review load; ${loadSizingResult.undersizedCount} component check${loadSizingResult.undersizedCount === 1 ? '' : 's'} need local upgrades.`
+        : 'Open a visual assembly to run deterministic requirement sizing.',
+      anchor: '#requirement-sizing-panel',
+      actionLabel: 'Open sizing panel',
+      canMarkReviewed: Boolean(loadSizingResult),
+    },
+    {
       id: 'select-part',
       label: 'Select and inspect parts',
       status: demoStepReviews.has('select-part') ? 'complete' : 'available',
@@ -1469,23 +1575,6 @@ function App() {
                 <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); setFocusedPartId(null); }}>Reset view</button>
               </div>
             </div>
-            <GuidedPartFlowPanel
-              activeUnits={design.units}
-              matches={guidedCatalogMatches}
-              onApplyToSelected={applyGuidedRecipeToSelected}
-              onPlaceInAssembly={placeGuidedRecipeInAssembly}
-              onQueryChange={changeGuidedPartQuery}
-              onSelectMatch={setGuidedCatalogMatchId}
-              onSyncCatalog={syncGuidedMatchToCatalogPanel}
-              query={guidedPartQuery}
-              selectedMatch={selectedGuidedMatch}
-              selectedPartName={selectedPart.name}
-            />
-            <CanvasToolPalette
-              onCreatePart={createPartFromPalette}
-              onCreateAssembly={createAssemblyFromPalette}
-              selectedPartName={selectedPart.name}
-            />
             <VisualCadWorkspace
               explodePercent={explodePercent}
               focusedPartId={focusedPartId}
@@ -1503,6 +1592,7 @@ function App() {
                 setViewZoom(nextView.zoom);
                 setViewPan({ x: nextView.panX, y: nextView.panY });
               }}
+              loadHighlights={loadSizingHighlights}
               parts={activeAssembly.parts}
               selectedPartId={selectedPart.id}
               units={design.units}
@@ -1512,9 +1602,27 @@ function App() {
             <SelectedPartCanvasCard
               activeTask={design.task}
               assemblyParts={activeAssembly.parts}
+              loadSizingFinding={selectedLoadSizingFinding}
               part={selectedPart}
               selectedOption={selectedOption}
               units={design.units}
+            />
+            <GuidedPartFlowPanel
+              activeUnits={design.units}
+              matches={guidedCatalogMatches}
+              onApplyToSelected={applyGuidedRecipeToSelected}
+              onPlaceInAssembly={placeGuidedRecipeInAssembly}
+              onQueryChange={changeGuidedPartQuery}
+              onSelectMatch={setGuidedCatalogMatchId}
+              onSyncCatalog={syncGuidedMatchToCatalogPanel}
+              query={guidedPartQuery}
+              selectedMatch={selectedGuidedMatch}
+              selectedPartName={selectedPart.name}
+            />
+            <CanvasToolPalette
+              onCreatePart={createPartFromPalette}
+              onCreateAssembly={createAssemblyFromPalette}
+              selectedPartName={selectedPart.name}
             />
             <div className="viewer-footer">
               <span>
@@ -1674,6 +1782,20 @@ function App() {
                 </div>
                 <p className="microcopy">Display units are user-selectable; portable project files still store numeric geometry in millimeters for backend consistency.</p>
               </section>
+
+              {loadSizingResult ? (
+                <RequirementSizingPanel
+                  automaticSelfWeightLb={automaticAssemblySelfWeightLb}
+                  onApplyAllFixes={applyAllLoadSizingFixes}
+                  onApplyFinding={applyLoadSizingFinding}
+                  onPayloadChange={changeRequirementPayload}
+                  onSafetyFactorChange={changeRequirementSafetyFactor}
+                  onSelectPart={selectPart}
+                  onSelfWeightDraftChange={setAssemblySelfWeightDraftLb}
+                  result={loadSizingResult}
+                  selfWeightDraftLb={assemblySelfWeightDraftLb}
+                />
+              ) : null}
 
               <section className="panel authoring-panel" aria-label="Create parts and equipment">
                 <div className="section-heading-row">
@@ -1995,6 +2117,148 @@ function App() {
   );
 }
 
+function RequirementSizingPanel({
+  automaticSelfWeightLb,
+  onApplyAllFixes,
+  onApplyFinding,
+  onPayloadChange,
+  onSafetyFactorChange,
+  onSelectPart,
+  onSelfWeightDraftChange,
+  result,
+  selfWeightDraftLb,
+}: {
+  automaticSelfWeightLb: number;
+  onApplyAllFixes: () => void;
+  onApplyFinding: (finding: RobotArmLoadSizingFinding) => void;
+  onPayloadChange: (payloadLb: number) => void;
+  onSafetyFactorChange: (safetyFactor: number) => void;
+  onSelectPart: (partId: string) => void;
+  onSelfWeightDraftChange: (value: string) => void;
+  result: RobotArmLoadSizingResult;
+  selfWeightDraftLb: string;
+}) {
+  const actionableCount = result.findings.filter((finding) => finding.status === 'undersized' && finding.fix && finding.partId).length;
+  const topFindings = result.findings.slice(0, 9);
+  const statusCopy: Record<RobotArmLoadFindingStatus, string> = {
+    ok: 'Inside local sizing window',
+    watch: 'Watch or review',
+    undersized: 'Needs deterministic upgrade',
+  };
+  return (
+    <section className={`panel authoring-panel requirement-sizing-panel status-${result.summaryStatus}`} id="requirement-sizing-panel" aria-label="Requirements-driven load resizing">
+      <div className="section-heading-row">
+        <div>
+          <p className="eyebrow">Requirement sizing triage</p>
+          <h2>Resize the robot arm from 50 lb to 75 lb</h2>
+        </div>
+        <span className={`status-pill status-${result.summaryStatus}`}>{statusCopy[result.summaryStatus]}</span>
+      </div>
+      <p className="microcopy">
+        This deterministic MVP checks target payload plus assembly self-weight against local catalog capacity, torque, fastener, and geometry rules.
+        It is not FEA, standards certification, supplier warranty, or a production release decision.
+      </p>
+      <div className="requirement-controls" aria-label="Requirement load controls">
+        <label className="field-row compact-field">
+          <span>Payload target</span>
+          <input
+            aria-label="Requirement payload target in pounds"
+            min="0"
+            onChange={(event) => onPayloadChange(Number(event.target.value))}
+            step="1"
+            type="number"
+            value={result.requirement.payloadLb}
+          />
+        </label>
+        <label className="field-row compact-field">
+          <span>Assembly self-weight</span>
+          <input
+            aria-label="Assembly self-weight estimate in pounds"
+            min="0"
+            onChange={(event) => onSelfWeightDraftChange(event.target.value)}
+            placeholder={`Auto ${automaticSelfWeightLb} lb`}
+            step="0.1"
+            type="number"
+            value={selfWeightDraftLb}
+          />
+        </label>
+        <label className="field-row compact-field">
+          <span>Safety factor</span>
+          <input
+            aria-label="Requirement safety factor"
+            min="1"
+            onChange={(event) => onSafetyFactorChange(Number(event.target.value))}
+            step="0.1"
+            type="number"
+            value={result.requirement.safetyFactor}
+          />
+        </label>
+        <div className="requirement-button-row" aria-label="Load demo shortcuts">
+          <button onClick={() => onPayloadChange(50)} type="button">Set 50 lb</button>
+          <button className="primary-guided-action" onClick={() => onPayloadChange(75)} type="button">Set demo target to 75 lb</button>
+          <button disabled={actionableCount === 0} onClick={onApplyAllFixes} type="button">Apply all deterministic fixes</button>
+        </div>
+      </div>
+      <dl className="requirement-metrics" aria-label="Requirement load calculation">
+        <div>
+          <dt>Working load</dt>
+          <dd>{formatMeasurement(result.workingLoadLb)} lb<small>payload plus self-weight</small></dd>
+        </div>
+        <div>
+          <dt>Review load</dt>
+          <dd>{formatMeasurement(result.designReviewLoadLb)} lb<small>(payload + self-weight) x safety factor</small></dd>
+        </div>
+        <div>
+          <dt>Shoulder torque</dt>
+          <dd>{formatMeasurement(result.effectiveShoulderTorqueNm)} N-m<small>local linkage estimate</small></dd>
+        </div>
+        <div>
+          <dt>Affected checks</dt>
+          <dd>{result.undersizedCount} undersized / {result.watchCount} watch<small>{result.impactedPartIds.length} highlighted part{result.impactedPartIds.length === 1 ? '' : 's'}</small></dd>
+        </div>
+      </dl>
+      <div className="load-finding-list" aria-label="Load sizing component findings">
+        {topFindings.map((finding) => (
+          <article className={`load-finding-card status-${finding.status}`} key={finding.id}>
+            <div className="load-finding-heading">
+              <div>
+                <span>{finding.componentRole}</span>
+                <strong>{finding.partName}</strong>
+              </div>
+              <span className={`status-pill status-${finding.status}`}>{finding.status}</span>
+            </div>
+            <dl className="mini-metric-grid">
+              <div>
+                <dt>Required</dt>
+                <dd>{formatMeasurement(finding.requiredValue)} {finding.unit}</dd>
+              </div>
+              <div>
+                <dt>Rated</dt>
+                <dd>{finding.ratedValue == null ? 'review' : `${formatMeasurement(finding.ratedValue)} ${finding.unit}`}</dd>
+              </div>
+              <div>
+                <dt>Utilization</dt>
+                <dd>{finding.utilization == null ? 'unknown' : `${formatMeasurement(finding.utilization * 100, 0)}%`}</dd>
+              </div>
+            </dl>
+            <p>{finding.reason}</p>
+            <small>{finding.evidence}</small>
+            <div className="load-finding-actions">
+              {finding.partId ? <button type="button" onClick={() => onSelectPart(finding.partId!)}>Select part</button> : null}
+              {finding.fix ? <button type="button" onClick={() => onApplyFinding(finding)}>{finding.fix.buttonLabel}</button> : null}
+            </div>
+            {finding.fix ? <small className="runner-note">Catalog-backed fix: {finding.fix.summary}</small> : null}
+          </article>
+        ))}
+      </div>
+      <details className="requirement-assumptions">
+        <summary>Assumptions and uncertainty</summary>
+        <ul>{result.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul>
+      </details>
+    </section>
+  );
+}
+
 function GuidedPartFlowPanel({
   activeUnits,
   matches,
@@ -2262,12 +2526,14 @@ function CatalogMatchPanel({
 function SelectedPartCanvasCard({
   activeTask,
   assemblyParts,
+  loadSizingFinding,
   part,
   selectedOption,
   units,
 }: {
   activeTask: ReferenceDesign['task'];
   assemblyParts: Part[];
+  loadSizingFinding?: RobotArmLoadSizingFinding;
   part: Part;
   selectedOption?: MaterialOption;
   units: AuthoringUnit;
@@ -2279,6 +2545,7 @@ function SelectedPartCanvasCard({
   const materialStrengthCriterion = part.designCriteria.find((criterion) => criterion.id === 'material-strength');
   const catalogMatchCriterion = part.designCriteria.find((criterion) => criterion.id === 'catalog-match');
   const featureRecipeCriterion = part.designCriteria.find((criterion) => criterion.id === 'feature-recipe');
+  const sizingUpgradeCriterion = part.designCriteria.find((criterion) => criterion.id === 'requirement-sizing-upgrade');
   const parentPart = part.authoring.parentPartId ? assemblyParts.find((candidate) => candidate.id === part.authoring.parentPartId) : null;
   const warnings = reviewWarningsForPart(part, selectedOption);
   const thermalLimit = part.analysisReadiness.thermal_guidance?.heat_deflection_temp_c
@@ -2293,6 +2560,8 @@ function SelectedPartCanvasCard({
         <small>Primitive proxy: {primitiveLabel(part.authoring.primitive)} in {part.subassembly}. This is authored visual geometry and project metadata, not a full parametric CAD kernel.</small>
         {part.authoring.featureRecipe ? <small>Sketch recipe: {part.authoring.featureRecipe.name}. {part.authoring.featureRecipe.plane} includes {part.authoring.featureRecipe.callouts.map((callout) => `${callout.label} ${formatFeatureRecipeCallout(part, callout, units)}`).join(', ')}.</small> : null}
         {catalogMatchCriterion ? <small>Local catalog match: {catalogMatchCriterion.value}. {catalogMatchCriterion.plainEnglish}</small> : null}
+        {loadSizingFinding ? <small>Requirement sizing: {loadSizingFinding.status} - requires {formatMeasurement(loadSizingFinding.requiredValue)} {loadSizingFinding.unit}, rated {loadSizingFinding.ratedValue == null ? 'review required' : `${formatMeasurement(loadSizingFinding.ratedValue)} ${loadSizingFinding.unit}`}. {loadSizingFinding.reason}</small> : null}
+        {sizingUpgradeCriterion ? <small>{sizingUpgradeCriterion.label}: {sizingUpgradeCriterion.value}. {sizingUpgradeCriterion.plainEnglish}</small> : null}
       </div>
       <dl className="selected-part-stat-grid">
         <div>
@@ -2353,6 +2622,14 @@ function SelectedPartCanvasCard({
             <strong>Sketch and feature history</strong>
             <p>{featureRecipeCriterion.plainEnglish}</p>
             <small>{featureRecipeCriterion.sourceConfidence}</small>
+          </article>
+        ) : null}
+        {loadSizingFinding ? (
+          <article className={`selected-load-card status-${loadSizingFinding.status}`}>
+            <strong>Requirement sizing check</strong>
+            <p>{loadSizingFinding.componentRole}: {loadSizingFinding.status.replaceAll('_', ' ')}.</p>
+            <p>{loadSizingFinding.evidence}</p>
+            {loadSizingFinding.fix ? <small>Catalog-backed fix: {loadSizingFinding.fix.label}. {loadSizingFinding.fix.summary}</small> : <small>No automatic local fix is applied. Route to engineering review.</small>}
           </article>
         ) : null}
         <article>

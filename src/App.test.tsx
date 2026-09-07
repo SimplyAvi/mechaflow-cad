@@ -126,6 +126,35 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Assembly link/i);
   });
 
+  it('resizes a 50 lb robot-arm requirement to 75 lb and offers catalog-backed fixes', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const sizingPanel = await screen.findByLabelText(/Requirements-driven load resizing/i);
+    expect(sizingPanel).toHaveTextContent(/Requirement sizing triage/i);
+    expect(sizingPanel).toHaveTextContent(/payload plus self-weight/i);
+    expect(within(sizingPanel).getByLabelText(/Requirement payload target in pounds/i)).toHaveValue(50);
+
+    await user.click(within(sizingPanel).getByRole('button', { name: /Set demo target to 75 lb/i }));
+
+    expect(await screen.findByText(/Payload requirement set to 75 lb/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Active task/i)).toHaveTextContent(/75 lb payload/i);
+    const updatedSizingPanel = screen.getByLabelText(/Requirements-driven load resizing/i);
+    expect(within(updatedSizingPanel).getByLabelText(/Requirement payload target in pounds/i)).toHaveValue(75);
+    expect(updatedSizingPanel).toHaveTextContent(/Integrated shoulder servo actuator/i);
+    expect(updatedSizingPanel).toHaveTextContent(/Motor or servo torque path/i);
+    expect(updatedSizingPanel).toHaveTextContent(/Screws, bolts, and fastener material/i);
+    expect(updatedSizingPanel).toHaveTextContent(/undersized/i);
+
+    await user.click(within(updatedSizingPanel).getByRole('button', { name: /Apply all deterministic fixes/i }));
+
+    expect(await screen.findByText(/Applied \d+ deterministic local upgrades for the 75 lb requirement/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Requirement sizing upgrade/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/deterministic local upgrade catalog/i);
+  });
+
   it('captures typed design intent into structured chips and starts a prompt concept honestly', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
     const user = userEvent.setup();
