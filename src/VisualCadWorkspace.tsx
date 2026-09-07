@@ -371,10 +371,20 @@ function DimensionOverlay({ part, units, project, focused }: { part: Part; units
   );
 }
 
-function FeatureRecipeOverlay({ part, project, focused }: { part: Part; project: (point: Point3D) => ProjectedPoint; focused: boolean }) {
+function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; project: (point: Point3D) => ProjectedPoint; focused: boolean; units: AuthoringUnit }) {
   const recipe = part.authoring.featureRecipe;
   if (!recipe) return null;
   const dims = primitiveDimensions(part);
+  const editableDimensions = part.authoring.dimensionsMm;
+  const outerDiameter = editableDimensions.diameterMm ?? editableDimensions.widthMm ?? dims.width;
+  const innerDiameter = Math.max(0, outerDiameter - 2 * (editableDimensions.thicknessMm ?? 0));
+  const calloutValue = (callout: typeof recipe.callouts[number]): string => {
+    if (callout.id === 'od') return formatLength(outerDiameter, units);
+    if (callout.id === 'id' && editableDimensions.thicknessMm != null) return formatLength(innerDiameter, units);
+    if (callout.id === 'slot') return `${formatLength(dims.length, units)} x ${formatLength(dims.width, units)}`;
+    if (callout.id === 'height') return formatLength(dims.height, units);
+    return callout.value;
+  };
   const offset = focusOffset(focused);
   const center = {
     x: part.authoring.positionMm.x + offset.x,
@@ -407,7 +417,7 @@ function FeatureRecipeOverlay({ part, project, focused }: { part: Part; project:
         return (
           <g className={`feature-callout kind-${callout.kind}`} key={callout.id}>
             <line x1={label.x} y1={label.y} x2={target.x} y2={target.y} />
-            <text x={label.x} y={label.y}>{callout.label}: {callout.value}</text>
+            <text x={label.x} y={label.y}>{callout.label}: {calloutValue(callout)}</text>
           </g>
         );
       })}
@@ -579,7 +589,7 @@ export function VisualCadWorkspace({
           })}
         </g>
         {selectedPart ? <DimensionOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
-        {selectedPart ? <FeatureRecipeOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} /> : null}
+        {selectedPart ? <FeatureRecipeOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
       </svg>
       <div className="canvas-status-row" aria-live="polite">
         <strong>{selectedPart?.name ?? 'No part selected'}</strong>

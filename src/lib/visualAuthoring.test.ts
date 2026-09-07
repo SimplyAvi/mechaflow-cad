@@ -62,11 +62,13 @@ describe('visual authoring project helpers', () => {
     expect(matchedPart.material_id).toBe('mat-servo-actuator-assembly');
     expect(matchedProject.materials.some((material) => material.id === 'mat-servo-actuator-assembly')).toBe(true);
     expect(matchedPart.dimensions.length_mm).toBe(86);
+    expect(matchedPart.source_file).toBeNull();
     expect(matchedPart.manufacturing_options[0]?.process).toBe('off_the_shelf');
     expect(visual.primitive).toBe('motor_block');
     expect(visual.authored).toBe(true);
     expect(localMatch.score).toBeGreaterThanOrEqual(70);
     expect(localMatch.editable).toBe(true);
+    expect(localMatch.catalog_uri).toBe('local-catalog://catalog-shoulder-servo-actuator-80mm');
 
     const design = remapDesignFromProject(mockReferenceDesign, matchedProject);
     const selected = design.assembly.parts.find((part) => part.id === created.partId)!;

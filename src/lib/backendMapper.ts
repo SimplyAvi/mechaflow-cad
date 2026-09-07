@@ -514,7 +514,9 @@ const buildFallbackAnalysisReadiness = (
   const demoCriteria = demoDesignCriteria(part);
   const demoLoadCapacityLb = numberMetadata(demoCriteria.load_capacity_lb);
   const hasPayloadTask = task.kind === 'lift_payload' && typeof task.target_value === 'number';
-  const hasGeometry = typeof part.source_file === 'string' && part.source_file.trim() !== '';
+  const hasGeometry = typeof part.source_file === 'string'
+    && part.source_file.trim() !== ''
+    && !part.source_file.trim().startsWith('local-catalog://');
   const hasMaterial = Boolean(material);
   const dimensionsReady = Object.values(part.dimensions).some((value) => typeof value === 'number' && Number.isFinite(value));
   const blockingReview = [
@@ -630,7 +632,9 @@ const buildFallbackAssemblyReadiness = (
   const aggregateMaterialId = materialIds.size === 1 ? [...materialIds][0] : undefined;
   const aggregateMaterial = aggregateMaterialId ? materialsById.get(aggregateMaterialId) : undefined;
   const allGeometryReady = assembly.parts.length > 0 && assembly.parts.every(
-    (part) => typeof part.source_file === 'string' && part.source_file.trim() !== '',
+    (part) => typeof part.source_file === 'string'
+      && part.source_file.trim() !== ''
+      && !part.source_file.trim().startsWith('local-catalog://'),
   );
   const allDimensionsReady = assembly.parts.length > 0 && assembly.parts.every(
     (part) => Object.values(part.dimensions).some((value) => typeof value === 'number' && Number.isFinite(value)),

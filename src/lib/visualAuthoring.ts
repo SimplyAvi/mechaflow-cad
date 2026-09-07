@@ -411,6 +411,7 @@ export const applyCatalogMatchToPart = (
         matched_terms: match.matchedTerms,
         reasoning: match.reasoning,
         editable: true,
+        catalog_uri: `local-catalog://${catalogItem.id}`,
         source: catalogItem.source,
         recipe_id: catalogItem.featureRecipe?.id ?? null,
       },
@@ -444,7 +445,7 @@ export const applyCatalogMatchToPart = (
       },
       mass_kg: null,
       manufacturing_options: [option, ...existingOptions],
-      source_file: `local-catalog://${catalogItem.id}`,
+      source_file: null,
       metadata,
     };
   });
