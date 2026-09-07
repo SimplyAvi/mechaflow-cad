@@ -1731,14 +1731,9 @@ function App() {
                   />
                 </label>
                 <div className="authoring-grid three-col">
-                  {[
-                    ['length', selectedPart.authoring.dimensionsMm.lengthMm ?? 0],
-                    ['width', selectedPart.authoring.dimensionsMm.widthMm ?? 0],
-                    ['height', selectedPart.authoring.dimensionsMm.heightMm ?? 0],
-                    ...(selectedPart.authoring.primitive === 'cylinder_joint'
-                      ? [['diameter', selectedPart.authoring.dimensionsMm.diameterMm ?? 0]]
-                      : []),
-                  ].map(([key, value]) => (
+                  {(selectedPart.authoring.primitive === 'cylinder_joint'
+                    ? [['diameter', selectedPart.authoring.dimensionsMm.diameterMm ?? 0], ['height', selectedPart.authoring.dimensionsMm.heightMm ?? 0]]
+                    : [['length', selectedPart.authoring.dimensionsMm.lengthMm ?? 0], ['width', selectedPart.authoring.dimensionsMm.widthMm ?? 0], ['height', selectedPart.authoring.dimensionsMm.heightMm ?? 0]]).map(([key, value]) => (
                     <label className="field-row compact-field" key={key}>
                       <span>{key}</span>
                       <input

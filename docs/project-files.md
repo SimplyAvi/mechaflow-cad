@@ -39,7 +39,7 @@ The project payload preserves the meaningful MVP data: authoring units, project 
 
 Visual authoring data is stored on each part at `metadata.visual_authoring`. The browser workspace writes fields such as `primitive`, `position_mm`, `rotation_deg`, `color`, `parent_part_id`, `joint_type`, `assigned_to_part_id`, and `connector_id`; the in-place label editor persists its trimmed value as the part's canonical `name`. These fields drive the MVP canvas and are intentionally review-required hints until real CAD geometry workers produce authoritative artifacts.
 
-Catalog matches are stored at `metadata.local_catalog_match`, with related `metadata.catalog_role_criteria` and `metadata.preferred_manufacturing_process` fields. Applying a match updates the part's canonical name, dimensions, material, manufacturing option, and `source_file` local-catalog reference while retaining editable visual-authoring metadata. These values are local seed metadata, not supplier or engineering validation.
+Catalog matches are stored at `metadata.local_catalog_match`, with related `metadata.catalog_role_criteria` and `metadata.preferred_manufacturing_process` fields. Applying a match updates the part's canonical name, dimensions, material, manufacturing option, and editable catalog metadata; local-catalog URIs remain in `metadata.local_catalog_match.catalog_uri`, never in `source_file`. Existing real CAD source references are retained. These values are local seed metadata, not supplier or engineering validation.
 
 ## API
 

@@ -390,6 +390,7 @@ export const applyCatalogMatchToPart = (
     next.materials = [...next.materials, catalogFallbackMaterial(catalogItem)];
   }
   return setPartInProject(next, partId, (part) => {
+    const existingSource = typeof part.source_file === 'string' ? part.source_file.trim() : null;
     const visual = normalizePartVisualAuthoring(part);
     visual.authored = true;
     visual.primitive = catalogItem.primitive;
@@ -445,7 +446,7 @@ export const applyCatalogMatchToPart = (
       },
       mass_kg: null,
       manufacturing_options: [option, ...existingOptions],
-      source_file: null,
+      source_file: existingSource && !existingSource.startsWith('local-catalog://') ? existingSource : null,
       metadata,
     };
   });

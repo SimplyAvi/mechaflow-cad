@@ -412,15 +412,19 @@ function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; p
       <polygon className="sketch-plane" points={pointString(plane)} />
       <text className="sketch-plane-label" x={anchor.x} y={anchor.y}>{recipe.plane}: sketch profile</text>
       {recipe.callouts.slice(0, 5).map((callout, index) => {
+        const targetOffsets = [[-0.4, 0.72], [0.1, 0.18], [0.42, -0.26], [0.66, 0.92], [-0.72, -0.78]] as const;
+        const labelOffsets = [[-1.15, 1.08], [-1.05, 0.36], [0.9, -0.5], [0.82, 1.2], [-1.02, -1.08]] as const;
+        const [targetX, targetZ] = targetOffsets[index] ?? targetOffsets.at(-1)!;
+        const [labelX, labelZ] = labelOffsets[index] ?? labelOffsets.at(-1)!;
         const target = project({
-          x: center.x + [-0.4, 0.1, 0.42, 0.66][index]! * dims.length,
+          x: center.x + targetX * dims.length,
           y: planeY,
-          z: center.z + [0.72, 0.18, -0.26, 0.92][index]! * dims.height,
+          z: center.z + targetZ * dims.height,
         });
         const label = project({
-          x: center.x + [-1.15, -1.05, 0.9, 0.82][index]! * dims.length,
+          x: center.x + labelX * dims.length,
           y: planeY - 22,
-          z: center.z + [1.08, 0.36, -0.5, 1.2][index]! * dims.height,
+          z: center.z + labelZ * dims.height,
         });
         return (
           <g className={`feature-callout kind-${callout.kind}`} key={callout.id}>
