@@ -2658,6 +2658,27 @@ small,
   color: #bbf7d0;
 }
 
+/* Keep the authoring workspace inside the viewport below the three-column breakpoint. */
+@media (max-width: 1280px) {
+  .input-first-shell .workspace-topbar,
+  .input-first-shell .project-cockpit {
+    grid-template-columns: 1fr;
+  }
+
+  .input-first-shell .cad-sidebar,
+  .input-first-shell .context-sidebar {
+    max-height: none;
+  }
+
+  .input-first-shell .canvas-column {
+    order: -1;
+  }
+
+  .input-first-shell .tool-rail {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1220px) {
   .visual-authoring-dock,
   .authoring-grid.two-col,
