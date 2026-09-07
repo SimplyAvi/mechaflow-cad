@@ -93,6 +93,12 @@ const normalizePartVisualAuthoring = (part: BackendPart): Record<string, unknown
   return visual;
 };
 
+const provenanceRecord = (visual: Record<string, unknown>): Record<string, unknown> => {
+  const provenance = isRecord(visual.provenance) ? { ...visual.provenance } : {};
+  visual.provenance = provenance;
+  return provenance;
+};
+
 const flattenParts = (project: BackendProject): BackendPart[] => project.assemblies.flatMap((assembly) => assembly.parts);
 
 const findAssembly = (project: BackendProject, assemblyId: string): BackendAssembly | null => (
@@ -392,9 +398,16 @@ export const updatePartGeometry = (
       if (positiveFiniteValue(updates.dimensions.heightMm)) nextDimensions.height_mm = updates.dimensions.heightMm;
       if (positiveFiniteValue(updates.dimensions.diameterMm)) nextDimensions.diameter_mm = updates.dimensions.diameterMm;
       if (positiveFiniteValue(updates.dimensions.thicknessMm)) nextDimensions.thickness_mm = updates.dimensions.thicknessMm;
+      const provenance = provenanceRecord(visual);
+      const dimensionProvenance = isRecord(provenance.dimensions) ? { ...provenance.dimensions } : {};
+      for (const key of Object.keys(updates.dimensions)) dimensionProvenance[key] = 'user-defined';
+      provenance.dimensions = dimensionProvenance;
     }
     const metadata = { ...(isRecord(part.metadata) ? part.metadata : {}) };
-    if (updates.manufacturingProcess) metadata.preferred_manufacturing_process = updates.manufacturingProcess;
+    if (updates.manufacturingProcess) {
+      metadata.preferred_manufacturing_process = updates.manufacturingProcess;
+    }
+    if (updates.materialId) provenanceRecord(visual).material = 'user-defined';
     if (updates.holePattern !== undefined) {
       visual.hole_pattern = updates.holePattern;
       nextDimensions.metadata.visual_hole_pattern = updates.holePattern;
@@ -408,6 +421,12 @@ export const updatePartGeometry = (
     if (updates.featureRecipe !== undefined) {
       visual.feature_recipe = updates.featureRecipe;
       metadata.feature_recipe = updates.featureRecipe;
+      if (updates.featureRecipe) {
+        const provenance = provenanceRecord(visual);
+        provenance.featureRecipe = updates.featureRecipe.provenance ?? 'user-defined';
+        const existingFeatureSteps = isRecord(provenance.featureSteps) ? provenance.featureSteps : {};
+        provenance.featureSteps = Object.fromEntries(updates.featureRecipe.history.map((step) => [step.id, step.provenance ?? existingFeatureSteps[step.id] ?? provenance.featureRecipe]));
+      }
     }
     const nextName = typeof updates.label === 'string' && updates.label.trim() !== ''
       ? updates.label.trim()
@@ -466,6 +485,13 @@ export const applyCatalogMatchToPart = (
     visual.color = catalogItem.color;
     visual.catalog_item_id = catalogItem.id;
     visual.feature_recipe = catalogItem.featureRecipe ?? null;
+    const provenance = provenanceRecord(visual);
+    provenance.dimensions = Object.fromEntries(Object.keys(catalogItem.defaultDimensionsMm).map((key) => [key, 'defaulted']));
+    provenance.material = 'defaulted';
+    provenance.featureRecipe = catalogItem.featureRecipe ? 'defaulted' : undefined;
+    provenance.featureSteps = catalogItem.featureRecipe
+      ? Object.fromEntries(catalogItem.featureRecipe.history.map((step) => [step.id, 'defaulted']))
+      : undefined;
     const option = catalogManufacturingOption(catalogItem);
     const existingOptions = part.manufacturing_options.filter((candidate) => candidate.id !== option.id && candidate.process !== option.process);
     const metadata = {

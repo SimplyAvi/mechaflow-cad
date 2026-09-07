@@ -85,7 +85,23 @@ const holeDefinitionState = (part: Part): CADDefinitionState => {
 
 const materialProvenance = (part: Part): CADValueProvenance => {
   if (!part.authoring.materialId) return 'unresolved';
+  return part.authoring.provenance?.material ?? (part.authoring.authored ? 'user-defined' : 'inferred');
+};
+
+const dimensionProvenance = (part: Part): CADValueProvenance => {
+  const values = requiredDimensionKeys(part).map((key) => part.authoring.provenance?.dimensions?.[key]);
+  if (values.includes('invalid')) return 'invalid';
+  if (values.includes('user-defined')) return 'user-defined';
+  if (values.includes('defaulted')) return 'defaulted';
   return part.authoring.authored ? 'user-defined' : 'inferred';
+};
+
+const featureProvenance = (part: Part): CADValueProvenance => {
+  const feature = part.authoring.featureRecipe;
+  if (!feature) return 'unresolved';
+  const stepValues = feature.history.map((step) => part.authoring.provenance?.featureSteps?.[step.id] ?? step.provenance);
+  if (stepValues.includes('user-defined') || part.authoring.provenance?.featureRecipe === 'user-defined') return 'user-defined';
+  return part.authoring.provenance?.featureRecipe ?? 'inferred';
 };
 
 const holeProvenance = (part: Part): CADValueProvenance => {
@@ -135,7 +151,7 @@ export const buildPartLifecycleEvidence = (
       value: dimensionValue(part, units),
       editableKind: 'dimension',
       definitionState: dimensionState(part),
-      provenance: part.authoring.authored ? 'user-defined' : 'inferred',
+      provenance: dimensionProvenance(part),
       downstreamImpacts: ['geometry envelope', 'hole edge distance', 'self-weight estimate', 'drawing dimensions', 'mesh size seeds'],
       reviewableFixes: ['Add missing width, length, height or diameter callouts', 'Resolve impossible or zero dimensions before export'],
     },
@@ -155,7 +171,7 @@ export const buildPartLifecycleEvidence = (
       value: feature ? `${feature.history.length} steps: ${feature.history.map((step) => step.kind).join(', ') || 'callouts only'}` : 'Feature recipe not generated yet',
       editableKind: 'feature',
       definitionState: feature ? 'provisional' : 'under-defined',
-      provenance: feature ? 'inferred' : 'unresolved',
+      provenance: featureProvenance(part),
       downstreamImpacts: ['feature tree', 'manufacturing operations', 'drawing views', 'CAD worker recipe'],
       reviewableFixes: ['Add extrude, cut, revolve, chamfer, or fillet operations', 'Confirm feature order before released CAD'],
     },

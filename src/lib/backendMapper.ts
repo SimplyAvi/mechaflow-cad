@@ -27,11 +27,13 @@ import type {
   MaterialOption,
   CADJointType,
   CADPrimitiveShape,
+  CADValueProvenance,
   ElectronicsComponent,
   WireSegment,
   Part,
   PartAuthoringFeatureRecipe,
   PartAuthoringFeatureStep,
+  PartAuthoringProvenance,
   PartAuthoringHolePattern,
   PartAuthoringSketchState,
   PartVisual,
@@ -330,12 +332,13 @@ const vectorFrom = (value: unknown, fallback: { x: number; y: number; z: number 
 const featureStepFromMetadata = (value: unknown): PartAuthoringFeatureStep | null => {
   const record = metadataRecord(value);
   const kind = record.kind;
-  if (kind !== 'sketch' && kind !== 'extrude' && kind !== 'cut' && kind !== 'finish' && kind !== 'placement') return null;
+  if (kind !== 'sketch' && kind !== 'extrude' && kind !== 'cut' && kind !== 'finish' && kind !== 'placement' && kind !== 'revolve' && kind !== 'chamfer' && kind !== 'fillet') return null;
   const id = stringMetadata(record.id);
   const label = stringMetadata(record.label);
   const stepValue = stringMetadata(record.value);
   if (!id || !label || !stepValue) return null;
-  return { id, label, value: stepValue, kind };
+  const provenance = record.provenance;
+  return { id, label, value: stepValue, kind, ...(typeof provenance === 'string' ? { provenance: provenance as PartAuthoringFeatureStep['provenance'] } : {}) };
 };
 
 const featureRecipeFromMetadata = (value: unknown): PartAuthoringFeatureRecipe | null => {
@@ -351,7 +354,20 @@ const featureRecipeFromMetadata = (value: unknown): PartAuthoringFeatureRecipe |
   const callouts = Array.isArray(record.callouts)
     ? record.callouts.map(featureStepFromMetadata).filter((step): step is PartAuthoringFeatureStep => step != null)
     : [];
-  return { id, name, plane, profile, history, callouts };
+  const provenance = record.provenance;
+  return { id, name, plane, profile, history, callouts, ...(typeof provenance === 'string' ? { provenance: provenance as PartAuthoringFeatureRecipe['provenance'] } : {}) };
+};
+
+const authoringProvenanceFromMetadata = (value: unknown): PartAuthoringProvenance => {
+  const record = metadataRecord(value);
+  const dimensions = metadataRecord(record.dimensions);
+  const featureSteps = metadataRecord(record.featureSteps ?? record.feature_steps);
+  return {
+    dimensions: Object.fromEntries(Object.entries(dimensions).filter(([, provenance]) => typeof provenance === 'string')) as PartAuthoringProvenance['dimensions'],
+    material: typeof record.material === 'string' ? record.material as PartAuthoringProvenance['material'] : undefined,
+    featureRecipe: typeof record.featureRecipe === 'string' ? record.featureRecipe as PartAuthoringProvenance['featureRecipe'] : undefined,
+    featureSteps: Object.fromEntries(Object.entries(featureSteps).filter(([, provenance]) => typeof provenance === 'string')) as Record<string, CADValueProvenance>,
+  };
 };
 
 const holePatternFromMetadata = (value: unknown): PartAuthoringHolePattern | null => {
@@ -438,6 +454,7 @@ const authoringFor = (part: BackendPart, index: number, visual: PartVisual) => {
     featureRecipe: featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe),
     holePattern: holePatternFromMetadata(visualAuthoring.hole_pattern ?? part.dimensions.metadata.visual_hole_pattern),
     sketchState: sketchStateFromMetadata(visualAuthoring.sketch_state ?? part.metadata.visual_sketch_state),
+    provenance: authoringProvenanceFromMetadata(visualAuthoring.provenance),
   };
 };
 

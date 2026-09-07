@@ -210,6 +210,7 @@ export interface PartAuthoringFeatureStep {
   label: string;
   value: string;
   kind: 'sketch' | 'extrude' | 'cut' | 'finish' | 'placement' | 'revolve' | 'chamfer' | 'fillet';
+  provenance?: CADValueProvenance;
 }
 
 export interface PartAuthoringFeatureRecipe {
@@ -219,6 +220,14 @@ export interface PartAuthoringFeatureRecipe {
   profile: string;
   history: PartAuthoringFeatureStep[];
   callouts: PartAuthoringFeatureStep[];
+  provenance?: CADValueProvenance;
+}
+
+export interface PartAuthoringProvenance {
+  dimensions?: Partial<Record<keyof PartAuthoringDimensions, CADValueProvenance>>;
+  material?: CADValueProvenance;
+  featureRecipe?: CADValueProvenance;
+  featureSteps?: Record<string, CADValueProvenance>;
 }
 
 export interface PartAuthoringHolePattern {
@@ -261,6 +270,7 @@ export interface PartAuthoringData {
   featureRecipe: PartAuthoringFeatureRecipe | null;
   holePattern: PartAuthoringHolePattern | null;
   sketchState: PartAuthoringSketchState | null;
+  provenance?: PartAuthoringProvenance;
 }
 
 export interface CapabilityRating {

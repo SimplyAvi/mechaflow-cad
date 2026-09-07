@@ -13,6 +13,7 @@ import {
   updatePartGeometry,
   updateProjectUnits,
 } from './visualAuthoring';
+import { buildPartLifecycleEvidence } from './designLifecycle';
 
 describe('visual authoring project helpers', () => {
   it('exports seeded and edited canvas metadata into portable project files', () => {
@@ -141,6 +142,28 @@ describe('visual authoring project helpers', () => {
     const selected = design.assembly.parts.find((part) => part.id === created.partId)!;
     expect(selected.authoring.featureRecipe?.history.some((step) => step.kind === 'cut')).toBe(true);
     expect(selected.designCriteria.some((criterion) => criterion.id === 'feature-recipe')).toBe(true);
+    expect(buildPartLifecycleEvidence(selected, 'mm', design.task).items.find((item) => item.id === 'dimension-definition')?.provenance).toBe('defaulted');
+    expect(buildPartLifecycleEvidence(selected, 'mm', design.task).items.find((item) => item.id === 'material-process')?.provenance).toBe('defaulted');
+
+    const editedProject = updatePartGeometry(matchedProject, created.partId, {
+      dimensions: { diameterMm: 100 },
+      materialId: 'mat-aluminum-6061-t6',
+      featureRecipe: {
+        ...selected.authoring.featureRecipe!,
+        history: [...selected.authoring.featureRecipe!.history, {
+          id: 'viewport-chamfer',
+          label: 'Chamfer edge note',
+          value: '2 mm edge break',
+          kind: 'chamfer',
+          provenance: 'user-defined',
+        }],
+      },
+    });
+    const edited = remapDesignFromProject(mockReferenceDesign, editedProject).assembly.parts.find((part) => part.id === created.partId)!;
+    const editedEvidence = buildPartLifecycleEvidence(edited, 'mm', design.task);
+    expect(editedEvidence.items.find((item) => item.id === 'dimension-definition')?.provenance).toBe('user-defined');
+    expect(editedEvidence.items.find((item) => item.id === 'material-process')?.provenance).toBe('user-defined');
+    expect(editedEvidence.items.find((item) => item.id === 'feature-history')?.provenance).toBe('user-defined');
   });
 
   it('rejects parent links that would create an assembly cycle', () => {
