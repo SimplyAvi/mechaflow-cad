@@ -1072,7 +1072,7 @@ const projectFileValidationError = (file) => {
           error = requireObject(part[field], `${assemblyPath}.parts.${field}`);
           if (error) return error;
         }
-        error = rejectUnknownFields(part.dimensions, ['length_mm', 'width_mm', 'height_mm', 'thickness_mm', 'metadata'], `${assemblyPath}.parts.dimensions`);
+        error = rejectUnknownFields(part.dimensions, ['length_mm', 'width_mm', 'height_mm', 'diameter_mm', 'thickness_mm', 'metadata'], `${assemblyPath}.parts.dimensions`);
         if (error) return error;
         error = requireStringArray(part.related_fasteners, `${assemblyPath}.parts.related_fasteners`) || requireStringArray(part.wiring_route_ids, `${assemblyPath}.parts.wiring_route_ids`);
         if (error) return error;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { matchLocalPartCatalog } from '../data/localPartCatalog';
 import { mockReferenceDesign } from '../data/mockDesign';
 import {
+  applyCatalogMatchToPart,
   buildLocalProjectFile,
   connectPartToParent,
   createAssemblyWithBase,
@@ -45,6 +47,30 @@ describe('visual authoring project helpers', () => {
     expect(design.wiringRoutes.find((route) => route.id === routed.routeId)?.connectedParts)
       .toEqual(expect.arrayContaining([created.partId, 'part-palm-plate']));
     expect(routed.project.wire_segments.some((segment) => segment.from_endpoint?.part_id === created.partId || segment.to_endpoint?.part_id === created.partId)).toBe(true);
+  });
+
+  it('applies a local catalog match to a newly authored part while keeping it editable', () => {
+    const assemblyId = mockReferenceDesign.assembly.id;
+    const created = createPrimitivePart(mockReferenceDesign.backendProject, assemblyId, 'beam', 'part-palm-plate');
+    const match = matchLocalPartCatalog('joint motor')[0]!;
+    const matchedProject = applyCatalogMatchToPart(created.project, created.partId, match.item, { ...match, query: 'joint motor' });
+    const matchedPart = matchedProject.assemblies[0]!.parts.find((part) => part.id === created.partId)!;
+    const visual = matchedPart.metadata.visual_authoring as Record<string, unknown>;
+    const localMatch = matchedPart.metadata.local_catalog_match as Record<string, unknown>;
+
+    expect(matchedPart.name).toBe('Integrated 80 mm shoulder servo actuator');
+    expect(matchedPart.material_id).toBe('mat-servo-actuator-assembly');
+    expect(matchedProject.materials.some((material) => material.id === 'mat-servo-actuator-assembly')).toBe(true);
+    expect(matchedPart.dimensions.length_mm).toBe(86);
+    expect(matchedPart.manufacturing_options[0]?.process).toBe('off_the_shelf');
+    expect(visual.primitive).toBe('motor_block');
+    expect(visual.authored).toBe(true);
+    expect(localMatch.score).toBeGreaterThanOrEqual(70);
+    expect(localMatch.editable).toBe(true);
+
+    const design = remapDesignFromProject(mockReferenceDesign, matchedProject);
+    const selected = design.assembly.parts.find((part) => part.id === created.partId)!;
+    expect(selected.designCriteria.some((criterion) => criterion.id === 'catalog-match')).toBe(true);
   });
 
   it('rejects parent links that would create an assembly cycle', () => {

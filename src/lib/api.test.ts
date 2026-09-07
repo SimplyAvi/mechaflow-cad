@@ -23,7 +23,7 @@ describe('loadCockpitDesign', () => {
 
     const design = await loadCockpitDesign();
 
-    expect(design.name).toContain('Robot arm visual MVP task-preserving edit demo');
+    expect(design.name).toContain('Robot arm with catalog-matched servo actuator demo');
     expect(design.backend.source).toBe('bundled-mock');
     expect(design.analysisJobs.some((job) => job.worker === 'freecad-worker')).toBe(true);
   });
@@ -42,7 +42,7 @@ describe('loadCockpitDesign', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/metadata');
     expect(fetchMock).toHaveBeenCalledWith('http://api.test/api/projects/project-open-gripper-demo/panel-data');
-    expect(design.name).toBe('Robot arm visual MVP task-preserving edit demo');
+    expect(design.name).toBe('Robot arm with catalog-matched servo actuator demo');
     expect(design.backend.source).toBe('backend-panel-data');
   });
 
@@ -88,7 +88,7 @@ describe('loadCockpitDesign', () => {
       'http://api.test/api/projects/import-file',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(imported.name).toBe('Robot arm visual MVP task-preserving edit demo');
+    expect(imported.name).toBe('Robot arm with catalog-matched servo actuator demo');
     expect(imported.backend.projectId).toBe('project-open-gripper-demo');
     expect(imported.assemblies[0]?.parts.map((part) => part.id)).toContain('part-finger-link');
   });

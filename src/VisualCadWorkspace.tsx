@@ -14,6 +14,7 @@ interface VisualCadWorkspaceProps {
   parts: Part[];
   wiringRoutes: WiringRoute[];
   selectedPartId: string;
+  focusedPartId: string | null;
   units: AuthoringUnit;
   explodePercent: number;
   view: ViewState;
@@ -101,6 +102,8 @@ const primitiveDimensions = (part: Part): { length: number; width: number; heigh
   };
 };
 
+const focusOffset = (focused: boolean): Point3D => focused ? { x: 0, y: -36, z: 74 } : { x: 0, y: 0, z: 0 };
+
 const connectorCenter = (part: Part): Point3D => ({
   x: part.authoring.positionMm.x,
   y: part.authoring.positionMm.y,
@@ -142,13 +145,14 @@ function useProjection(view: ViewState) {
   };
 }
 
-function boxFaces(part: Part, explodePercent: number, project: (point: Point3D) => ProjectedPoint): BoxFace[] {
+function boxFaces(part: Part, explodePercent: number, project: (point: Point3D) => ProjectedPoint, focused: boolean): BoxFace[] {
   const dims = primitiveDimensions(part);
   const explode = explodePercent / 100;
+  const offset = focusOffset(focused);
   const center = {
-    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode,
-    y: part.authoring.positionMm.y,
-    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode,
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode + offset.z,
   };
   const half = { x: dims.length / 2, y: dims.width / 2, z: dims.height / 2 };
   const corners = {
@@ -239,24 +243,27 @@ function PrimitiveSurfaceDetails({ part, faces }: { part: Part; faces: BoxFace[]
   return null;
 }
 
-function VisualBox({ part, selected, explodePercent, project, onSelect }: {
+function VisualBox({ part, selected, focused, focusDimmed, explodePercent, project, onSelect }: {
   part: Part;
   selected: boolean;
+  focused: boolean;
+  focusDimmed: boolean;
   explodePercent: number;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
 }) {
-  const faces = boxFaces(part, explodePercent, project);
+  const faces = boxFaces(part, explodePercent, project, focused);
+  const offset = focusOffset(focused);
   const labelPoint = project({
-    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * (explodePercent / 100),
-    y: part.authoring.positionMm.y,
-    z: part.authoring.positionMm.z + partHeight(part) + 18 + (part.visual.explodeY ?? 0) * 1.5 * (explodePercent / 100),
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * (explodePercent / 100) + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + partHeight(part) + 18 + (part.visual.explodeY ?? 0) * 1.5 * (explodePercent / 100) + offset.z,
   });
   const style = { '--cad-color': part.authoring.color } as CSSProperties;
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-${part.authoring.primitive} risk-${part.stressRisk} ${selected ? 'selected' : ''}`}
+      className={`cad-primitive primitive-${part.authoring.primitive} risk-${part.stressRisk} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -279,19 +286,22 @@ function VisualBox({ part, selected, explodePercent, project, onSelect }: {
   );
 }
 
-function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
+function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, project, onSelect }: {
   part: Part;
   selected: boolean;
+  focused: boolean;
+  focusDimmed: boolean;
   explodePercent: number;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
 }) {
   const dims = primitiveDimensions(part);
   const explode = explodePercent / 100;
+  const offset = focusOffset(focused);
   const center = {
-    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode,
-    y: part.authoring.positionMm.y,
-    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode,
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode + offset.z,
   };
   const top = project({ x: center.x, y: center.y, z: center.z + dims.height / 2 });
   const bottom = project({ x: center.x, y: center.y, z: center.z - dims.height / 2 });
@@ -303,7 +313,7 @@ function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-cylinder_joint risk-${part.stressRisk} ${selected ? 'selected' : ''}`}
+      className={`cad-primitive primitive-cylinder_joint risk-${part.stressRisk} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -328,9 +338,14 @@ function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
   );
 }
 
-function DimensionOverlay({ part, units, project }: { part: Part; units: AuthoringUnit; project: (point: Point3D) => ProjectedPoint }) {
+function DimensionOverlay({ part, units, project, focused }: { part: Part; units: AuthoringUnit; project: (point: Point3D) => ProjectedPoint; focused: boolean }) {
   const dims = primitiveDimensions(part);
-  const center = part.authoring.positionMm;
+  const offset = focusOffset(focused);
+  const center = {
+    x: part.authoring.positionMm.x + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + offset.z,
+  };
   const half = dims.length / 2;
   const start = project({ x: center.x - half, y: center.y - dims.width / 2 - 28, z: center.z + dims.height / 2 + 10 });
   const end = project({ x: center.x + half, y: center.y - dims.width / 2 - 28, z: center.z + dims.height / 2 + 10 });
@@ -353,6 +368,7 @@ export function VisualCadWorkspace({
   parts,
   wiringRoutes,
   selectedPartId,
+  focusedPartId,
   units,
   explodePercent,
   view,
@@ -364,6 +380,7 @@ export function VisualCadWorkspace({
   const project = useProjection(view);
   const partsById = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts]);
   const selectedPart = partsById.get(selectedPartId) ?? parts[0];
+  const effectiveFocusedPartId = focusedPartId && partsById.has(focusedPartId) ? focusedPartId : null;
   const sortedParts = useMemo(() => [...parts].sort((left, right) => {
     const leftDepth = project(left.authoring.positionMm).depth + (left.visual.zIndex ?? 0);
     const rightDepth = project(right.authoring.positionMm).depth + (right.visual.zIndex ?? 0);
@@ -480,29 +497,37 @@ export function VisualCadWorkspace({
           })}
         </g>
         <g className="cad-primitives" filter="url(#cad-soft-shadow)">
-          {sortedParts.map((part) => part.authoring.primitive === 'cylinder_joint'
-            ? (
-              <VisualCylinder
-                explodePercent={explodePercent}
-                key={part.id}
-                onSelect={() => onSelectPart(part.id)}
-                part={part}
-                project={project}
-                selected={part.id === selectedPartId}
-              />
-            )
-            : (
-              <VisualBox
-                explodePercent={explodePercent}
-                key={part.id}
-                onSelect={() => onSelectPart(part.id)}
-                part={part}
-                project={project}
-                selected={part.id === selectedPartId}
-              />
-            ))}
+          {sortedParts.map((part) => {
+            const focused = effectiveFocusedPartId === part.id;
+            const focusDimmed = effectiveFocusedPartId != null && !focused;
+            return part.authoring.primitive === 'cylinder_joint'
+              ? (
+                <VisualCylinder
+                  explodePercent={explodePercent}
+                  focused={focused}
+                  focusDimmed={focusDimmed}
+                  key={part.id}
+                  onSelect={() => onSelectPart(part.id)}
+                  part={part}
+                  project={project}
+                  selected={part.id === selectedPartId}
+                />
+              )
+              : (
+                <VisualBox
+                  explodePercent={explodePercent}
+                  focused={focused}
+                  focusDimmed={focusDimmed}
+                  key={part.id}
+                  onSelect={() => onSelectPart(part.id)}
+                  part={part}
+                  project={project}
+                  selected={part.id === selectedPartId}
+                />
+              );
+          })}
         </g>
-        {selectedPart ? <DimensionOverlay part={selectedPart} project={project} units={units} /> : null}
+        {selectedPart ? <DimensionOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
       </svg>
       <div className="canvas-status-row" aria-live="polite">
         <strong>{selectedPart?.name ?? 'No part selected'}</strong>

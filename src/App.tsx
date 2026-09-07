@@ -12,10 +12,12 @@ import {
 } from './lib/api';
 import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
 import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
+import { localRobotArmPartCatalog, matchLocalPartCatalog, type LocalPartCatalogMatch } from './data/localPartCatalog';
 import { mockReferenceDesign } from './data/mockDesign';
 import { extractDesignIntentChips, taskFromDesignIntent, type DesignIntentChip } from './lib/designIntent';
 import { VisualCadWorkspace } from './VisualCadWorkspace';
 import {
+  applyCatalogMatchToPart,
   applyIntentToProjectGeometry,
   buildLocalProjectFile,
   connectPartToParent,
@@ -364,6 +366,7 @@ function App() {
   const [orbitPitchDeg, setOrbitPitchDeg] = useState(38);
   const [viewZoom, setViewZoom] = useState(1);
   const [viewPan, setViewPan] = useState({ x: 0, y: 0 });
+  const [focusedPartId, setFocusedPartId] = useState<string | null>(null);
   const [wireRouteTargetId, setWireRouteTargetId] = useState('');
   const [authoringMessage, setAuthoringMessage] = useState<string | null>('Visual CAD authoring is active: select geometry, choose units, create parts, add motors, and route wiring on the XYZ grid.');
   const [analysisRunMessage, setAnalysisRunMessage] = useState<string | null>(null);
@@ -384,6 +387,8 @@ function App() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('design');
   const [intentText, setIntentText] = useState('');
   const [intentMessage, setIntentMessage] = useState<string | null>('Robot arm demo is loaded. Describe a new mechanism or add a reference image to start faster.');
+  const [partMatchQuery, setPartMatchQuery] = useState('joint motor');
+  const [selectedCatalogMatchId, setSelectedCatalogMatchId] = useState('');
   const [referenceImages, setReferenceImages] = useState<ReferenceImageRecord[]>([]);
   const [imageDropActive, setImageDropActive] = useState(false);
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
@@ -409,6 +414,7 @@ function App() {
     setAnalysisRunMessage(null);
     setSubstitutionPending(false);
     setAnalysisRunPending(false);
+    setFocusedPartId(null);
     setDownstreamPanelsReviewed({ bom: false, manufacturing: false, wiring: false });
     setDemoStepReviews(new Set());
     setExportedEvidence(null);
@@ -493,9 +499,13 @@ function App() {
 
   const intentChips = useMemo(() => extractDesignIntentChips(intentText), [intentText]);
 
+  const catalogMatches = useMemo(() => matchLocalPartCatalog(partMatchQuery), [partMatchQuery]);
+  const selectedCatalogMatch = catalogMatches.find((match) => match.item.id === selectedCatalogMatchId) ?? catalogMatches[0];
+
   const selectPart = (partId: string) => {
     setSelectedPartId(partId);
     setSubstitutionPreview(null);
+    setFocusedPartId((current) => current == null ? current : partId);
     markDemoStep('select-part');
   };
 
@@ -639,6 +649,47 @@ function App() {
       message: `Created visible wire route ${routed.routeId}. The route is a polyline with heuristic clearance and bend data, not exact electrical validation.`,
     });
     markDownstreamPanelReviewed('wiring');
+  };
+
+  const focusSelectedPart = () => {
+    if (!selectedPart) return;
+    const nextFocus = focusedPartId === selectedPart.id ? null : selectedPart.id;
+    setFocusedPartId(nextFocus);
+    if (nextFocus) {
+      setExplodePercent((value) => Math.max(value, 72));
+      setViewZoom((value) => Math.max(value, 1.32));
+      setAuthoringMessage(`${selectedPart.name} is in focus: nearby parts are dimmed and the selected geometry lifts away from the assembly. Full exploded transforms remain a FreeCAD-worker follow-up.`);
+    } else {
+      setAuthoringMessage('Focus cleared. Use explode, orbit, pan, and zoom to inspect the complete assembly context.');
+    }
+  };
+
+  const applySelectedCatalogMatch = () => {
+    if (!design || !selectedPart || !selectedCatalogMatch) return;
+    const query = partMatchQuery.trim() || selectedCatalogMatch.item.name;
+    const matchedProject = applyCatalogMatchToPart(design.backendProject, selectedPart.id, selectedCatalogMatch.item, { ...selectedCatalogMatch, query });
+    commitAuthoredProject(matchedProject, {
+      selectedPartId: selectedPart.id,
+      message: `Matched "${query}" to ${selectedCatalogMatch.item.name} with ${selectedCatalogMatch.score}% ${selectedCatalogMatch.confidence} confidence. Type, dimensions, material, process, and local catalog reasoning are applied but remain editable.`,
+    });
+    setSelectedCatalogMatchId(selectedCatalogMatch.item.id);
+    markDemoStep('catalog-match');
+  };
+
+  const addSelectedCatalogMatchToAssembly = () => {
+    if (!design || !activeAssembly || !selectedPart || !selectedCatalogMatch) return;
+    const query = partMatchQuery.trim() || selectedCatalogMatch.item.name;
+    const created = createPrimitivePart(design.backendProject, activeAssembly.id, selectedCatalogMatch.item.primitive, selectedPart.id);
+    if (!created.partId) return;
+    const matchedProject = applyCatalogMatchToPart(created.project, created.partId, selectedCatalogMatch.item, { ...selectedCatalogMatch, query });
+    commitAuthoredProject(matchedProject, {
+      selectedPartId: created.partId,
+      message: `Added ${selectedCatalogMatch.item.name} to ${activeAssembly.name} from the local catalog match for "${query}". It is now a selectable assembly part with editable criteria, dimensions, material, process, and wiring handoff metadata.`,
+    });
+    setSelectedCatalogMatchId(selectedCatalogMatch.item.id);
+    setFocusedPartId(created.partId);
+    setExplodePercent((value) => Math.max(value, 72));
+    markDemoStep('catalog-match');
   };
 
   const createProjectFromIntent = (event?: FormEvent<HTMLFormElement>) => {
@@ -1042,6 +1093,15 @@ function App() {
       }
     : selectedPart.rating;
   const visibleDesign = substitutionPreview?.design ?? design;
+  const selectedRouteIds = new Set(selectedPart.relatedWires);
+  const authoringWireRoutes = [...visibleDesign.wiringRoutes]
+    .sort((a, b) => {
+      const score = (route: ReferenceDesign['wiringRoutes'][number]) => (
+        (route.connectedParts.includes(selectedPart.id) ? 2 : 0) + (selectedRouteIds.has(route.id) ? 2 : 0)
+      );
+      return score(b) - score(a);
+    })
+    .slice(0, 6);
   const visibleBomTotal = totalBomCost(visibleDesign.bom);
   const hasBomManufacturingWiring = visibleDesign.bom.length > 0
     && visibleDesign.manufacturingOptions.length > 0
@@ -1072,6 +1132,15 @@ function App() {
       summary: `${activeAssembly.parts.length} selectable mechanical and electrical parts are available in ${activeAssembly.name}.`,
       anchor: '#assembly-viewer',
       actionLabel: 'Open viewer',
+      canMarkReviewed: true,
+    },
+    {
+      id: 'catalog-match',
+      label: 'Match an unknown part name',
+      status: demoStepReviews.has('catalog-match') ? 'complete' : 'available',
+      summary: `${localRobotArmPartCatalog.length} local robot-arm catalog items can explain labels such as joint motor, servo actuator, arm link, gripper bracket, and base plate.`,
+      anchor: '#catalog-match-editor',
+      actionLabel: 'Open catalog match',
       canMarkReviewed: true,
     },
     {
@@ -1276,6 +1345,9 @@ function App() {
                 <button type="button" onClick={() => setExplodePercent((value) => (value > 0 ? 0 : 100))}>
                   {explodePercent > 0 ? 'Collapse' : 'Explode'}
                 </button>
+                <button aria-pressed={focusedPartId === selectedPart.id} type="button" onClick={focusSelectedPart}>
+                  {focusedPartId === selectedPart.id ? 'Clear focus' : 'Focus selected'}
+                </button>
                 <label>
                   <span>Explode</span>
                   <input
@@ -1325,7 +1397,7 @@ function App() {
                 </label>
                 <button type="button" onClick={() => setViewPan((value) => ({ ...value, x: value.x - 32 }))}>Pan left</button>
                 <button type="button" onClick={() => setViewPan((value) => ({ ...value, x: value.x + 32 }))}>Pan right</button>
-                <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); }}>Reset view</button>
+                <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); setFocusedPartId(null); }}>Reset view</button>
               </div>
             </div>
             <CanvasToolPalette
@@ -1335,6 +1407,7 @@ function App() {
             />
             <VisualCadWorkspace
               explodePercent={explodePercent}
+              focusedPartId={focusedPartId}
               onNudgeSelected={(delta) => updateSelectedPartGeometry({
                 position: {
                   x: selectedPart.authoring.positionMm.x + delta.x,
@@ -1357,6 +1430,7 @@ function App() {
             />
             <SelectedPartCanvasCard
               activeTask={design.task}
+              assemblyParts={activeAssembly.parts}
               part={selectedPart}
               selectedOption={selectedOption}
               units={design.units}
@@ -1667,6 +1741,21 @@ function App() {
                 <p className="microcopy">Live dimensions and XYZ coordinates update authored project metadata immediately. Strength, tolerance, mass, and manufacturability remain review-required until real CAD and solver integrations run.</p>
               </section>
 
+              <CatalogMatchPanel
+                matches={catalogMatches}
+                onAddToAssembly={addSelectedCatalogMatchToAssembly}
+                onApplyToSelected={applySelectedCatalogMatch}
+                onQueryChange={(query) => {
+                  setPartMatchQuery(query);
+                  setSelectedCatalogMatchId('');
+                }}
+                onSelectMatch={setSelectedCatalogMatchId}
+                query={partMatchQuery}
+                selectedMatch={selectedCatalogMatch}
+                selectedPartName={selectedPart.name}
+                units={design.units}
+              />
+
               <section className="panel authoring-panel assembly-authoring-panel" id="assembly-authoring-editor" aria-label="Assembly and wiring authoring">
                 <div className="section-heading-row">
                   <div>
@@ -1707,7 +1796,7 @@ function App() {
                   <button type="button" onClick={routeWireToTarget}>Route visible wire</button>
                 </div>
                 <ul className="wire-route-list" aria-label="Visible wire routes">
-                  {visibleDesign.wiringRoutes.slice(0, 5).map((route) => (
+                  {authoringWireRoutes.map((route) => (
                     <li key={route.id}>
                       <strong>{route.name}</strong>
                       <small>{route.wireSegmentIds.length} segment{route.wireSegmentIds.length === 1 ? '' : 's'} - {route.reviewStatus.replaceAll('_', ' ')}</small>
@@ -1876,13 +1965,130 @@ function CanvasToolPalette({
   );
 }
 
+function CatalogMatchPanel({
+  matches,
+  onAddToAssembly,
+  onApplyToSelected,
+  onQueryChange,
+  onSelectMatch,
+  query,
+  selectedMatch,
+  selectedPartName,
+  units,
+}: {
+  matches: LocalPartCatalogMatch[];
+  onAddToAssembly: () => void;
+  onApplyToSelected: () => void;
+  onQueryChange: (query: string) => void;
+  onSelectMatch: (catalogItemId: string) => void;
+  query: string;
+  selectedMatch?: LocalPartCatalogMatch;
+  selectedPartName: string;
+  units: AuthoringUnit;
+}) {
+  const examples = ['joint motor', 'servo actuator', 'arm link', 'gripper bracket', 'base plate'];
+  return (
+    <section className="panel authoring-panel catalog-match-panel" id="catalog-match-editor" aria-label="Catalog matching for unknown part names">
+      <div className="section-heading-row">
+        <div>
+          <p className="eyebrow">Catalog match</p>
+          <h2>Describe unknown parts, then use the match in the assembly</h2>
+        </div>
+        <span className="status-pill status-review_required">deterministic local</span>
+      </div>
+      <p className="microcopy">
+        If the exact part name is unknown, type plain language such as joint motor, servo actuator, arm link, gripper bracket, or base plate.
+        MechaFlow matches against a small local robot-arm catalog, explains why, and keeps the result editable.
+      </p>
+      <label className="field-row compact-field" htmlFor="part-catalog-query">
+        <span>Plain-language part label or description</span>
+        <input
+          id="part-catalog-query"
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="joint motor, servo actuator, arm link, gripper bracket, base plate"
+          type="text"
+          value={query}
+        />
+      </label>
+      <div className="catalog-query-examples" aria-label="Catalog match examples">
+        {examples.map((example) => (
+          <button key={example} onClick={() => onQueryChange(example)} type="button">{example}</button>
+        ))}
+      </div>
+      <div className="catalog-match-grid" aria-label="Local catalog match suggestions">
+        {matches.map((match) => {
+          const selected = selectedMatch?.item.id === match.item.id;
+          return (
+            <button
+              aria-pressed={selected}
+              className={`catalog-match-card confidence-${match.confidence} ${selected ? 'selected' : ''}`}
+              key={match.item.id}
+              onClick={() => onSelectMatch(match.item.id)}
+              type="button"
+            >
+              <span>{match.score}% {match.confidence} confidence</span>
+              <strong>{match.item.name}</strong>
+              <small>{match.item.partType} - {match.item.primitive.replaceAll('_', ' ')} - {match.item.manufacturing.process.replaceAll('_', ' ')}</small>
+              <p>{match.reasoning}</p>
+            </button>
+          );
+        })}
+      </div>
+      {selectedMatch ? (
+        <div className={`catalog-match-detail confidence-${selectedMatch.confidence}`} aria-live="polite">
+          <div>
+            <strong>{selectedMatch.item.name}</strong>
+            <span>{selectedMatch.item.source.label} - {selectedMatch.item.source.license}</span>
+            <p>{selectedMatch.item.assemblyRole}</p>
+          </div>
+          <dl className="comparison-grid">
+            <div>
+              <dt>Type inferred</dt>
+              <dd>{selectedMatch.item.partType}</dd>
+            </div>
+            <div>
+              <dt>Dimensions</dt>
+              <dd>
+                L {selectedMatch.item.defaultDimensionsMm.lengthMm == null ? 'review' : formatLength(selectedMatch.item.defaultDimensionsMm.lengthMm, units)} / W {selectedMatch.item.defaultDimensionsMm.widthMm == null ? 'review' : formatLength(selectedMatch.item.defaultDimensionsMm.widthMm, units)} / H {selectedMatch.item.defaultDimensionsMm.heightMm == null ? 'review' : formatLength(selectedMatch.item.defaultDimensionsMm.heightMm, units)}
+              </dd>
+            </div>
+            <div>
+              <dt>Material</dt>
+              <dd>{selectedMatch.item.materialSummary}</dd>
+            </div>
+            <div>
+              <dt>Process</dt>
+              <dd>{selectedMatch.item.manufacturing.process.replaceAll('_', ' ')} - {formatLeadTimeRange({ min: selectedMatch.item.manufacturing.leadTimeDaysMin, max: selectedMatch.item.manufacturing.leadTimeDaysMax })}</dd>
+            </div>
+          </dl>
+          <ul>
+            {selectedMatch.item.criteria.map((criterion) => <li key={criterion}>{criterion}</li>)}
+          </ul>
+          <div className="catalog-match-actions">
+            <button onClick={onApplyToSelected} type="button">Apply to selected part</button>
+            <button className="primary-match-action" onClick={onAddToAssembly} type="button">Add matched part to assembly</button>
+          </div>
+          <small className="runner-note">
+            {selectedMatch.confidence === 'low'
+              ? 'Low confidence: apply only as an editable starter and confirm the type, dimensions, material, process, and supplier data.'
+              : 'The match supplies local catalog metadata, then the selected geometry, dimensions, material, and process remain editable.'}
+          </small>
+          <small className="runner-note">Current selection: {selectedPartName}. Newly added matched parts are selected immediately and can be wired into the assembly.</small>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function SelectedPartCanvasCard({
   activeTask,
+  assemblyParts,
   part,
   selectedOption,
   units,
 }: {
   activeTask: ReferenceDesign['task'];
+  assemblyParts: Part[];
   part: Part;
   selectedOption?: MaterialOption;
   units: AuthoringUnit;
@@ -1892,6 +2098,8 @@ function SelectedPartCanvasCard({
   const loadCriterion = part.designCriteria.find((criterion) => criterion.id === 'load-capacity');
   const thermalCriterion = part.designCriteria.find((criterion) => criterion.id === 'temperature-limit');
   const materialStrengthCriterion = part.designCriteria.find((criterion) => criterion.id === 'material-strength');
+  const catalogMatchCriterion = part.designCriteria.find((criterion) => criterion.id === 'catalog-match');
+  const parentPart = part.authoring.parentPartId ? assemblyParts.find((candidate) => candidate.id === part.authoring.parentPartId) : null;
   const warnings = reviewWarningsForPart(part, selectedOption);
   const thermalLimit = part.analysisReadiness.thermal_guidance?.heat_deflection_temp_c
     ?? part.analysisReadiness.thermal_guidance?.max_service_temp_c
@@ -1903,6 +2111,7 @@ function SelectedPartCanvasCard({
         <h3>Selected: {part.name}</h3>
         <p>{part.purpose}</p>
         <small>Primitive proxy: {primitiveLabel(part.authoring.primitive)} in {part.subassembly}. This is authored visual geometry and project metadata, not a full parametric CAD kernel.</small>
+        {catalogMatchCriterion ? <small>Local catalog match: {catalogMatchCriterion.value}. {catalogMatchCriterion.plainEnglish}</small> : null}
       </div>
       <dl className="selected-part-stat-grid">
         <div>
@@ -1928,6 +2137,17 @@ function SelectedPartCanvasCard({
         <div>
           <dt>Stress or capability</dt>
           <dd>{riskLabel[part.stressRisk]} stress risk<small>{part.rating.payloadLb == null ? 'payload and safety factor review required' : part.rating.summary}</small></dd>
+        </div>
+        <div>
+          <dt>XYZ location</dt>
+          <dd>
+            X {formatLength(part.authoring.positionMm.x, units)} / Y {formatLength(part.authoring.positionMm.y, units)} / Z {formatLength(part.authoring.positionMm.z, units)}
+            <small>Position in the active assembly grid</small>
+          </dd>
+        </div>
+        <div>
+          <dt>Assembly link</dt>
+          <dd>{parentPart ? `${parentPart.name} via ${part.authoring.jointType.replaceAll('_', ' ')}` : 'Top-level or unassigned'}<small>{part.authoring.assignedToPartId ? `Assigned to ${part.authoring.assignedToPartId}` : 'Editable parent and joint metadata'}</small></dd>
         </div>
       </dl>
       <div className="selected-part-rationale-grid">

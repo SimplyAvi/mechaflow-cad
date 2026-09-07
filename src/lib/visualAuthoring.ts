@@ -5,6 +5,7 @@ import type {
   BackendBOMItem,
   BackendElectronicsComponent,
   BackendManufacturingOption,
+  BackendMaterial,
   BackendPart,
   BackendProject,
   BackendProjectFile,
@@ -18,6 +19,7 @@ import type {
   CADPrimitiveShape,
   ReferenceDesign,
 } from '../types';
+import type { LocalPartCatalogItem, LocalPartCatalogMatch } from '../data/localPartCatalog';
 import { mapProjectPanelDataToReferenceDesign } from './backendMapper';
 
 export const unitOptions: Array<{ value: AuthoringUnit; label: string; factorToMm: number }> = [
@@ -347,6 +349,98 @@ export const updatePartGeometry = (
       material_id: updates.materialId ?? part.material_id,
       dimensions: nextDimensions,
       mass_kg: updates.dimensions || updates.materialId ? null : part.mass_kg,
+      metadata,
+    };
+  });
+};
+
+const catalogFallbackMaterial = (item: LocalPartCatalogItem): BackendMaterial => ({
+  id: item.defaultMaterialId,
+  name: item.materialSummary,
+  family: item.category.includes('actuator') ? 'mechatronic_actuator' : item.category.replaceAll(' ', '_'),
+  properties: {},
+  compatible_processes: [item.manufacturing.process],
+  cost: null,
+  source: { label: item.source.label, license: item.source.license },
+  confidence: item.source.confidence,
+  notes: ['Created from the local part catalog so matched visual-authoring parts keep a resolvable material reference.'],
+});
+
+const catalogManufacturingOption = (item: LocalPartCatalogItem): BackendManufacturingOption => ({
+  id: `mfg-${item.id}-${item.manufacturing.process}`,
+  process: item.manufacturing.process,
+  description: item.manufacturing.description,
+  cost: item.manufacturing.cost,
+  lead_time_days_min: item.manufacturing.leadTimeDaysMin,
+  lead_time_days_max: item.manufacturing.leadTimeDaysMax,
+  supplier_url: null,
+  risk_notes: item.manufacturing.riskNotes,
+  confidence: item.manufacturing.confidence,
+});
+
+export const applyCatalogMatchToPart = (
+  project: BackendProject,
+  partId: string,
+  catalogItem: LocalPartCatalogItem,
+  match: Pick<LocalPartCatalogMatch, 'score' | 'confidence' | 'matchedTerms' | 'reasoning'> & { query: string },
+): BackendProject => {
+  const next = cloneProject(project);
+  if (!next.materials.some((material) => material.id === catalogItem.defaultMaterialId)) {
+    next.materials = [...next.materials, catalogFallbackMaterial(catalogItem)];
+  }
+  return setPartInProject(next, partId, (part) => {
+    const visual = normalizePartVisualAuthoring(part);
+    visual.authored = true;
+    visual.primitive = catalogItem.primitive;
+    visual.color = catalogItem.color;
+    visual.catalog_item_id = catalogItem.id;
+    const option = catalogManufacturingOption(catalogItem);
+    const existingOptions = part.manufacturing_options.filter((candidate) => candidate.id !== option.id && candidate.process !== option.process);
+    const metadata = {
+      ...(isRecord(part.metadata) ? part.metadata : {}),
+      preferred_manufacturing_process: catalogItem.manufacturing.process,
+      created_by_visual_authoring: true,
+      local_catalog_match: {
+        catalog_item_id: catalogItem.id,
+        catalog_item_name: catalogItem.name,
+        query: match.query,
+        score: match.score,
+        confidence: match.confidence,
+        matched_terms: match.matchedTerms,
+        reasoning: match.reasoning,
+        editable: true,
+        source: catalogItem.source,
+      },
+      catalog_role_criteria: catalogItem.criteria,
+      visual_authoring: visual,
+      demo_design_criteria: {
+        ...(isRecord(part.metadata?.demo_design_criteria) ? part.metadata.demo_design_criteria : {}),
+        load_capacity_status: 'review-required',
+        load_capacity_note: `Catalog match ${catalogItem.name} supplies type, dimensions, material, and process metadata. Strength, torque, fatigue, tolerances, and sourcing remain review-required.`,
+      },
+    };
+    return {
+      ...part,
+      name: catalogItem.name,
+      category: catalogItem.category,
+      purpose: `${catalogItem.assemblyRole} ${catalogItem.description}`,
+      material_id: catalogItem.defaultMaterialId,
+      dimensions: {
+        ...part.dimensions,
+        length_mm: catalogItem.defaultDimensionsMm.lengthMm,
+        width_mm: catalogItem.defaultDimensionsMm.widthMm,
+        height_mm: catalogItem.defaultDimensionsMm.heightMm,
+        diameter_mm: catalogItem.defaultDimensionsMm.diameterMm,
+        thickness_mm: catalogItem.defaultDimensionsMm.thicknessMm,
+        metadata: {
+          ...(isRecord(part.dimensions.metadata) ? part.dimensions.metadata : {}),
+          local_catalog_item_id: catalogItem.id,
+          units: 'mm',
+        },
+      },
+      mass_kg: null,
+      manufacturing_options: [option, ...existingOptions],
+      source_file: `local-catalog://${catalogItem.id}`,
       metadata,
     };
   });

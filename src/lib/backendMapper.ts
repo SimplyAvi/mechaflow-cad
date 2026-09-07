@@ -394,7 +394,12 @@ const buildDesignCriteria = (
   const stiffnessGpa = material?.properties.elastic_modulus_gpa ?? null;
   const yieldMpa = material?.properties.yield_strength_mpa ?? null;
   const heatLimitC = material?.properties.heat_deflection_temp_c ?? material?.properties.max_service_temp_c ?? null;
-  return [
+  const catalogMatch = metadataRecord(part.metadata.local_catalog_match);
+  const catalogScore = numberMetadata(catalogMatch.score);
+  const catalogName = stringMetadata(catalogMatch.catalog_item_name);
+  const catalogConfidence = stringMetadata(catalogMatch.confidence);
+  const catalogReasoning = stringMetadata(catalogMatch.reasoning);
+  const criteria: DesignCriterion[] = [
     {
       id: 'load-capacity',
       label: 'Intended load or lift role',
@@ -445,6 +450,17 @@ const buildDesignCriteria = (
       sourceConfidence: criterionSource('Manufacturing option seed', manufacturingOption?.confidence),
     },
   ];
+  if (catalogName) {
+    criteria.push({
+      id: 'catalog-match',
+      label: 'Catalog or database match',
+      value: `${catalogName}${catalogScore == null ? '' : ` - ${catalogScore}%`} ${catalogConfidence ?? 'review-required'} confidence`,
+      status: catalogScore != null && catalogScore >= 45 ? 'estimated' : 'review-required',
+      plainEnglish: `${catalogReasoning ?? 'Local catalog matching supplied editable part metadata.'} The user can still edit the label, dimensions, material, process, and assembly placement before release.`,
+      sourceConfidence: criterionSource('Local deterministic part catalog', catalogConfidence),
+    });
+  }
+  return criteria;
 };
 
 const buildFallbackAnalysisReadiness = (

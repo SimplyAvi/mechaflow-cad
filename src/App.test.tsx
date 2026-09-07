@@ -75,6 +75,33 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/Visible wire routes/i)).toHaveTextContent(/Wrist motor layout proxy/i);
   });
 
+  it('matches an unknown part description locally and focuses the authored assembly handoff', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
+    await user.click(within(screen.getByLabelText(/Visual CAD primitive palette/i)).getByRole('button', { name: /^Motor$/i }));
+    expect(await screen.findByText(/Created motor block primitive/i)).toBeInTheDocument();
+
+    const catalogPanel = screen.getByLabelText(/Catalog matching for unknown part names/i);
+    await user.clear(within(catalogPanel).getByLabelText(/Plain-language part label or description/i));
+    await user.type(within(catalogPanel).getByLabelText(/Plain-language part label or description/i), '80 mm shoulder joint motor');
+
+    expect(within(catalogPanel).getAllByText(/Shoulder servo actuator/i).length).toBeGreaterThan(0);
+    expect(within(catalogPanel).getByText(/Bolts beside the shoulder yoke/i)).toBeInTheDocument();
+    await user.click(within(catalogPanel).getByRole('button', { name: /Apply to selected part/i }));
+
+    expect(await screen.findByText(/Matched "80 mm shoulder joint motor" to Integrated 80 mm shoulder servo actuator/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Local catalog match: Integrated 80 mm shoulder servo actuator/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Assembly link/i);
+
+    await user.click(screen.getByRole('button', { name: /Focus selected/i }));
+    expect(await screen.findByText(/is in focus: nearby parts are dimmed/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Clear focus/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('captures typed design intent into structured chips and starts a prompt concept honestly', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
     const user = userEvent.setup();
@@ -324,14 +351,14 @@ describe('MechaFlow input-first cockpit', () => {
     expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
     expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$581.60-$1,761.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: /Apply validated substitution/i }));
 
     expect(await screen.findByText(/Applied substitution to the backend project/i)).toBeInTheDocument();
     expect(screen.queryByText(/BOM and cost preview/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$581.60-$1,761.46 open estimate' })).toBeInTheDocument();
   });
 
   it('imports a portable project file from the project browser and keeps data interactive', async () => {
@@ -422,7 +449,7 @@ describe('MechaFlow input-first cockpit', () => {
     );
 
     expect(await screen.findByText(/Project import failed: file is not valid JSON/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Robot arm visual MVP task-preserving edit demo/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Robot arm with catalog-matched servo actuator demo/i).length).toBeGreaterThan(0);
   });
 
   it('renders queue recommendations, planning estimates, and cached artifact links in analysis mode', async () => {
@@ -660,10 +687,10 @@ describe('MechaFlow input-first cockpit', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Author a visual robot or machine/i })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '$1.37-$2.74 open estimate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '$1.57-$3.14 open estimate' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
-    expect(await screen.findByRole('heading', { name: '$1.37-$2.74 open estimate' })).toBeInTheDocument();
-    expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(16);
+    expect(await screen.findByRole('heading', { name: '$1.57-$3.14 open estimate' })).toBeInTheDocument();
+    expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(18);
   });
 
   it('renders missing backend engineering values as review-required inside contextual modes', async () => {
