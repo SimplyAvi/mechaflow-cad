@@ -14,6 +14,8 @@ It includes mocked orchestration data for:
 - Choosing project units across millimeters, centimeters, meters, and inches while storing backend geometry in millimeters.
 - Creating and editing visual primitives for base plates, beams, cylinder joints, brackets, motors, connectors, electronics, and tool plates.
 - Editing selected geometry dimensions, XYZ position, Z rotation, material, manufacturing process, parent part, and joint type.
+- Focusing the selected part by lifting it from the assembly, dimming neighboring parts, and keeping its dimension overlay readable.
+- Matching unknown part descriptions against the deterministic local robot-arm catalog, then applying an editable match with dimensions, material, process, criteria, and assembly handoff metadata.
 - Routing visible wire harness polylines between parts with persisted endpoints, connector placeholders, wire segments, BOM rows, and review-required routing evidence.
 - Preserving the active task while comparing compatible material and manufacturing substitutions.
 - Previewing backend substitution effects before apply, with non-persisted preview panels clearly separated from persisted project mutation.
@@ -35,11 +37,13 @@ It includes mocked orchestration data for:
 3. Choose working units in Design mode. Values are displayed in the selected units while project JSON stores millimeter geometry for backend consistency.
 4. Create parts from the canvas CAD tool palette or primitive palette, then label the selected part and edit length, width, height, XYZ position, rotation, material, process, parent, and joint type.
 5. Place motors, connector blocks, electronics, and tool plates, then route visible harness polylines between parts. These routes persist as connector, wire segment, route, and BOM data but remain review-required for real electrical and CAD validation.
-6. Type into `Describe what you want to design...`. The command line extracts chips for payload, reach, cycle time, material cues, constraints, and restrictions when it can. Click `Start design` to create a local prompt concept with units and reach prefilled on the grid. The current workspace remains a visual authoring proxy until real CAD generation exists.
-7. Add reference photos or images with upload or drag/drop. Images are treated as local reference metadata only in this slice. The UI does not claim photo-to-CAD reconstruction, FEA, supplier quotes, or electrical validation.
-8. Use the left sidebar to open an existing `.mfcad.json` project through the offline client path, local desktop mock, or backend, reopen the recent project, or load one of the repository-local ready examples.
-9. Stay in Design mode for model tree, part selection, and authoring tools. Switch to Analysis for solver readiness and job queue, Manufacturing for BOM, make or buy paths, wiring and electronics, Reports for advisory reports and project import/export, and Backend for API handoff details.
-10. Ready examples in this slice are repository-local MIT seed data. No external CAD assets were imported, so no third-party attribution is required beyond the local seed notes.
+6. Toggle Focus selected to inspect one part in isolation, then clear focus to restore the full assembly context.
+7. Type an unknown part description into the local catalog matcher. Review ranked local matches and their confidence, dimensions, material, process, and caveats, then apply one to the selected part or add it to the active assembly. The result remains editable and review-required for engineering release.
+8. Type into `Describe what you want to design...`. The command line extracts chips for payload, reach, cycle time, material cues, constraints, and restrictions when it can. Click `Start design` to create a local prompt concept with units and reach prefilled on the grid. The current workspace remains a visual authoring proxy until real CAD generation exists.
+9. Add reference photos or images with upload or drag/drop. Images are treated as local reference metadata only in this slice. The UI does not claim photo-to-CAD reconstruction, FEA, supplier quotes, or electrical validation.
+10. Use the left sidebar to open an existing `.mfcad.json` project through the offline client path, local desktop mock, or backend, reopen the recent project, or load one of the repository-local ready examples.
+11. Stay in Design mode for model tree, part selection, and authoring tools. Switch to Analysis for solver readiness and job queue, Manufacturing for BOM, make or buy paths, wiring and electronics, Reports for advisory reports and project import/export, and Backend for API handoff details.
+12. Ready examples in this slice are repository-local MIT seed data. No external CAD assets were imported, so no third-party attribution is required beyond the local seed notes.
 
 Screenshot evidence for the visual CAD authoring MVP is stored at `docs/screenshots/visual-cad-authoring-mvp.png` and `docs/screenshots/visual-cad-authoring-tools.png`.
 
