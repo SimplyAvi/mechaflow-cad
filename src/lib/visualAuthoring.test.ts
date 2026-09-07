@@ -73,6 +73,23 @@ describe('visual authoring project helpers', () => {
     expect(selected.designCriteria.some((criterion) => criterion.id === 'catalog-match')).toBe(true);
   });
 
+  it('persists guided sleeve feature recipes through visual project remapping', () => {
+    const assemblyId = mockReferenceDesign.assembly.id;
+    const created = createPrimitivePart(mockReferenceDesign.backendProject, assemblyId, 'cylinder_joint', 'part-shoulder-yoke');
+    const match = matchLocalPartCatalog('round arm connector with diagonal slots')[0]!;
+    const matchedProject = applyCatalogMatchToPart(created.project, created.partId, match.item, { ...match, query: 'round arm connector with diagonal slots' });
+    const matchedPart = matchedProject.assemblies[0]!.parts.find((part) => part.id === created.partId)!;
+    const visual = matchedPart.metadata.visual_authoring as Record<string, unknown>;
+
+    expect(match.item.id).toBe('catalog-lightened-joint-sleeve-coupler');
+    expect(visual.feature_recipe).toEqual(expect.objectContaining({ id: 'recipe-lightened-joint-sleeve-coupler' }));
+
+    const design = remapDesignFromProject(mockReferenceDesign, matchedProject);
+    const selected = design.assembly.parts.find((part) => part.id === created.partId)!;
+    expect(selected.authoring.featureRecipe?.history.some((step) => step.kind === 'cut')).toBe(true);
+    expect(selected.designCriteria.some((criterion) => criterion.id === 'feature-recipe')).toBe(true);
+  });
+
   it('rejects parent links that would create an assembly cycle', () => {
     const createdAssembly = createAssemblyWithBase(mockReferenceDesign.backendProject);
     const child = createPrimitivePart(createdAssembly.project, createdAssembly.assemblyId, 'beam', createdAssembly.partId);

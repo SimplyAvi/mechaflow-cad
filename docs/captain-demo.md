@@ -20,22 +20,26 @@ For the selected part, confirm the card and inspector explain:
 - Which values are demo estimates, heuristics, seeded guidance, unknown, or review-required.
 - That visible primitives are MVP project metadata, not imported manufacturing CAD, real FEA, exact electrical validation, or supplier quotes.
 
-## CAD authoring proof
+## Guided CAD authoring proof
 
-1. Use the canvas CAD tool palette to add a beam, joint, bracket, motor, connector, electronics block, or tool plate.
-2. Confirm the new primitive appears in the canvas and model tree, is selected automatically, and can be renamed with the selected-part label field.
-3. Edit length, width, height, XYZ position, and Z rotation. Confirm the canvas dimensions and selected-part detail card update.
-4. Toggle Focus selected. Confirm the selected part lifts out, neighboring parts dim, and a focused dimension overlay remains readable.
-5. Connect the selected primitive to a parent part and choose a joint type. Confirm a visible joint marker appears in the canvas.
-6. Route a visible wire to another part. Confirm the cyan route appears in the canvas, the route list updates, and the route remains labeled review-required for real electrical and CAD checks.
-7. Export the `.mfcad.json` project, import it again, and confirm the new label, dimensions, parent or joint metadata, and visible wiring survive the round trip.
+1. In the Guided part studio, type an approximate description such as `lightweight sleeve with diagonal slots` or `round arm connector`.
+2. Confirm the flow reads like a sketch-first CAD recipe: Describe or choose role, Sketch profile, Dimension in viewport, Add feature steps, Match local catalog, Place in assembly.
+3. Confirm the sleeve or coupler recipe shows the front plane, concentric outer and inner bore dimensions, tube extrude height, diagonal rounded slot cuts, chamfer callout, and assembly placement intent.
+4. Place the matched part in the assembly. Confirm the rendered part appears as selectable geometry with bore, slot, chamfer, dimensions, feature history, material or process, catalog reasoning, and assembly link in the selected-part card.
+5. Use the canvas CAD tool palette to add a beam, joint, bracket, motor, connector, electronics block, or tool plate.
+6. Confirm the new primitive appears in the canvas and model tree, is selected automatically, and can be renamed with the selected-part label field.
+7. Edit length, width, height, XYZ position, and Z rotation. Confirm the canvas dimensions and selected-part detail card update.
+8. Toggle Focus selected. Confirm the selected part lifts out, neighboring parts dim, and a focused dimension overlay remains readable.
+9. Connect the selected primitive to a parent part and choose a joint type. Confirm a visible joint marker appears in the canvas.
+10. Route a visible wire to another part. Confirm the cyan route appears in the canvas, the route list updates, and the route remains labeled review-required for real electrical and CAD checks.
+11. Export the `.mfcad.json` project, import it again, and confirm the new label, dimensions, parent or joint metadata, recipe metadata, and visible wiring survive the round trip.
 
 ## Local catalog matching proof
 
-1. In the deterministic local catalog panel, type an unknown description such as `80 mm shoulder joint motor`, `pocketed aluminum arm link`, or `sheet metal gripper bracket`.
-2. Confirm ranked matches appear without a network call and show confidence, dimensions in millimeters, material, process, and caveats.
+1. In the deterministic local catalog panel, type an unknown description such as `80 mm shoulder joint motor`, `servo thing`, `round arm connector`, `pocketed aluminum arm link`, or `sheet metal gripper bracket`.
+2. Confirm ranked matches appear without a network call and show confidence, dimensions in millimeters, material, process, caveats, and recipe information when available.
 3. Apply the match to the selected primitive or add it to the active assembly. Confirm the selected-part detail card shows the catalog match, XYZ placement, assembly handoff metadata, dimensions, and review-required criteria.
-4. Export and reimport the project. Confirm the `local_catalog_match` metadata is still present in the portable `.mfcad.json` payload.
+4. Export and reimport the project. Confirm the `local_catalog_match` and `feature_recipe` metadata are still present in the portable `.mfcad.json` payload.
 
 ## Evidence path
 

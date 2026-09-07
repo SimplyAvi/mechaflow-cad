@@ -13,7 +13,11 @@ describe('local robot-arm part catalog matching', () => {
     expect(match?.item.manufacturing.process).toBe('off_the_shelf');
   });
 
-  it('matches arm link, gripper bracket, and base plate descriptions to editable typed parts', () => {
+  it('matches sleeve, arm link, gripper bracket, and base plate descriptions to editable typed parts', () => {
+    const sleeve = matchLocalPartCatalog('lightweight sleeve with diagonal slots')[0];
+    expect(sleeve?.item.id).toBe('catalog-lightened-joint-sleeve-coupler');
+    expect(sleeve?.item.featureRecipe?.history.map((step) => step.kind)).toEqual(['sketch', 'extrude', 'cut', 'finish', 'placement']);
+    expect(matchLocalPartCatalog('round arm connector')[0]?.item.id).toBe('catalog-lightened-joint-sleeve-coupler');
     expect(matchLocalPartCatalog('arm link segment')[0]?.item.id).toBe('catalog-pocketed-aluminum-arm-link-285mm');
     expect(matchLocalPartCatalog('gripper bracket')[0]?.item.id).toBe('catalog-sheet-metal-gripper-bracket');
     expect(matchLocalPartCatalog('base plate')[0]?.item.id).toBe('catalog-cnc-base-pedestal-plate');

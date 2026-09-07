@@ -30,6 +30,8 @@ import type {
   ElectronicsComponent,
   WireSegment,
   Part,
+  PartAuthoringFeatureRecipe,
+  PartAuthoringFeatureStep,
   PartVisual,
   ReferenceDesign,
   RiskLevel,
@@ -323,6 +325,33 @@ const vectorFrom = (value: unknown, fallback: { x: number; y: number; z: number 
   };
 };
 
+const featureStepFromMetadata = (value: unknown): PartAuthoringFeatureStep | null => {
+  const record = metadataRecord(value);
+  const kind = record.kind;
+  if (kind !== 'sketch' && kind !== 'extrude' && kind !== 'cut' && kind !== 'finish' && kind !== 'placement') return null;
+  const id = stringMetadata(record.id);
+  const label = stringMetadata(record.label);
+  const stepValue = stringMetadata(record.value);
+  if (!id || !label || !stepValue) return null;
+  return { id, label, value: stepValue, kind };
+};
+
+const featureRecipeFromMetadata = (value: unknown): PartAuthoringFeatureRecipe | null => {
+  const record = metadataRecord(value);
+  const id = stringMetadata(record.id);
+  const name = stringMetadata(record.name);
+  const plane = stringMetadata(record.plane);
+  const profile = stringMetadata(record.profile);
+  if (!id || !name || !plane || !profile) return null;
+  const history = Array.isArray(record.history)
+    ? record.history.map(featureStepFromMetadata).filter((step): step is PartAuthoringFeatureStep => step != null)
+    : [];
+  const callouts = Array.isArray(record.callouts)
+    ? record.callouts.map(featureStepFromMetadata).filter((step): step is PartAuthoringFeatureStep => step != null)
+    : [];
+  return { id, name, plane, profile, history, callouts };
+};
+
 const defaultPositionFromVisual = (visual: PartVisual, index: number) => ({
   x: Math.round((visual.x - 50) * 10),
   y: Math.round((50 - visual.y) * 8),
@@ -356,6 +385,7 @@ const authoringFor = (part: BackendPart, index: number, visual: PartVisual) => {
     assignedToPartId: stringMetadata(visualAuthoring.assigned_to_part_id) ?? null,
     connectorId: stringMetadata(visualAuthoring.connector_id) ?? null,
     authored: Boolean(visualAuthoring.authored ?? part.metadata.created_by_visual_authoring),
+    featureRecipe: featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe),
   };
 };
 
@@ -399,6 +429,8 @@ const buildDesignCriteria = (
   const catalogName = stringMetadata(catalogMatch.catalog_item_name);
   const catalogConfidence = stringMetadata(catalogMatch.confidence);
   const catalogReasoning = stringMetadata(catalogMatch.reasoning);
+  const visualAuthoring = metadataRecord(part.metadata.visual_authoring);
+  const featureRecipe = featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe);
   const criteria: DesignCriterion[] = [
     {
       id: 'load-capacity',
@@ -450,6 +482,16 @@ const buildDesignCriteria = (
       sourceConfidence: criterionSource('Manufacturing option seed', manufacturingOption?.confidence),
     },
   ];
+  if (featureRecipe) {
+    criteria.push({
+      id: 'feature-recipe',
+      label: 'Sketch-first feature recipe',
+      value: `${featureRecipe.name} on ${featureRecipe.plane}`,
+      status: 'estimated',
+      plainEnglish: `${featureRecipe.profile}. Feature history: ${featureRecipe.history.map((step) => `${step.label} ${step.value}`).join('; ')}. These are editable visual authoring steps, not solved CAD features yet.`,
+      sourceConfidence: criterionSource('Local guided part recipe', 'estimated_from_heuristic'),
+    });
+  }
   if (catalogName) {
     criteria.push({
       id: 'catalog-match',

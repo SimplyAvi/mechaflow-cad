@@ -203,6 +203,22 @@ export interface PartAuthoringDimensions {
   thicknessMm: number | null;
 }
 
+export interface PartAuthoringFeatureStep {
+  id: string;
+  label: string;
+  value: string;
+  kind: 'sketch' | 'extrude' | 'cut' | 'finish' | 'placement';
+}
+
+export interface PartAuthoringFeatureRecipe {
+  id: string;
+  name: string;
+  plane: string;
+  profile: string;
+  history: PartAuthoringFeatureStep[];
+  callouts: PartAuthoringFeatureStep[];
+}
+
 export interface PartAuthoringData {
   primitive: CADPrimitiveShape;
   positionMm: BackendVector3;
@@ -215,6 +231,7 @@ export interface PartAuthoringData {
   assignedToPartId: string | null;
   connectorId: string | null;
   authored: boolean;
+  featureRecipe: PartAuthoringFeatureRecipe | null;
 }
 
 export interface CapabilityRating {

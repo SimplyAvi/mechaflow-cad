@@ -227,6 +227,7 @@ const projectWithDesignAuthoring = (design: ReferenceDesign): BackendProject => 
       joint_type: source.authoring.jointType,
       assigned_to_part_id: source.authoring.assignedToPartId,
       connector_id: source.authoring.connectorId,
+      feature_recipe: source.authoring.featureRecipe,
     });
     part.dimensions = {
       ...part.dimensions,
@@ -394,6 +395,7 @@ export const applyCatalogMatchToPart = (
     visual.primitive = catalogItem.primitive;
     visual.color = catalogItem.color;
     visual.catalog_item_id = catalogItem.id;
+    visual.feature_recipe = catalogItem.featureRecipe ?? null;
     const option = catalogManufacturingOption(catalogItem);
     const existingOptions = part.manufacturing_options.filter((candidate) => candidate.id !== option.id && candidate.process !== option.process);
     const metadata = {
@@ -410,7 +412,9 @@ export const applyCatalogMatchToPart = (
         reasoning: match.reasoning,
         editable: true,
         source: catalogItem.source,
+        recipe_id: catalogItem.featureRecipe?.id ?? null,
       },
+      feature_recipe: catalogItem.featureRecipe ?? null,
       catalog_role_criteria: catalogItem.criteria,
       visual_authoring: visual,
       demo_design_criteria: {

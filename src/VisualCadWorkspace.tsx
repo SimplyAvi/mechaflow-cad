@@ -330,7 +330,14 @@ function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, 
       <path className="cylinder-wall" d={`M ${top.x - rx} ${top.y} L ${bottom.x - rx} ${bottom.y} Q ${bottom.x} ${bottom.y + ry} ${bottom.x + rx} ${bottom.y} L ${top.x + rx} ${top.y}`} />
       <ellipse className="face-side" cx={bottom.x} cy={bottom.y} rx={rx} ry={ry} />
       <ellipse className="face-top" cx={top.x} cy={top.y} rx={rx} ry={ry} />
-      <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />
+      {part.authoring.featureRecipe ? (
+        <g className="sleeve-feature-details" aria-hidden="true">
+          <ellipse className="sleeve-bore" cx={top.x} cy={top.y} rx={rx * 0.48} ry={ry * 0.48} />
+          <line className="slot-cut" x1={top.x - rx * 0.72} y1={top.y - ry * 0.92} x2={top.x + rx * 0.72} y2={top.y + ry * 0.58} />
+          <line className="slot-cut secondary" x1={top.x - rx * 0.52} y1={bottom.y - ry * 0.42} x2={top.x + rx * 0.52} y2={bottom.y + ry * 0.68} />
+          <ellipse className="chamfer-ring" cx={top.x} cy={top.y} rx={rx * 0.92} ry={ry * 0.92} />
+        </g>
+      ) : <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />}
       {selected ? <circle className="selected-part-pulse" cx={top.x} cy={top.y} r={Math.max(18, rx * 0.72)} /> : null}
       <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text>
       {selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
@@ -360,6 +367,50 @@ function DimensionOverlay({ part, units, project, focused }: { part: Part; units
       <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{label}</text>
       <line x1={heightStart.x} y1={heightStart.y} x2={heightEnd.x} y2={heightEnd.y} />
       <text x={heightEnd.x + 8} y={heightEnd.y}>Height {formatLength(dims.height, units)}</text>
+    </g>
+  );
+}
+
+function FeatureRecipeOverlay({ part, project, focused }: { part: Part; project: (point: Point3D) => ProjectedPoint; focused: boolean }) {
+  const recipe = part.authoring.featureRecipe;
+  if (!recipe) return null;
+  const dims = primitiveDimensions(part);
+  const offset = focusOffset(focused);
+  const center = {
+    x: part.authoring.positionMm.x + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + offset.z,
+  };
+  const planeY = center.y - dims.width / 2 - 44;
+  const plane = [
+    project({ x: center.x - dims.length * 0.68, y: planeY, z: center.z - dims.height * 0.72 }),
+    project({ x: center.x + dims.length * 0.68, y: planeY, z: center.z - dims.height * 0.72 }),
+    project({ x: center.x + dims.length * 0.68, y: planeY, z: center.z + dims.height * 0.92 }),
+    project({ x: center.x - dims.length * 0.68, y: planeY, z: center.z + dims.height * 0.92 }),
+  ];
+  const anchor = project({ x: center.x - dims.length * 0.55, y: planeY, z: center.z + dims.height * 1.08 });
+  return (
+    <g className="feature-recipe-overlay" aria-hidden="true">
+      <polygon className="sketch-plane" points={pointString(plane)} />
+      <text className="sketch-plane-label" x={anchor.x} y={anchor.y}>{recipe.plane}: sketch profile</text>
+      {recipe.callouts.slice(0, 4).map((callout, index) => {
+        const target = project({
+          x: center.x + [-0.4, 0.1, 0.42, 0.66][index]! * dims.length,
+          y: planeY,
+          z: center.z + [0.72, 0.18, -0.26, 0.92][index]! * dims.height,
+        });
+        const label = project({
+          x: center.x + [-1.15, -1.05, 0.9, 0.82][index]! * dims.length,
+          y: planeY - 22,
+          z: center.z + [1.08, 0.36, -0.5, 1.2][index]! * dims.height,
+        });
+        return (
+          <g className={`feature-callout kind-${callout.kind}`} key={callout.id}>
+            <line x1={label.x} y1={label.y} x2={target.x} y2={target.y} />
+            <text x={label.x} y={label.y}>{callout.label}: {callout.value}</text>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -528,6 +579,7 @@ export function VisualCadWorkspace({
           })}
         </g>
         {selectedPart ? <DimensionOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
+        {selectedPart ? <FeatureRecipeOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} /> : null}
       </svg>
       <div className="canvas-status-row" aria-live="polite">
         <strong>{selectedPart?.name ?? 'No part selected'}</strong>

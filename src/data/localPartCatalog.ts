@@ -32,6 +32,14 @@ export interface LocalPartCatalogItem {
   color: string;
   keywords: string[];
   criteria: string[];
+  featureRecipe?: {
+    id: string;
+    name: string;
+    plane: string;
+    profile: string;
+    history: Array<{ id: string; label: string; value: string; kind: 'sketch' | 'extrude' | 'cut' | 'finish' | 'placement' }>;
+    callouts: Array<{ id: string; label: string; value: string; kind: 'sketch' | 'extrude' | 'cut' | 'finish' | 'placement' }>;
+  };
   source: {
     label: string;
     license: string;
@@ -59,6 +67,13 @@ const synonymTokens: Record<string, string[]> = {
   plate: ['base', 'adapter', 'mount'],
   gripper: ['jaw', 'tool', 'end', 'effector'],
   harness: ['wire', 'connector', 'cable'],
+  sleeve: ['coupler', 'collar', 'tube', 'bushing'],
+  coupler: ['sleeve', 'collar', 'connector', 'shaft'],
+  collar: ['sleeve', 'coupler', 'ring'],
+  bore: ['hole', 'inner', 'diameter'],
+  slot: ['slots', 'cut', 'lightening'],
+  slots: ['slot', 'cuts', 'lightening'],
+  round: ['cylindrical', 'sleeve', 'coupler'],
 };
 
 const normalize = (value: string): string => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -95,6 +110,52 @@ const confidenceFor = (score: number): LocalPartMatchConfidence => {
 };
 
 export const localRobotArmPartCatalog: LocalPartCatalogItem[] = [
+  {
+    id: 'catalog-lightened-joint-sleeve-coupler',
+    name: 'Lightened joint sleeve coupler with diagonal slots',
+    aliases: ['round arm connector', 'joint sleeve', 'motor coupler', 'cylindrical sleeve', 'bored collar', 'lightweight sleeve with diagonal slots'],
+    partType: 'sketch-first sleeve coupler',
+    primitive: 'cylinder_joint',
+    category: 'robot-arm joint sleeve',
+    assemblyRole: 'Fits between the shoulder servo output and arm link as a manufacturable sleeve with a central bore and lightening slots.',
+    description: 'SolidWorks-inspired sleeve or coupler recipe with concentric sketch circles, extruded tube body, diagonal rounded slot cuts, and chamfer callouts.',
+    defaultMaterialId: 'mat-aluminum-6061-t6',
+    materialSummary: 'Aluminum 6061-T6 seed properties for a CNC sleeve or coupler that needs bore fit, slot edge, and fatigue review.',
+    manufacturing: {
+      process: 'cnc_machining',
+      description: 'CNC turn or mill sleeve, bore the center, cut diagonal rounded slots, then chamfer edges after tolerance review.',
+      cost: { currency: 'USD', min: 54, max: 168, confidence: 'estimated_from_heuristic' },
+      leadTimeDaysMin: 4,
+      leadTimeDaysMax: 12,
+      riskNotes: ['Bore tolerance, slot stress concentration, chamfer size, and coupling torque path remain review-required.'],
+      confidence: 'estimated_from_heuristic',
+    },
+    defaultDimensionsMm: { lengthMm: 96, widthMm: 86, heightMm: 54, diameterMm: 86, thicknessMm: 8 },
+    color: '#22d3ee',
+    keywords: ['sleeve', 'coupler', 'collar', 'round', 'cylindrical', 'bore', 'inner', 'outer', 'diameter', 'diagonal', 'slot', 'slots', 'cut', 'chamfer', 'lightweight', 'connector'],
+    criteria: ['Outer diameter, inner bore, wall thickness, slot length, slot angle, and chamfer are editable recipe dimensions.', 'Diagonal slots need edge-distance and stress concentration review.', 'Bore fit and torque transfer require named CAD faces before solver or supplier release.'],
+    featureRecipe: {
+      id: 'recipe-lightened-joint-sleeve-coupler',
+      name: 'Sketch, extrude, slot-cut, chamfer sleeve',
+      plane: 'Front plane',
+      profile: 'Concentric outer circle and central bore with in-viewport OD, ID, wall, and height dimensions',
+      history: [
+        { id: 'sketch-profile', label: 'Sketch profile', value: 'OD 86 mm, ID 42 mm, wall 8 mm', kind: 'sketch' },
+        { id: 'extrude-tube', label: 'Extrude tube', value: '54 mm sleeve height', kind: 'extrude' },
+        { id: 'cut-slots', label: 'Cut diagonal slots', value: '2 x rounded slots, 48 mm long at 32 deg', kind: 'cut' },
+        { id: 'finish-chamfer', label: 'Chamfer edges', value: '2 mm edge break placeholder', kind: 'finish' },
+        { id: 'place-assembly', label: 'Place in assembly', value: 'Shoulder servo to upper arm link', kind: 'placement' },
+      ],
+      callouts: [
+        { id: 'od', label: 'Outer diameter', value: '86 mm', kind: 'sketch' },
+        { id: 'id', label: 'Central bore', value: '42 mm', kind: 'sketch' },
+        { id: 'slot', label: 'Diagonal rounded slot', value: '48 mm x 14 mm at 32 deg', kind: 'cut' },
+        { id: 'height', label: 'Extrude height', value: '54 mm', kind: 'extrude' },
+        { id: 'chamfer', label: 'Chamfer', value: '2 mm', kind: 'finish' },
+      ],
+    },
+    source: { label: 'Repository-local guided CAD recipe fixture', license: 'MIT local demo seed', confidence: 'estimated_from_heuristic' },
+  },
   {
     id: 'catalog-shoulder-servo-actuator-80mm',
     name: 'Integrated 80 mm shoulder servo actuator',

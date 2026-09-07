@@ -102,6 +102,30 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByRole('button', { name: /Clear focus/i })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('guides an approximate sleeve description into a rendered assembly placement', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByLabelText(/Guided visual part authoring flow/i)).toBeInTheDocument();
+    const studio = screen.getByLabelText(/Guided visual part authoring flow/i);
+    expect(studio).toHaveTextContent(/Sketch profile/i);
+    expect(studio).toHaveTextContent(/Cut diagonal slots/i);
+
+    const query = within(studio).getByLabelText(/What part do you want to author/i);
+    await user.clear(query);
+    await user.type(query, 'round arm connector');
+    expect(within(studio).getAllByText(/Lightened joint sleeve coupler with diagonal slots/i).length).toBeGreaterThan(0);
+
+    await user.click(within(studio).getByRole('button', { name: /Place matched part in assembly/i }));
+
+    expect(await screen.findByText(/Guided flow placed Lightened joint sleeve coupler with diagonal slots/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Sketch recipe: Sketch, extrude, slot-cut, chamfer sleeve/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Local catalog match: Lightened joint sleeve coupler with diagonal slots/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Assembly link/i);
+  });
+
   it('captures typed design intent into structured chips and starts a prompt concept honestly', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
     const user = userEvent.setup();

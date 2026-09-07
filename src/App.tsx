@@ -389,6 +389,8 @@ function App() {
   const [intentMessage, setIntentMessage] = useState<string | null>('Robot arm demo is loaded. Describe a new mechanism or add a reference image to start faster.');
   const [partMatchQuery, setPartMatchQuery] = useState('joint motor');
   const [selectedCatalogMatchId, setSelectedCatalogMatchId] = useState('');
+  const [guidedPartQuery, setGuidedPartQuery] = useState('lightweight sleeve with diagonal slots');
+  const [guidedCatalogMatchId, setGuidedCatalogMatchId] = useState('catalog-lightened-joint-sleeve-coupler');
   const [referenceImages, setReferenceImages] = useState<ReferenceImageRecord[]>([]);
   const [imageDropActive, setImageDropActive] = useState(false);
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
@@ -501,6 +503,8 @@ function App() {
 
   const catalogMatches = useMemo(() => matchLocalPartCatalog(partMatchQuery), [partMatchQuery]);
   const selectedCatalogMatch = catalogMatches.find((match) => match.item.id === selectedCatalogMatchId) ?? catalogMatches[0];
+  const guidedCatalogMatches = useMemo(() => matchLocalPartCatalog(guidedPartQuery, localRobotArmPartCatalog, 4), [guidedPartQuery]);
+  const selectedGuidedMatch = guidedCatalogMatches.find((match) => match.item.id === guidedCatalogMatchId) ?? guidedCatalogMatches[0];
 
   const selectPart = (partId: string) => {
     setSelectedPartId(partId);
@@ -689,6 +693,59 @@ function App() {
     setSelectedCatalogMatchId(selectedCatalogMatch.item.id);
     setFocusedPartId(created.partId);
     setExplodePercent((value) => Math.max(value, 72));
+    markDemoStep('catalog-match');
+  };
+
+  const changeGuidedPartQuery = (query: string) => {
+    setGuidedPartQuery(query);
+    setGuidedCatalogMatchId('');
+  };
+
+  const syncGuidedMatchToCatalogPanel = () => {
+    if (!selectedGuidedMatch) return;
+    setPartMatchQuery(guidedPartQuery);
+    setSelectedCatalogMatchId(selectedGuidedMatch.item.id);
+    markDemoStep('catalog-match');
+  };
+
+  const applyGuidedRecipeToSelected = () => {
+    if (!design || !selectedPart || !selectedGuidedMatch) return;
+    const query = guidedPartQuery.trim() || selectedGuidedMatch.item.name;
+    const matchedProject = applyCatalogMatchToPart(design.backendProject, selectedPart.id, selectedGuidedMatch.item, { ...selectedGuidedMatch, query });
+    commitAuthoredProject(matchedProject, {
+      selectedPartId: selectedPart.id,
+      message: `Guided flow applied ${selectedGuidedMatch.item.name} to the selected part from "${query}". Sketch profile, dimensions, feature recipe, material, process, and local match reasoning are now editable project metadata.`,
+    });
+    setPartMatchQuery(query);
+    setSelectedCatalogMatchId(selectedGuidedMatch.item.id);
+    setFocusedPartId(selectedPart.id);
+    setExplodePercent((value) => Math.max(value, 72));
+    markDemoStep('guided-authoring');
+    markDemoStep('catalog-match');
+  };
+
+  const placeGuidedRecipeInAssembly = () => {
+    if (!design || !activeAssembly || !selectedPart || !selectedGuidedMatch) return;
+    const query = guidedPartQuery.trim() || selectedGuidedMatch.item.name;
+    const created = createPrimitivePart(design.backendProject, activeAssembly.id, selectedGuidedMatch.item.primitive, selectedPart.id);
+    if (!created.partId) return;
+    const matchedProject = applyCatalogMatchToPart(created.project, created.partId, selectedGuidedMatch.item, { ...selectedGuidedMatch, query });
+    const placedProject = updatePartGeometry(matchedProject, created.partId, {
+      position: {
+        x: selectedPart.authoring.positionMm.x + 118,
+        y: selectedPart.authoring.positionMm.y + 28,
+        z: selectedPart.authoring.positionMm.z + 30,
+      },
+    });
+    commitAuthoredProject(placedProject, {
+      selectedPartId: created.partId,
+      message: `Guided flow placed ${selectedGuidedMatch.item.name} in ${activeAssembly.name} from "${query}". The new part is rendered, selected, dimensioned, and ready for assembly, wiring, and backend handoff review.`,
+    });
+    setPartMatchQuery(query);
+    setSelectedCatalogMatchId(selectedGuidedMatch.item.id);
+    setFocusedPartId(created.partId);
+    setExplodePercent((value) => Math.max(value, 72));
+    markDemoStep('guided-authoring');
     markDemoStep('catalog-match');
   };
 
@@ -1126,6 +1183,15 @@ function App() {
       actionLabel: 'Review project source',
     },
     {
+      id: 'guided-authoring',
+      label: 'Guided sketch-first part flow',
+      status: demoStepReviews.has('guided-authoring') ? 'complete' : 'available',
+      summary: 'Describe an approximate part, select units, review a sketch/profile/dimension/feature recipe, match it locally, and place it in the robot arm assembly.',
+      anchor: '#guided-part-studio',
+      actionLabel: 'Open guided flow',
+      canMarkReviewed: true,
+    },
+    {
       id: 'select-part',
       label: 'Select and inspect parts',
       status: demoStepReviews.has('select-part') ? 'complete' : 'available',
@@ -1138,7 +1204,7 @@ function App() {
       id: 'catalog-match',
       label: 'Match an unknown part name',
       status: demoStepReviews.has('catalog-match') ? 'complete' : 'available',
-      summary: `${localRobotArmPartCatalog.length} local robot-arm catalog items can explain labels such as joint motor, servo actuator, arm link, gripper bracket, and base plate.`,
+      summary: `${localRobotArmPartCatalog.length} local robot-arm catalog items can explain labels such as joint motor, servo actuator, round arm connector, arm link, gripper bracket, and base plate.`,
       anchor: '#catalog-match-editor',
       actionLabel: 'Open catalog match',
       canMarkReviewed: true,
@@ -1400,6 +1466,18 @@ function App() {
                 <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); setFocusedPartId(null); }}>Reset view</button>
               </div>
             </div>
+            <GuidedPartFlowPanel
+              activeUnits={design.units}
+              matches={guidedCatalogMatches}
+              onApplyToSelected={applyGuidedRecipeToSelected}
+              onPlaceInAssembly={placeGuidedRecipeInAssembly}
+              onQueryChange={changeGuidedPartQuery}
+              onSelectMatch={setGuidedCatalogMatchId}
+              onSyncCatalog={syncGuidedMatchToCatalogPanel}
+              query={guidedPartQuery}
+              selectedMatch={selectedGuidedMatch}
+              selectedPartName={selectedPart.name}
+            />
             <CanvasToolPalette
               onCreatePart={createPartFromPalette}
               onCreateAssembly={createAssemblyFromPalette}
@@ -1916,6 +1994,106 @@ function App() {
   );
 }
 
+function GuidedPartFlowPanel({
+  activeUnits,
+  matches,
+  onApplyToSelected,
+  onPlaceInAssembly,
+  onQueryChange,
+  onSelectMatch,
+  onSyncCatalog,
+  query,
+  selectedMatch,
+  selectedPartName,
+}: {
+  activeUnits: AuthoringUnit;
+  matches: LocalPartCatalogMatch[];
+  onApplyToSelected: () => void;
+  onPlaceInAssembly: () => void;
+  onQueryChange: (query: string) => void;
+  onSelectMatch: (catalogItemId: string) => void;
+  onSyncCatalog: () => void;
+  query: string;
+  selectedMatch?: LocalPartCatalogMatch;
+  selectedPartName: string;
+}) {
+  const guidedSteps = [
+    ['choose', 'Describe or choose role', query.trim() || 'plain language part intent'],
+    ['sketch', selectedMatch?.item.featureRecipe ? selectedMatch.item.featureRecipe.history[0]?.label ?? 'Sketch profile' : 'Pick primitive profile', selectedMatch?.item.featureRecipe?.profile ?? selectedMatch?.item.partType ?? 'matched primitive'],
+    ['dimension', 'Dimension in viewport', selectedMatch ? `Units ${activeUnits}, ${dimensionSummary({ authoring: { dimensionsMm: selectedMatch.item.defaultDimensionsMm, primitive: selectedMatch.item.primitive } } as Part, activeUnits)}` : `Units ${activeUnits}`],
+    ['feature', 'Add feature steps', selectedMatch?.item.featureRecipe ? selectedMatch.item.featureRecipe.history.map((step) => step.label).join(' -> ') : selectedMatch?.item.criteria[0] ?? 'feature review required'],
+    ['match', 'Match local catalog', selectedMatch ? `${selectedMatch.item.name} - ${selectedMatch.score}% ${selectedMatch.confidence}` : 'No match yet'],
+    ['place', 'Place in assembly', selectedMatch?.item.assemblyRole ?? 'select a matched role first'],
+  ];
+  const examples = ['lightweight sleeve with diagonal slots', 'round arm connector', 'servo thing', 'joint motor', 'sheet metal gripper bracket'];
+  return (
+    <section className="guided-part-studio" id="guided-part-studio" aria-label="Guided visual part authoring flow">
+      <div className="guided-studio-heading">
+        <div>
+          <p className="eyebrow">Guided part studio</p>
+          <h3>Describe a part, sketch the recipe, then place it in the robot arm</h3>
+          <small>SolidWorks-inspired flow: plane, sketch, dimensions, extrude, cut, chamfer, catalog match, assembly handoff.</small>
+        </div>
+        <span className="units-badge">units {activeUnits}</span>
+      </div>
+      <label className="guided-query" htmlFor="guided-part-query">
+        <span>What part do you want to author?</span>
+        <input
+          id="guided-part-query"
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="lightweight sleeve with diagonal slots"
+          type="text"
+          value={query}
+        />
+      </label>
+      <div className="guided-example-row" aria-label="Guided part examples">
+        {examples.map((example) => <button key={example} onClick={() => onQueryChange(example)} type="button">{example}</button>)}
+      </div>
+      <ol className="guided-stepper" aria-label="Sketch-first part authoring steps">
+        {guidedSteps.map(([id, label, detail], index) => (
+          <li key={id}>
+            <span>{index + 1}</span>
+            <strong>{label}</strong>
+            <small>{detail}</small>
+          </li>
+        ))}
+      </ol>
+      <div className="guided-match-and-recipe">
+        <div className="guided-match-list" aria-label="Guided local matches">
+          {matches.map((match) => (
+            <button
+              aria-pressed={selectedMatch?.item.id === match.item.id}
+              className={selectedMatch?.item.id === match.item.id ? 'selected' : ''}
+              key={match.item.id}
+              onClick={() => onSelectMatch(match.item.id)}
+              type="button"
+            >
+              <strong>{match.item.name}</strong>
+              <span>{match.score}% {match.confidence} - {match.item.partType}</span>
+            </button>
+          ))}
+        </div>
+        {selectedMatch ? (
+          <div className="guided-recipe-card" aria-live="polite">
+            <strong>{selectedMatch.item.featureRecipe?.name ?? selectedMatch.item.name}</strong>
+            <p>{selectedMatch.item.featureRecipe?.profile ?? selectedMatch.item.assemblyRole}</p>
+            <ul>
+              {(selectedMatch.item.featureRecipe?.history ?? selectedMatch.item.criteria.map((criterion, index) => ({ id: `${selectedMatch.item.id}-${index}`, label: criterion, value: selectedMatch.item.manufacturing.process, kind: 'placement' as const }))).map((step) => (
+                <li className={`kind-${step.kind}`} key={step.id}><span>{step.label}</span><small>{step.value}</small></li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+      <div className="guided-action-row">
+        <button onClick={onApplyToSelected} type="button">Apply guided recipe to {selectedPartName}</button>
+        <button className="primary-guided-action" onClick={onPlaceInAssembly} type="button">Place matched part in assembly</button>
+        <button onClick={onSyncCatalog} type="button">Open match details below</button>
+      </div>
+    </section>
+  );
+}
+
 function CanvasToolPalette({
   onCreatePart,
   onCreateAssembly,
@@ -1986,7 +2164,7 @@ function CatalogMatchPanel({
   selectedPartName: string;
   units: AuthoringUnit;
 }) {
-  const examples = ['joint motor', 'servo actuator', 'arm link', 'gripper bracket', 'base plate'];
+  const examples = ['joint motor', 'servo actuator', 'round arm connector', 'arm link', 'gripper bracket', 'base plate'];
   return (
     <section className="panel authoring-panel catalog-match-panel" id="catalog-match-editor" aria-label="Catalog matching for unknown part names">
       <div className="section-heading-row">
@@ -2099,6 +2277,7 @@ function SelectedPartCanvasCard({
   const thermalCriterion = part.designCriteria.find((criterion) => criterion.id === 'temperature-limit');
   const materialStrengthCriterion = part.designCriteria.find((criterion) => criterion.id === 'material-strength');
   const catalogMatchCriterion = part.designCriteria.find((criterion) => criterion.id === 'catalog-match');
+  const featureRecipeCriterion = part.designCriteria.find((criterion) => criterion.id === 'feature-recipe');
   const parentPart = part.authoring.parentPartId ? assemblyParts.find((candidate) => candidate.id === part.authoring.parentPartId) : null;
   const warnings = reviewWarningsForPart(part, selectedOption);
   const thermalLimit = part.analysisReadiness.thermal_guidance?.heat_deflection_temp_c
@@ -2111,6 +2290,7 @@ function SelectedPartCanvasCard({
         <h3>Selected: {part.name}</h3>
         <p>{part.purpose}</p>
         <small>Primitive proxy: {primitiveLabel(part.authoring.primitive)} in {part.subassembly}. This is authored visual geometry and project metadata, not a full parametric CAD kernel.</small>
+        {part.authoring.featureRecipe ? <small>Sketch recipe: {part.authoring.featureRecipe.name}. {part.authoring.featureRecipe.plane} includes {part.authoring.featureRecipe.callouts.map((callout) => `${callout.label} ${callout.value}`).join(', ')}.</small> : null}
         {catalogMatchCriterion ? <small>Local catalog match: {catalogMatchCriterion.value}. {catalogMatchCriterion.plainEnglish}</small> : null}
       </div>
       <dl className="selected-part-stat-grid">
@@ -2167,6 +2347,13 @@ function SelectedPartCanvasCard({
             <li>Heat: {thermalLimit == null ? thermalCriterion?.value ?? 'temperature review required' : `${formatMeasurement(thermalLimit)} C screening limit`}.</li>
           </ul>
         </article>
+        {featureRecipeCriterion ? (
+          <article>
+            <strong>Sketch and feature history</strong>
+            <p>{featureRecipeCriterion.plainEnglish}</p>
+            <small>{featureRecipeCriterion.sourceConfidence}</small>
+          </article>
+        ) : null}
         <article>
           <strong>Load cases, constraints, and serviceability</strong>
           <ul>
