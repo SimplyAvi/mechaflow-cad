@@ -10,7 +10,7 @@ import {
   runLocalSolverReadinessAnalysis,
   type MaterialSubstitutionResult,
 } from './lib/api';
-import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, PartAuthoringFeatureRecipe, PartAuthoringHolePattern, PartAuthoringSketchState, ReferenceDesign, UsdRange } from './types';
+import type { AdvisoryReport, Assembly, CADDefinitionState, LocalSolverReadinessSummary, MaterialOption, Part, PartAuthoringFeatureRecipe, PartAuthoringHolePattern, PartAuthoringSketchState, ReferenceDesign, UsdRange } from './types';
 import {
   applyRobotArmLoadFixesToProject,
   assessRobotArmLoadRequirement,
@@ -28,6 +28,7 @@ import {
   type PartOutputPreview,
 } from './lib/partOutputs';
 import { cadLifecycleMappings } from './lib/cadLifecycleMap';
+import type { CanvasEditableKind } from './lib/designLifecycle';
 import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
 import { localRobotArmPartCatalog, matchLocalPartCatalog, type LocalPartCatalogMatch } from './data/localPartCatalog';
 import { mockReferenceDesign } from './data/mockDesign';
@@ -88,6 +89,16 @@ const sketchOperationLabel: Record<PartAuthoringSketchState['operation'], string
   cut: 'Cut or drill feature',
   finish: 'Finish edges',
 };
+
+const definitionStateOptions: CADDefinitionState[] = ['under-defined', 'fully-defined', 'over-defined', 'provisional', 'requirements-incomplete'];
+const definitionStateCopy: Record<CADDefinitionState, string> = {
+  'under-defined': 'Under-defined: rough sketch or assembly relation still needs dimensions or relations.',
+  'fully-defined': 'Fully defined: enough MVP dimensions, relations, material, and context are present for review.',
+  'over-defined': 'Over-defined or conflicting: a dimension, relation, or requirement conflicts with another value.',
+  provisional: 'Provisional: usable for iteration, but still generated or awaiting review.',
+  'requirements-incomplete': 'Requirements incomplete: job intent, payload, reach, material, or analysis input is missing.',
+};
+const valueProvenanceOptions = ['user-defined', 'inferred', 'defaulted', 'estimated', 'unresolved', 'invalid'];
 
 const recipeFromSketchState = (part: Part, state: PartAuthoringSketchState): PartAuthoringFeatureRecipe => {
   const base = part.authoring.featureRecipe ?? {
@@ -444,6 +455,7 @@ function App() {
   const [exportedEvidence, setExportedEvidence] = useState<ExportedEvidenceSignature | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('design');
   const [activeCanvasDrawer, setActiveCanvasDrawer] = useState<CanvasDrawer>('part');
+  const [activeCanvasEditKind, setActiveCanvasEditKind] = useState<CanvasEditableKind>('dimension');
   const [intentText, setIntentText] = useState('');
   const [intentMessage, setIntentMessage] = useState<string | null>('Robot arm demo is loaded. Describe a new mechanism or add a reference image to start faster.');
   const [partMatchQuery, setPartMatchQuery] = useState('joint motor');
@@ -607,9 +619,16 @@ function App() {
     setSelectedPartId(partId);
     setSubstitutionPreview(null);
     setFocusedPartId((current) => current == null ? current : partId);
+    setActiveCanvasEditKind('dimension');
     setActiveCanvasDrawer('part');
     setAuthoringMessage(`Selected ${activeAssembly?.parts.find((part) => part.id === partId)?.name ?? partId} for contextual visual editing beside the 3D plane.`);
     markDemoStep('select-part');
+  };
+
+  const selectCanvasEditKind = (kind: CanvasEditableKind) => {
+    setActiveCanvasEditKind(kind);
+    setActiveCanvasDrawer(kind === 'load' ? 'requirements' : kind === 'mate' ? 'assembly' : kind === 'drawing' ? 'drawing' : 'part');
+    setAuthoringMessage(`Selected ${kind} annotation on the model canvas. The same value is now editable in the synchronized left inspector.`);
   };
 
   const selectMaterialOption = (optionId: string) => {
@@ -693,6 +712,49 @@ function App() {
     };
     updateSelectedPartGeometry({ sketchState, featureRecipe: recipeFromSketchState(selectedPart, sketchState) }, message ?? `${selectedPart.name} ${sketchOperationLabel[sketchState.operation].toLowerCase()} updated on ${sketchState.plane}.`);
     markDemoStep('viewport-edit');
+  };
+
+  const updateSelectedDefinitionState = (definitionState: CADDefinitionState) => {
+    if (!selectedPart) return;
+    const base = selectedPart.authoring.sketchState ?? defaultSketchStateForPart(selectedPart);
+    updateSelectedSketchState({
+      definitionState,
+      provenance: 'user-defined',
+      constraintSummary: definitionStateCopy[definitionState],
+      notes: [...base.notes.filter((note) => !note.startsWith('Definition state:')), `Definition state: ${definitionState}`],
+    }, `${selectedPart.name} sketch definition marked ${definitionState} from the synchronized canvas inspector.`);
+  };
+
+  const addSelectedFeatureMetadata = (kind: 'revolve' | 'chamfer' | 'fillet') => {
+    if (!selectedPart) return;
+    const label = kind === 'revolve' ? 'Revolve axis note' : kind === 'chamfer' ? 'Chamfer edge note' : 'Fillet edge note';
+    const value = kind === 'revolve'
+      ? 'Axis and angular extent are captured as review-required feature metadata.'
+      : kind === 'chamfer'
+        ? 'Edge break captured for machining review and drawing note propagation.'
+        : 'Radius intent captured for edge comfort, stress, and manufacturing review.';
+    const baseSketch = selectedPart.authoring.sketchState ?? defaultSketchStateForPart(selectedPart);
+    const baseRecipe = recipeFromSketchState(selectedPart, baseSketch);
+    const step: PartAuthoringFeatureRecipe['history'][number] = {
+      id: `viewport-${kind}`,
+      label,
+      value,
+      kind,
+    };
+    updateSelectedPartGeometry({
+      sketchState: {
+        ...baseSketch,
+        operation: 'finish',
+        definitionState: 'provisional',
+        provenance: 'user-defined',
+        notes: [...baseSketch.notes.filter((note) => !note.startsWith('Feature metadata:')), `Feature metadata: ${label}`],
+      },
+      featureRecipe: {
+        ...baseRecipe,
+        history: [...baseRecipe.history.filter((candidate) => candidate.id !== step.id), step],
+        callouts: [...baseRecipe.callouts.filter((candidate) => candidate.id !== step.id), step],
+      },
+    }, `${selectedPart.name} ${label.toLowerCase()} added as editable feature metadata.`);
   };
 
   const commitSelectedPartLabel = (rawLabel: string) => {
@@ -1736,7 +1798,10 @@ function App() {
                 setViewZoom(nextView.zoom);
                 setViewPan({ x: nextView.panX, y: nextView.panY });
               }}
+              activeCanvasEditKind={activeCanvasEditKind}
+              lifecycleEvidence={selectedPartOutputPreview?.lifecycleEvidence}
               loadHighlights={loadSizingHighlights}
+              onSelectCanvasEdit={selectCanvasEditKind}
               parts={activeAssembly.parts}
               selectedPartId={selectedPart.id}
               units={design.units}
@@ -1744,6 +1809,34 @@ function App() {
               wiringRoutes={visibleDesign.wiringRoutes}
             >
               {selectedPartOutputPreview ? (
+                <>
+                <SynchronizedCanvasValueInspector
+                  activeEditKind={activeCanvasEditKind}
+                  activeTask={design.task}
+                  assemblyParts={activeAssembly.parts}
+                  dimensionDrafts={dimensionDrafts}
+                  evidence={selectedPartOutputPreview.lifecycleEvidence}
+                  fastenerOptions={fastenerCatalogOptions}
+                  materials={design.backendProject.materials}
+                  onCanvasEditChange={selectCanvasEditKind}
+                  onConnectPart={connectSelectedPart}
+                  onDefinitionStateChange={updateSelectedDefinitionState}
+                  onDimensionChange={updateSelectedDimension}
+                  onHolePatternChange={updateSelectedHolePattern}
+                  onAddFeatureMetadata={addSelectedFeatureMetadata}
+                  onMaterialChange={(materialId) => updateSelectedPartGeometry({ materialId }, `${selectedPart.name} material set from the synchronized canvas inspector.`)}
+                  onPayloadChange={changeRequirementPayload}
+                  onProcessChange={(process) => updateSelectedPartGeometry({ manufacturingProcess: process }, `${selectedPart.name} manufacturing process set to ${process.replaceAll('_', ' ')} from the synchronized canvas inspector.`)}
+                  onSetCenteredTwoInchHole={() => {
+                    const nextPattern = normalizeHolePattern(selectedPart, { offsetFromBottomMm: lengthToMm(2, 'in'), centeredOnWidth: true });
+                    updateSelectedHolePattern(nextPattern, `${selectedPart.name} hole pattern set to 2 in from the bottom and centered with ${nextPattern.fastenerLabel}.`);
+                  }}
+                  onSketchStateChange={updateSelectedSketchState}
+                  part={selectedPart}
+                  processOptions={selectedPartProcessOptions}
+                  processValue={selectedPartProcessValue}
+                  units={design.units}
+                />
                 <ViewportAnchoredPartEditor
                   activeTask={design.task}
                   dimensionDrafts={dimensionDrafts}
@@ -1766,6 +1859,7 @@ function App() {
                   processValue={selectedPartProcessValue}
                   units={design.units}
                 />
+                </>
               ) : null}
             </VisualCadWorkspace>
             <SelectedPartCanvasCard
@@ -2348,6 +2442,235 @@ function FullCanvasActionBar({
         ))}
       </div>
     </nav>
+  );
+}
+
+function SynchronizedCanvasValueInspector({
+  activeEditKind,
+  activeTask,
+  assemblyParts,
+  dimensionDrafts,
+  evidence,
+  fastenerOptions,
+  materials,
+  onCanvasEditChange,
+  onConnectPart,
+  onDefinitionStateChange,
+  onDimensionChange,
+  onHolePatternChange,
+  onAddFeatureMetadata,
+  onMaterialChange,
+  onPayloadChange,
+  onProcessChange,
+  onSetCenteredTwoInchHole,
+  onSketchStateChange,
+  part,
+  processOptions,
+  processValue,
+  units,
+}: {
+  activeEditKind: CanvasEditableKind;
+  activeTask: ReferenceDesign['task'];
+  assemblyParts: Part[];
+  dimensionDrafts: Record<string, string>;
+  evidence: PartOutputPreview['lifecycleEvidence'];
+  fastenerOptions: typeof fastenerCatalogOptions;
+  materials: BackendMaterial[];
+  onCanvasEditChange: (kind: CanvasEditableKind) => void;
+  onConnectPart: (parentPartId: string | null, jointType: CADJointType) => void;
+  onDefinitionStateChange: (state: CADDefinitionState) => void;
+  onDimensionChange: (key: 'length' | 'width' | 'height' | 'diameter', rawValue: string) => void;
+  onHolePatternChange: (updates: Partial<PartAuthoringHolePattern>, message?: string) => void;
+  onAddFeatureMetadata: (kind: 'revolve' | 'chamfer' | 'fillet') => void;
+  onMaterialChange: (materialId: string) => void;
+  onPayloadChange: (payloadLb: number) => void;
+  onProcessChange: (process: string) => void;
+  onSetCenteredTwoInchHole: () => void;
+  onSketchStateChange: (updates: Partial<PartAuthoringSketchState>, message?: string) => void;
+  part: Part;
+  processOptions: BackendManufacturingOption[];
+  processValue: string;
+  units: AuthoringUnit;
+}) {
+  const activeItem = evidence.items.find((item) => item.editableKind === activeEditKind) ?? evidence.items[0]!;
+  const sketchState = part.authoring.sketchState ?? defaultSketchStateForPart(part);
+  const holePattern = part.authoring.holePattern ?? buildDefaultHolePattern(part);
+  const dimensionKey: 'length' | 'width' | 'height' | 'diameter' = part.authoring.primitive === 'cylinder_joint' ? 'diameter' : 'length';
+  const dimensionValueMm = dimensionKey === 'diameter'
+    ? part.authoring.dimensionsMm.diameterMm ?? part.authoring.dimensionsMm.widthMm ?? 0
+    : part.authoring.dimensionsMm.lengthMm ?? 0;
+  const editableParents = assemblyParts.filter((candidate) => candidate.id !== part.id);
+  return (
+    <aside className="synchronized-left-inspector" id="synchronized-canvas-inspector" aria-label="Synchronized left-side inspector">
+      <div className="viewport-section-heading">
+        <div>
+          <p className="eyebrow">Synchronized left inspector</p>
+          <strong>{activeItem.label}</strong>
+          <small>{activeItem.value}</small>
+        </div>
+        <span className={`definition-badge state-${activeItem.definitionState}`}>{activeItem.definitionState}</span>
+      </div>
+      <p className="microcopy">Click a model annotation, then edit the same selected value here. Both surfaces update geometry, mates, drawings, BOM/export metadata, and analysis inputs.</p>
+      <div className="canvas-edit-tab-list" aria-label="Canvas selectable annotations">
+        {evidence.items.map((item) => (
+          <button
+            aria-pressed={activeEditKind === item.editableKind}
+            key={item.id}
+            onClick={() => onCanvasEditChange(item.editableKind)}
+            type="button"
+          >
+            <span>{item.label}</span>
+            <small>{item.definitionState} - {item.provenance}</small>
+          </button>
+        ))}
+      </div>
+      <div className="definition-state-legend" aria-label="Definition state legend">
+        {definitionStateOptions.map((state) => <span className={`state-${state}`} key={state}>{state}</span>)}
+      </div>
+      <div className="provenance-legend" aria-label="Value provenance legend">
+        {valueProvenanceOptions.map((source) => <span key={source}>{source}</span>)}
+      </div>
+      <section className="synchronized-edit-card" aria-label="Selected canvas value editor">
+        {activeEditKind === 'dimension' ? (
+          <label className="field-row compact-field">
+            <span>{dimensionKey} from canvas</span>
+            <input
+              aria-label={`Synchronized canvas ${dimensionKey} dimension in ${units}`}
+              min="0.001"
+              onChange={(event) => onDimensionChange(dimensionKey, event.target.value)}
+              step="0.1"
+              type="number"
+              value={dimensionDrafts[`${part.id}:${units}:${dimensionKey}`] ?? Number(lengthFromMm(dimensionValueMm, units).toFixed(3))}
+            />
+          </label>
+        ) : null}
+        {activeEditKind === 'constraint' ? (
+          <>
+            <label className="field-row compact-field">
+              <span>Sketch definition</span>
+              <select aria-label="Sketch definition state" onChange={(event) => onDefinitionStateChange(event.target.value as CADDefinitionState)} value={sketchState.definitionState ?? evidence.overallDefinitionState}>
+                {definitionStateOptions.map((state) => <option key={state} value={state}>{state}</option>)}
+              </select>
+            </label>
+            <label className="field-row compact-field">
+              <span>Constraint note</span>
+              <input
+                aria-label="Synchronized constraint summary"
+                onChange={(event) => onSketchStateChange({ constraintSummary: event.target.value, provenance: 'user-defined' }, `${part.name} constraint summary edited from the synchronized canvas inspector.`)}
+                type="text"
+                value={sketchState.constraintSummary}
+              />
+            </label>
+          </>
+        ) : null}
+        {activeEditKind === 'feature' ? (
+          <>
+            <div className="viewport-operation-row" aria-label="Synchronized feature operation buttons">
+              {(['sketch', 'extrude', 'cut', 'finish'] as const).map((operation) => (
+                <button
+                  aria-pressed={sketchState.operation === operation}
+                  key={operation}
+                  onClick={() => onSketchStateChange({ operation, provenance: 'user-defined' }, `${part.name} ${sketchOperationLabel[operation].toLowerCase()} edited from the synchronized canvas inspector.`)}
+                  type="button"
+                >
+                  {sketchOperationLabel[operation]}
+                </button>
+              ))}
+            </div>
+            <div className="viewport-operation-row" aria-label="Synchronized revolve chamfer fillet metadata buttons">
+              {(['revolve', 'chamfer', 'fillet'] as const).map((kind) => (
+                <button key={kind} onClick={() => onAddFeatureMetadata(kind)} type="button">
+                  {kind === 'revolve' ? 'Add revolve note' : kind === 'chamfer' ? 'Add chamfer note' : 'Add fillet note'}
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+        {activeEditKind === 'hole' ? (
+          <>
+            <label className="field-row compact-field">
+              <span>Fastener</span>
+              <select aria-label="Synchronized canvas fastener size" onChange={(event) => onHolePatternChange({ fastenerId: event.target.value, source: 'viewport-user-defined' })} value={holePattern.fastenerId}>
+                {fastenerOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="field-row compact-field">
+              <span>Hole offset</span>
+              <input
+                aria-label={`Synchronized canvas hole offset in ${units}`}
+                min="0.001"
+                onChange={(event) => onHolePatternChange({ offsetFromBottomMm: lengthToMm(Number(event.target.value), units), centeredOnWidth: true, source: 'viewport-user-defined' })}
+                step="0.1"
+                type="number"
+                value={Number(lengthFromMm(holePattern.offsetFromBottomMm, units).toFixed(3))}
+              />
+            </label>
+            <button className="viewport-primary-action" onClick={onSetCenteredTwoInchHole} type="button">Apply 2 in centered hole from canvas</button>
+          </>
+        ) : null}
+        {activeEditKind === 'material' ? (
+          <>
+            <label className="field-row compact-field">
+              <span>Material</span>
+              <select aria-label="Synchronized selected part material" onChange={(event) => onMaterialChange(event.target.value)} value={part.authoring.materialId ?? ''}>
+                {materials.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}
+              </select>
+            </label>
+            <label className="field-row compact-field">
+              <span>Process</span>
+              <select aria-label="Synchronized selected part process" onChange={(event) => onProcessChange(event.target.value)} value={processValue}>
+                {processOptions.map((option) => <option key={option.id} value={option.process}>{option.process.replaceAll('_', ' ')}</option>)}
+              </select>
+            </label>
+          </>
+        ) : null}
+        {activeEditKind === 'mate' ? (
+          <>
+            <label className="field-row compact-field">
+              <span>Parent</span>
+              <select aria-label="Synchronized selected part parent" onChange={(event) => onConnectPart(event.target.value || null, part.authoring.jointType)} value={part.authoring.parentPartId ?? ''}>
+                <option value="">Top-level or unassigned</option>
+                {editableParents.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+              </select>
+            </label>
+            <label className="field-row compact-field">
+              <span>Mate type</span>
+              <select aria-label="Synchronized selected part mate type" onChange={(event) => onConnectPart(part.authoring.parentPartId, event.target.value as CADJointType)} value={part.authoring.jointType}>
+                {(['unassigned', 'fixed', 'revolute', 'prismatic', 'linear', 'tool_mount'] as CADJointType[]).map((joint) => <option key={joint} value={joint}>{joint.replaceAll('_', ' ')}</option>)}
+              </select>
+            </label>
+          </>
+        ) : null}
+        {activeEditKind === 'load' ? (
+          <label className="field-row compact-field">
+            <span>Payload target</span>
+            <input
+              aria-label="Synchronized payload target in pounds"
+              min="0"
+              onChange={(event) => onPayloadChange(Number(event.target.value))}
+              step="1"
+              type="number"
+              value={activeTask.targetPayloadLb ?? 0}
+            />
+          </label>
+        ) : null}
+        {activeEditKind === 'drawing' ? (
+          <p>Drawing, BOM/export, and FEA previews are regenerated from the same selected sketch, dimension, material, hole, and mate data.</p>
+        ) : null}
+      </section>
+      <section className="downstream-impact-card" aria-label="Downstream impact preview">
+        <strong>Downstream impact preview</strong>
+        <ul>
+          {activeItem.downstreamImpacts.slice(0, 5).map((impact) => <li key={impact}>{impact}</li>)}
+        </ul>
+        <strong>Reviewable fixes</strong>
+        <ul>
+          {activeItem.reviewableFixes.slice(0, 4).map((fix) => <li key={fix}>{fix}</li>)}
+        </ul>
+      </section>
+      <small>{evidence.loopStage}</small>
+      <small>{evidence.automationBoundary}</small>
+    </aside>
   );
 }
 

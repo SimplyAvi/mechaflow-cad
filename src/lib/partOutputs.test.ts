@@ -51,5 +51,7 @@ describe('part output previews', () => {
     expect(preview.feaInput.geometry.holePattern?.centeredOnWidth).toBe(true);
     expect(preview.feaInput.fasteners.join(' ')).toMatch(/M6 class 10.9/);
     expect(preview.feaInput.assumptions.join(' ')).toMatch(/Payload plus self-weight/);
+    expect(preview.lifecycleEvidence.items.map((item) => item.editableKind)).toEqual(expect.arrayContaining(['dimension', 'constraint', 'feature', 'hole', 'material', 'mate', 'load', 'drawing']));
+    expect(preview.lifecycleEvidence.downstreamImpactSummary).toEqual(expect.arrayContaining(['drawing dimensions', 'feature tree']));
   });
 });

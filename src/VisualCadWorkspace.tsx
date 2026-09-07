@@ -1,4 +1,5 @@
 import { useMemo, useRef, type CSSProperties, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import type { CanvasEditableKind, PartLifecycleEvidence } from './lib/designLifecycle';
 import type { RobotArmLoadFindingStatus } from './lib/loadSizing';
 import type { AuthoringUnit, Part, PartAuthoringData, PartAuthoringDimensions, WiringRoute } from './types';
 import { formatFeatureRecipeCallout, formatLength, lengthFromMm } from './lib/visualAuthoring';
@@ -18,8 +19,11 @@ interface VisualCadWorkspaceProps {
   focusedPartId: string | null;
   units: AuthoringUnit;
   explodePercent: number;
+  activeCanvasEditKind: CanvasEditableKind;
+  lifecycleEvidence?: PartLifecycleEvidence;
   loadHighlights?: Record<string, RobotArmLoadFindingStatus>;
   view: ViewState;
+  onSelectCanvasEdit: (kind: CanvasEditableKind) => void;
   onViewChange: (view: ViewState) => void;
   onSelectPart: (partId: string) => void;
   onNudgeSelected: (delta: { x: number; y: number; z: number }) => void;
@@ -287,7 +291,7 @@ function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadS
       {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={labelPoint.x} cy={labelPoint.y - 22} r="20" /> : null}
       {selected ? <circle className="selected-part-pulse" cx={labelPoint.x} cy={labelPoint.y - 22} r="18" /> : null}
       {showLabel && !selected ? <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text> : null}
-      {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={labelPoint.x} y={labelPoint.y - 36}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
+      {showLabel && loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={labelPoint.x} y={labelPoint.y - 36}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
       {!showLabel && selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
     </g>
   );
@@ -350,7 +354,7 @@ function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, 
       {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={top.x} cy={top.y} r={Math.max(22, rx * 0.82)} /> : null}
       {selected ? <circle className="selected-part-pulse" cx={top.x} cy={top.y} r={Math.max(18, rx * 0.72)} /> : null}
       {showLabel && !selected ? <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text> : null}
-      {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={top.x} y={top.y - ry - 28}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
+      {showLabel && loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={top.x} y={top.y - ry - 28}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
       {!showLabel && selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
     </g>
   );
@@ -407,7 +411,21 @@ function onCanvasLoadSummary(part: Part, loadStatus?: RobotArmLoadFindingStatus)
   return `FEA readiness: ${part.analysisReadiness.state.replaceAll('_', ' ')}`;
 }
 
-function OnCanvasEngineeringAnnotations({ part, units, loadStatus }: { part: Part; units: AuthoringUnit; loadStatus?: RobotArmLoadFindingStatus }) {
+function OnCanvasEngineeringAnnotations({
+  activeCanvasEditKind,
+  lifecycleEvidence,
+  loadStatus,
+  onSelectCanvasEdit,
+  part,
+  units,
+}: {
+  activeCanvasEditKind: CanvasEditableKind;
+  lifecycleEvidence?: PartLifecycleEvidence;
+  loadStatus?: RobotArmLoadFindingStatus;
+  onSelectCanvasEdit: (kind: CanvasEditableKind) => void;
+  part: Part;
+  units: AuthoringUnit;
+}) {
   const dimensions = partLabelDimension(part, units);
   const sketch = part.authoring.sketchState;
   const feature = part.authoring.featureRecipe;
@@ -428,28 +446,26 @@ function OnCanvasEngineeringAnnotations({ part, units, loadStatus }: { part: Par
         <span>On-model annotations</span>
         <strong>{part.name}</strong>
       </div>
-      <dl>
-        <div>
-          <dt>Size</dt>
-          <dd>{dimensions}</dd>
-        </div>
-        <div>
-          <dt>Constraints and feature</dt>
-          <dd>{featureSummary}</dd>
-        </div>
-        <div>
-          <dt>Hole and fastener fit</dt>
-          <dd>{holeSummary}</dd>
-        </div>
-        <div>
-          <dt>Material and process</dt>
-          <dd>{part.material}; {part.manufacturingProcess}. {materialCriterion?.value ?? 'properties review required'}</dd>
-        </div>
-        <div>
-          <dt>Load and FEA context</dt>
-          <dd>{onCanvasLoadSummary(part, loadStatus)}</dd>
-        </div>
-      </dl>
+      <div className="on-canvas-click-targets" aria-label="Clickable on-model dimensions and constraints">
+        {(lifecycleEvidence?.items ?? [
+          { editableKind: 'dimension' as const, label: 'Size', value: dimensions, definitionState: 'provisional', provenance: 'inferred' },
+          { editableKind: 'constraint' as const, label: 'Constraints and feature', value: featureSummary, definitionState: 'provisional', provenance: 'inferred' },
+          { editableKind: 'hole' as const, label: 'Hole and fastener fit', value: holeSummary, definitionState: 'under-defined', provenance: 'unresolved' },
+          { editableKind: 'material' as const, label: 'Material and process', value: `${part.material}; ${part.manufacturingProcess}. ${materialCriterion?.value ?? 'properties review required'}`, definitionState: 'fully-defined', provenance: 'inferred' },
+          { editableKind: 'load' as const, label: 'Load and FEA context', value: onCanvasLoadSummary(part, loadStatus), definitionState: 'provisional', provenance: 'estimated' },
+        ]).slice(0, 8).map((item) => (
+          <button
+            aria-pressed={activeCanvasEditKind === item.editableKind}
+            key={`${item.editableKind}-${item.label}`}
+            onClick={() => onSelectCanvasEdit(item.editableKind)}
+            type="button"
+          >
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+            <small>{item.definitionState} - {item.provenance}</small>
+          </button>
+        ))}
+      </div>
     </aside>
   );
 }
@@ -509,8 +525,11 @@ export function VisualCadWorkspace({
   focusedPartId,
   units,
   explodePercent,
+  activeCanvasEditKind,
+  lifecycleEvidence,
   loadHighlights = {},
   view,
+  onSelectCanvasEdit,
   onViewChange,
   onSelectPart,
   onNudgeSelected,
@@ -584,7 +603,16 @@ export function VisualCadWorkspace({
         <span>Shift-drag to pan</span>
         <span>Wheel or slider to zoom</span>
       </div>
-      {selectedPart ? <OnCanvasEngineeringAnnotations loadStatus={loadHighlights[selectedPart.id]} part={selectedPart} units={units} /> : null}
+      {selectedPart ? (
+        <OnCanvasEngineeringAnnotations
+          activeCanvasEditKind={activeCanvasEditKind}
+          lifecycleEvidence={lifecycleEvidence}
+          loadStatus={loadHighlights[selectedPart.id]}
+          onSelectCanvasEdit={onSelectCanvasEdit}
+          part={selectedPart}
+          units={units}
+        />
+      ) : null}
       <svg
         aria-label="Visual CAD authoring canvas"
         className="visual-cad-canvas"

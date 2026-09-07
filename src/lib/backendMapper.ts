@@ -388,12 +388,16 @@ const sketchStateFromMetadata = (value: unknown): PartAuthoringSketchState | nul
   const operation = record.operation;
   if (!plane || !profile || !constraintSummary) return null;
   const notes = Array.isArray(record.notes) ? record.notes.filter((note): note is string => typeof note === 'string') : [];
+  const definitionState = stringMetadata(record.definitionState ?? record.definition_state);
+  const provenance = stringMetadata(record.provenance);
   return {
     plane,
     profile,
     constraintSummary,
     extrudeDepthMm: numberMetadata(record.extrudeDepthMm ?? record.extrude_depth_mm),
     operation: operation === 'extrude' || operation === 'cut' || operation === 'finish' ? operation : 'sketch',
+    ...(definitionState === 'under-defined' || definitionState === 'fully-defined' || definitionState === 'over-defined' || definitionState === 'provisional' || definitionState === 'requirements-incomplete' ? { definitionState } : {}),
+    ...(provenance === 'user-defined' || provenance === 'inferred' || provenance === 'defaulted' || provenance === 'estimated' || provenance === 'unresolved' || provenance === 'invalid' ? { provenance } : {}),
     notes,
   };
 };

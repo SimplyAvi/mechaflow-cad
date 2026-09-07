@@ -36,6 +36,8 @@ describe('visual authoring project helpers', () => {
       constraintSummary: 'Centered profile with hole center constrained on width.',
       extrudeDepthMm: 10,
       operation: 'cut' as const,
+      definitionState: 'fully-defined' as const,
+      provenance: 'user-defined' as const,
       notes: ['Viewport sketch metadata.'],
     };
     const labeledProject = updatePartGeometry(unitProject, 'part-palm-plate', {
@@ -58,16 +60,21 @@ describe('visual authoring project helpers', () => {
       primitive: 'base_plate',
       joint_type: 'unassigned',
       hole_pattern: expect.objectContaining({ offsetFromBottomMm: 50.8, centeredOnWidth: true }),
-      sketch_state: expect.objectContaining({ plane: 'Front plane', operation: 'cut' }),
+      sketch_state: expect.objectContaining({ plane: 'Front plane', operation: 'cut', definitionState: 'fully-defined', provenance: 'user-defined' }),
     }));
     expect(visual.position_mm).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number), z: expect.any(Number) }));
     expect(firstPart.dimensions.metadata.visual_hole_pattern).toEqual(expect.objectContaining({ fastenerLabel: 'M6 socket head screw' }));
     expect(firstPart.dimensions.length_mm).toBe(design.assemblies[0]!.parts[0]!.authoring.dimensionsMm.lengthMm);
+    expect(design.assemblies[0]!.parts[0]!.authoring.sketchState).toEqual(expect.objectContaining({ definitionState: 'fully-defined', provenance: 'user-defined' }));
     expect(design.assemblies[0]!.parts[0]!.designCriteria.some((criterion) => criterion.id === 'hole-fastener-placement')).toBe(true);
     expect(visualExtension.part_outputs).toEqual(expect.arrayContaining([
       expect.objectContaining({
         drawing: expect.objectContaining({ title: expect.stringMatching(/machinist drawing preview/i) }),
         feaInput: expect.objectContaining({ title: expect.stringMatching(/FEA input preview/i) }),
+        lifecycleEvidence: expect.objectContaining({
+          automationBoundary: expect.stringMatching(/user-defined, inferred, defaulted, estimated, unresolved, or invalid/i),
+          items: expect.arrayContaining([expect.objectContaining({ editableKind: 'dimension' })]),
+        }),
       }),
     ]));
     expect(visualExtension.cad_lifecycle_map).toEqual(expect.objectContaining({

@@ -23,7 +23,10 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByRole('button', { name: /Start blank part plane/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/On-model annotations/i);
-    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Size/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Dimension definition/i);
+    expect(screen.getByLabelText(/Synchronized left-side inspector/i)).toHaveTextContent(/under-defined/i);
+    expect(screen.getByLabelText(/Synchronized left-side inspector/i)).toHaveTextContent(/user-defined/i);
+    expect(screen.getByLabelText(/Synchronized left-side inspector/i)).toHaveTextContent(/requirements-incomplete/i);
     expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /New from prompt/i })).toBeInTheDocument();
     expect(screen.getByText(/Open local project/i)).toBeInTheDocument();
@@ -66,6 +69,30 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/Blank sleeve part design plane/i);
   });
 
+  it('syncs clicked on-canvas annotations with the left-side inspector', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const annotations = await screen.findByLabelText(/On-canvas selected part annotations/i);
+    await user.click(within(annotations).getByRole('button', { name: /Sketch relations/i }));
+    const leftInspector = screen.getByLabelText(/Synchronized left-side inspector/i);
+    expect(leftInspector).toHaveTextContent(/Sketch relations/i);
+    expect(within(leftInspector).getByLabelText(/Sketch definition state/i)).toBeInTheDocument();
+
+    await user.selectOptions(within(leftInspector).getByLabelText(/Sketch definition state/i), 'over-defined');
+    expect(await screen.findByText(/sketch definition marked over-defined/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/over-defined - user-defined/i);
+
+    await user.click(within(screen.getByLabelText(/On-canvas selected part annotations/i)).getByRole('button', { name: /Dimension definition/i }));
+    const syncedDimension = within(screen.getByLabelText(/Synchronized left-side inspector/i)).getByLabelText(/Synchronized canvas length dimension in mm/i);
+    await user.clear(syncedDimension);
+    await user.type(syncedDimension, '240');
+    expect(await screen.findByText(/length set to 240 mm/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/240 mm/);
+  });
+
   it('edits selected-part dimensions, holes, and output metadata from the viewport', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
     const user = userEvent.setup();
@@ -94,7 +121,7 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Hole and fastener fit/i);
     expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/M6 socket head screw/i);
     expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Material and process/i);
-    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Load and FEA context/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Requirements and analysis/i);
     expect(screen.getByLabelText(/FEA input preview/i)).toHaveTextContent(/Payload plus self-weight/i);
     expect(screen.getByLabelText(/FEA input preview/i)).toHaveTextContent(/selected fasteners/i);
     expect(screen.getByLabelText(/CAD lifecycle mapping preview/i)).toHaveTextContent(/Simulation setup with study type/i);
@@ -210,6 +237,7 @@ describe('MechaFlow input-first cockpit', () => {
     expect(updatedSizingPanel).toHaveTextContent(/Motor or servo torque path/i);
     expect(updatedSizingPanel).toHaveTextContent(/Screws, bolts, and fastener material/i);
     expect(updatedSizingPanel).toHaveTextContent(/undersized/i);
+    expect(within(screen.getByRole('img', { name: /Visual CAD authoring canvas/i })).queryAllByText(/watch load|needs resize/i)).toHaveLength(0);
 
     await user.click(within(updatedSizingPanel).getByRole('button', { name: /Apply all deterministic fixes/i }));
 

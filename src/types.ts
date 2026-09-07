@@ -6,6 +6,8 @@ export type AnalysisResultTrust = 'demo_estimate' | 'pre_solver_input' | 'solver
 export type AuthoringUnit = 'mm' | 'cm' | 'm' | 'in';
 export type CADPrimitiveShape = 'base_plate' | 'beam' | 'cylinder_joint' | 'bracket' | 'motor_block' | 'connector' | 'electronics' | 'tool';
 export type CADJointType = 'fixed' | 'revolute' | 'prismatic' | 'linear' | 'tool_mount' | 'unassigned';
+export type CADDefinitionState = 'under-defined' | 'fully-defined' | 'over-defined' | 'provisional' | 'requirements-incomplete';
+export type CADValueProvenance = 'user-defined' | 'inferred' | 'defaulted' | 'estimated' | 'unresolved' | 'invalid';
 
 export interface ReferenceDesign {
   id: string;
@@ -207,7 +209,7 @@ export interface PartAuthoringFeatureStep {
   id: string;
   label: string;
   value: string;
-  kind: 'sketch' | 'extrude' | 'cut' | 'finish' | 'placement';
+  kind: 'sketch' | 'extrude' | 'cut' | 'finish' | 'placement' | 'revolve' | 'chamfer' | 'fillet';
 }
 
 export interface PartAuthoringFeatureRecipe {
@@ -239,6 +241,8 @@ export interface PartAuthoringSketchState {
   constraintSummary: string;
   extrudeDepthMm: number | null;
   operation: 'sketch' | 'extrude' | 'cut' | 'finish';
+  definitionState?: CADDefinitionState;
+  provenance?: CADValueProvenance;
   notes: string[];
 }
 

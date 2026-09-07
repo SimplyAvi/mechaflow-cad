@@ -49,7 +49,8 @@ Owner files:
 - `src/lib/api.ts` for backend and mock API calls.
 - `src/lib/backendMapper.ts` for mapping backend panel data into cockpit state.
 - `src/lib/visualAuthoring.ts` for browser-side unit conversion, primitive creation, geometry mutation, assembly metadata, visible wire-route creation, local project-file export projection, and remapping authored backend project data into React state.
-- `src/lib/partOutputs.ts` for deterministic viewport hole/fastener defaults, selected-part machinist drawing previews, and structured FEA-input previews.
+- `src/lib/partOutputs.ts` for deterministic viewport hole/fastener defaults, selected-part machinist drawing previews, structured FEA-input previews, and per-part lifecycle evidence.
+- `src/lib/designLifecycle.ts` for under-defined, fully-defined, over-defined, provisional, requirements-incomplete state classification, value provenance, editable canvas targets, downstream impact summaries, and reviewable fixes.
 - `src/lib/designIntent.ts` for local design-intent chip extraction.
 - `src/data/backendPanelData.json`, `src/data/mockDesign.ts`, and `src/data/readyExamples.ts` for local fallback demo state.
 - `src/*.test.tsx`, `src/lib/*.test.ts`, and `src/data/*.test.ts` for frontend behavior coverage.
@@ -57,7 +58,7 @@ Owner files:
 Current behavior:
 
 - Opens directly into a full-canvas visual CAD authoring cockpit with contextual pop-out drawers instead of always-visible sidebars.
-- Supports unit selection, primitive creation, on-model engineering annotations, viewport-anchored selected geometry edits, motor and connector placement, parent and joint metadata, orbit, pan, zoom, explode, and visible wire routing.
+- Supports unit selection, primitive creation, clickable on-model engineering annotations, synchronized left-inspector edits for the selected value, viewport-anchored selected geometry edits, motor and connector placement, parent and joint metadata, orbit, pan, zoom, explode, and visible wire routing.
 - Supports a guided sketch-first part flow, local catalog matching, editable feature recipes, visual plane/profile/extrude/cut state, focus-selected inspection, and assembly placement metadata.
 - Supports fastener-aware hole placement examples and build-output previews for individual parts: machinist drawing metadata plus FEA-input data carrying geometry dimensions, material, load requirements, self-weight, constraints, fasteners, and review notes.
 - Supports deterministic requirement resizing for the robot-arm demo: payload plus assembly self-weight, safety factor, reach, actuator torque, fastener, joint, sleeve, bracket, link, and end-effector checks with local upgrade catalog fixes that remain review-required.

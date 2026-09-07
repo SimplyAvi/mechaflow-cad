@@ -6,6 +6,7 @@ import type {
   ReferenceDesign,
   TaskRequirement,
 } from '../types';
+import { buildPartLifecycleEvidence, type PartLifecycleEvidence } from './designLifecycle';
 import type { RobotArmLoadSizingFinding, RobotArmLoadSizingResult } from './loadSizing';
 
 export interface FastenerCatalogOption {
@@ -63,6 +64,7 @@ export interface PartFeaInputPreview {
 export interface PartOutputPreview {
   drawing: PartDrawingPreview;
   feaInput: PartFeaInputPreview;
+  lifecycleEvidence: PartLifecycleEvidence;
 }
 
 const UNIT_FACTOR_TO_MM: Record<AuthoringUnit, number> = {
@@ -206,6 +208,8 @@ export const defaultSketchStateForPart = (part: Part): PartAuthoringSketchState 
       : 'Centered profile, equal side constraints where symmetric, hole center locked to construction centerline.',
     extrudeDepthMm: envelope.height,
     operation: part.authoring.featureRecipe ? 'cut' : 'sketch',
+    definitionState: part.authoring.featureRecipe ? 'provisional' : 'under-defined',
+    provenance: part.authoring.featureRecipe ? 'inferred' : 'defaulted',
     notes: [
       'Viewport operation state is stored with the project as visual authoring metadata.',
       'Real parametric constraints must be rebuilt by a CAD worker before manufacturing release.',
@@ -346,6 +350,7 @@ export const buildPartOutputPreview = (
 ): PartOutputPreview => ({
   drawing: buildPartDrawingPreview(part, units),
   feaInput: buildPartFeaInputPreview(part, task, loadSizingResult, loadSizingFinding),
+  lifecycleEvidence: buildPartLifecycleEvidence(part, units, task, loadSizingFinding),
 });
 
 export const buildAllPartOutputPreviews = (design: ReferenceDesign): PartOutputPreview[] => {

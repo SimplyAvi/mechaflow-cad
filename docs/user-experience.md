@@ -79,7 +79,7 @@ The user can:
 
 - Choose millimeters, centimeters, meters, or inches as working units.
 - Create base plates, beams, joints, brackets, motors, connectors, electronics, and tools from the primitive palette.
-- See length, width, height or diameter, constraints/features, hole placement, fastener fit, material/process, and load/FEA context directly on the model canvas, then edit those values from the viewport-anchored selected-part editor without leaving the model.
+- See length, width, height or diameter, constraints/features, hole placement, fastener fit, material/process, assembly relation, drawing/export evidence, and load/FEA context directly on the model canvas, then click those annotations to edit the same selected value in the synchronized left inspector or viewport-anchored selected-part editor without leaving the model.
 - Connect a selected part to a parent with fixed, revolute, prismatic, tool-mount, or unassigned joint metadata.
 - Route visible wire harness polylines between parts and persist the route as connector, wire segment, route, and harness BOM data.
 - Play, toggle, or scrub exploded-view state.
@@ -95,12 +95,12 @@ The MVP visual seed is a robot arm with a wrist gripper. The legacy project id r
 
 ### 6. Inspect a part
 
-The model canvas annotations, viewport-anchored editor, and contextual Review drawer should show:
+The model canvas annotations, synchronized left inspector, viewport-anchored editor, and contextual Review drawer should show:
 
 - Purpose and why the part or material is in the design.
 - Active task role and available thresholds for payload, reach, safety factor, stiffness or yield guidance, heat or temperature limit, load cases, constraints, manufacturing criteria, and wiring or serviceability criteria.
 - Primitive or role, material, manufacturing process, and dimensions.
-- Sketch plane/profile, constraints, extrude/cut state, hole offset, screw/bolt selection, clearance diameter, material/process, and load/FEA context directly on or over the working plane when authored.
+- Sketch plane/profile, constraints, extrude/cut/revolve/chamfer/fillet metadata, hole offset, screw/bolt selection, clearance diameter, material/process, assembly mate state, value provenance, downstream impacts, and load/FEA context directly on or over the working plane when authored.
 - Machinist drawing/export preview and FEA-input preview for the selected part.
 - Weight or review-required mass.
 - Estimated cost range or review-required cost.
@@ -129,7 +129,7 @@ The user can compare or change without leaving the 3D profile:
 - Manufacturing process.
 - Surface treatment.
 - Wiring path.
-- Part drawing and FEA-input metadata that carries dimensions, material, load, self-weight, fastener, and constraint assumptions.
+- Part drawing, BOM/export, lifecycle evidence, and FEA-input metadata that carries dimensions, material, load, self-weight, fastener, provenance, downstream impact, and constraint assumptions.
 
 Current MVP substitution and visual authoring flow:
 
