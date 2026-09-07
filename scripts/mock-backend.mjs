@@ -1076,7 +1076,7 @@ const projectFileValidationError = (file) => {
         if (error) return error;
         error = requireStringArray(part.related_fasteners, `${assemblyPath}.parts.related_fasteners`) || requireStringArray(part.wiring_route_ids, `${assemblyPath}.parts.wiring_route_ids`);
         if (error) return error;
-        for (const field of ['length_mm', 'width_mm', 'height_mm', 'thickness_mm']) {
+        for (const field of ['length_mm', 'width_mm', 'height_mm', 'diameter_mm', 'thickness_mm']) {
           if (part.dimensions[field] != null) {
             error = requireFiniteNumber(part.dimensions[field], `${assemblyPath}.parts.dimensions.${field}`, Number.MIN_VALUE);
             if (error) return error;
