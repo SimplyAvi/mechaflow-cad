@@ -1689,6 +1689,7 @@ small,
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
 .canvas-drawer-buttons button {
@@ -1805,7 +1806,12 @@ small,
   bottom: 16px;
   left: 50%;
   max-width: min(920px, calc(100vw - 32px));
-  width: 920px;
+  transform: translateX(-50%) translateY(12px) scale(0.98);
+  width: min(920px, calc(100vw - 32px));
+}
+
+.canvas-drawer-command .command-dock {
+  transform: translateX(-50%);
 }
 
 .canvas-drawer-context .selected-part-canvas-card,
@@ -1852,6 +1858,12 @@ small,
   .full-canvas-cockpit .cad-sidebar,
   .full-canvas-cockpit .context-sidebar {
     top: 188px;
+  }
+}
+
+@media (max-width: 1280px) and (min-width: 1181px) {
+  .full-canvas-action-bar {
+    grid-template-columns: minmax(180px, 1fr) max-content minmax(0, 1.45fr) minmax(0, 0.95fr);
   }
 }
 

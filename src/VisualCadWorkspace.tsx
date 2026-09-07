@@ -286,9 +286,9 @@ function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadS
       <PrimitiveSurfaceDetails faces={faces} part={part} />
       {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={labelPoint.x} cy={labelPoint.y - 22} r="20" /> : null}
       {selected ? <circle className="selected-part-pulse" cx={labelPoint.x} cy={labelPoint.y - 22} r="18" /> : null}
-      {showLabel ? <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text> : null}
+      {showLabel && !selected ? <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text> : null}
       {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={labelPoint.x} y={labelPoint.y - 36}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
-      {selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
+      {!showLabel && selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
     </g>
   );
 }
@@ -349,9 +349,9 @@ function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, 
       ) : <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />}
       {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={top.x} cy={top.y} r={Math.max(22, rx * 0.82)} /> : null}
       {selected ? <circle className="selected-part-pulse" cx={top.x} cy={top.y} r={Math.max(18, rx * 0.72)} /> : null}
-      {showLabel ? <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text> : null}
+      {showLabel && !selected ? <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text> : null}
       {loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={top.x} y={top.y - ry - 28}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
-      {selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
+      {!showLabel && selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
     </g>
   );
 }
@@ -478,7 +478,7 @@ function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; p
       <text className="sketch-plane-label" x={anchor.x} y={anchor.y}>{recipe.plane}: sketch profile</text>
       {recipe.callouts.slice(0, 5).map((callout, index) => {
         const targetOffsets = [[-0.4, 0.72], [0.1, 0.18], [0.42, -0.26], [0.66, 0.92], [-0.72, -0.78]] as const;
-        const labelOffsets = [[-1.15, 1.08], [-1.05, 0.36], [0.9, -0.5], [0.82, 1.2], [-1.02, -1.08]] as const;
+        const labelOffsets = [[-2.05, 1.55], [-1.85, 0.42], [1.55, -0.72], [1.7, 1.7], [-1.9, -1.55]] as const;
         const [targetX, targetZ] = targetOffsets[index] ?? targetOffsets.at(-1)!;
         const [labelX, labelZ] = labelOffsets[index] ?? labelOffsets.at(-1)!;
         const target = project({
