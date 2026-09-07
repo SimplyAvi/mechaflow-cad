@@ -12,13 +12,18 @@ describe('MechaFlow input-first cockpit', () => {
     vi.unstubAllGlobals();
   });
 
-  it('launches into a simple 3D-first workspace with prompt, sidebars, and no advanced wall', async () => {
+  it('launches into a full-canvas 3D-first workspace with contextual controls', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Author a visual robot or machine on the XYZ grid/i })).toBeInTheDocument();
+    expect(container.querySelector('.full-canvas-cockpit')).not.toBeNull();
+    expect(screen.getByRole('navigation', { name: /Full-canvas contextual actions/i })).toHaveTextContent(/3D modeling plane primary/i);
+    expect(screen.getByRole('button', { name: /Start blank part plane/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/On-model annotations/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Size/i);
     expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /New from prompt/i })).toBeInTheDocument();
     expect(screen.getByText(/Open local project/i)).toBeInTheDocument();
@@ -28,6 +33,10 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('50 lb payload, 8 s cycle, 0.65 m reach');
     expect(screen.getByText(/Reference only. No photo-to-CAD reconstruction/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Canvas CAD tool palette/i)).toHaveTextContent(/Tool plate/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/Editable dimension handles/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/Machinist drawing preview/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/FEA input preview/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/CAD lifecycle map/i);
     expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Selected actual part/i);
     expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Task criteria and thresholds/i);
     expect(screen.getByLabelText(/Visual CAD primitive palette/i)).toHaveTextContent(/Motor/i);
@@ -36,6 +45,60 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BOM and cost/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/MVP coverage guide/i)).not.toBeInTheDocument();
+  });
+
+  it('opens contextual full-canvas drawers and starts from a blank part-design plane', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    const actionBar = await screen.findByRole('navigation', { name: /Full-canvas contextual actions/i });
+    expect(container.querySelector('.canvas-drawer-part')).not.toBeNull();
+
+    await user.click(within(actionBar).getByRole('button', { name: /Load50 lb to 75 lb/i }));
+    expect(container.querySelector('.canvas-drawer-requirements')).not.toBeNull();
+
+    await user.click(within(actionBar).getByRole('button', { name: /Projectopen\/load\/recent/i }));
+    expect(container.querySelector('.canvas-drawer-project')).not.toBeNull();
+
+    await user.click(within(actionBar).getByRole('button', { name: /Start blank part plane/i }));
+    expect(await screen.findByText(/Opened a blank part-design plane/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/Blank sleeve part design plane/i);
+  });
+
+  it('edits selected-part dimensions, holes, and output metadata from the viewport', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const viewportEditor = await screen.findByLabelText(/Viewport-anchored selected part editing/i);
+    expect(viewportEditor).toHaveTextContent(/Pick plane, sketch, extrude, cut/i);
+    expect(within(viewportEditor).getByLabelText(/Sketch plane for selected part/i)).toHaveValue('Front plane');
+
+    const lengthInput = within(viewportEditor).getByLabelText(/Viewport length dimension in mm/i);
+    await user.clear(lengthInput);
+    await user.type(lengthInput, '230');
+    expect(await screen.findByText(/length set to 230 mm/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/230 mm/);
+
+    await user.selectOptions(within(viewportEditor).getByLabelText(/Sketch plane for selected part/i), 'Top plane');
+    expect(await screen.findByText(/sketch profile updated on Top plane/i)).toBeInTheDocument();
+    await user.selectOptions(within(viewportEditor).getByLabelText(/Viewport fastener size/i), 'm6-socket-head');
+    expect(await screen.findByText(/hole pattern set to 50.8 mm from the bottom and centered with M6 socket head screw/i)).toBeInTheDocument();
+    await user.click(within(viewportEditor).getByRole('button', { name: /Set hole 2 in from bottom centered/i }));
+    expect(await screen.findByText(/hole pattern set to 2 in from the bottom and centered with M6 socket head screw/i)).toBeInTheDocument();
+
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/M6 class 10.9 socket head cap screw/i);
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/50.8 mm from bottom/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Hole and fastener fit/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/M6 socket head screw/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Material and process/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Load and FEA context/i);
+    expect(screen.getByLabelText(/FEA input preview/i)).toHaveTextContent(/Payload plus self-weight/i);
+    expect(screen.getByLabelText(/FEA input preview/i)).toHaveTextContent(/selected fasteners/i);
+    expect(screen.getByLabelText(/CAD lifecycle mapping preview/i)).toHaveTextContent(/Simulation setup with study type/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Hole and fastener placement/i);
   });
 
   it('authors units, primitives, dimensions, assembly links, and visible wiring locally', async () => {

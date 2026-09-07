@@ -219,6 +219,29 @@ export interface PartAuthoringFeatureRecipe {
   callouts: PartAuthoringFeatureStep[];
 }
 
+export interface PartAuthoringHolePattern {
+  id: string;
+  label: string;
+  fastenerId: string;
+  fastenerLabel: string;
+  fastenerSpec: string;
+  holeDiameterMm: number;
+  offsetFromBottomMm: number;
+  centeredOnWidth: boolean;
+  count: number;
+  source: string;
+  notes: string[];
+}
+
+export interface PartAuthoringSketchState {
+  plane: string;
+  profile: string;
+  constraintSummary: string;
+  extrudeDepthMm: number | null;
+  operation: 'sketch' | 'extrude' | 'cut' | 'finish';
+  notes: string[];
+}
+
 export interface PartAuthoringData {
   primitive: CADPrimitiveShape;
   positionMm: BackendVector3;
@@ -232,6 +255,8 @@ export interface PartAuthoringData {
   connectorId: string | null;
   authored: boolean;
   featureRecipe: PartAuthoringFeatureRecipe | null;
+  holePattern: PartAuthoringHolePattern | null;
+  sketchState: PartAuthoringSketchState | null;
 }
 
 export interface CapabilityRating {

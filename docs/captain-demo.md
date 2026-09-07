@@ -6,9 +6,10 @@ This checklist is the captain-facing proof path for MechaFlow CAD visual part se
 
 1. Launch with `npm start` and confirm the app opens directly into the robot-arm CAD workspace.
 2. In the canvas, click a concrete arm part, for example `Upper arm link`, `Shoulder yoke joint`, `Forearm link`, or `Parallel gripper jaw link`.
-3. Confirm the selected part is unmistakable in three places: the canvas highlight and selected tag, the model tree active row, and the selected-part detail card anchored under the canvas.
+3. Confirm the selected part is unmistakable in the canvas highlight and selected tag, the viewport-anchored editor, the Project drawer model tree active row, and the Review drawer selected-part detail card.
 4. Use keyboard focus on a canvas part and press Enter or Space. Confirm it selects the same part as a mouse click.
-5. Read the selected-part detail card without opening the far-right inspector. It should show part name, purpose, primitive or role, material, process, dimensions, weight or review-required mass, cost or review-required cost, stress or capability state, source confidence, and review-required warnings.
+5. Read the on-model annotation card and viewport-anchored editor without scrolling away from the model. The working plane itself should show selected size, constraints/features, hole placement, fastener fit, material/process, and load/FEA context. The viewport editor should show editable dimensions, sketch plane/profile/extrude/cut state, hole and fastener controls, material/process controls, a machinist drawing preview, and an FEA-input preview. Use the full-canvas action bar to open only the relevant Project, Tools, Load, Drawing/FEA, Assembly, Command, or Review pop-out.
+6. Read the selected-part detail card without opening the far-right inspector. It should show part name, purpose, primitive or role, material, process, dimensions, weight or review-required mass, cost or review-required cost, stress or capability state, source confidence, and review-required warnings.
 
 ## Criteria and rationale proof
 
@@ -28,11 +29,12 @@ For the selected part, confirm the card and inspector explain:
 4. Place the matched part in the assembly. Confirm the rendered part appears as selectable geometry with bore, slot, chamfer, dimensions, feature history, material or process, catalog reasoning, and assembly link in the selected-part card.
 5. Use the canvas CAD tool palette to add a beam, joint, bracket, motor, connector, electronics block, or tool plate.
 6. Confirm the new primitive appears in the canvas and model tree, is selected automatically, and can be renamed with the selected-part label field.
-7. Edit length, width, height, XYZ position, and Z rotation. Confirm the canvas dimensions and selected-part detail card update.
-8. Toggle Focus selected. Confirm the selected part lifts out, neighboring parts dim, and a focused dimension overlay remains readable.
-9. Connect the selected primitive to a parent part and choose a joint type. Confirm a visible joint marker appears in the canvas.
-10. Route a visible wire to another part. Confirm the cyan route appears in the canvas, the route list updates, and the route remains labeled review-required for real electrical and CAD checks.
-11. Export the `.mfcad.json` project, import it again, and confirm the new label, dimensions, parent or joint metadata, recipe metadata, and visible wiring survive the round trip.
+7. Edit length, width, height or diameter from the viewport-anchored inspector. Confirm the canvas dimensions, drawing preview, FEA-input preview, and selected-part detail card update without navigating away from the model.
+8. Pick a sketch plane, choose a 2D profile, set extrude depth or cut state, and apply the example centered hole 2 in from the bottom. Confirm the selected screw or bolt sets the clearance hole size and the hole callout appears on the rendered profile.
+9. Toggle Focus selected. Confirm the selected part lifts out, neighboring parts dim, and a focused dimension overlay remains readable.
+10. Connect the selected primitive to a parent part and choose a joint type. Confirm a visible joint marker appears in the canvas.
+11. Route a visible wire to another part. Confirm the cyan route appears in the canvas, the route list updates, and the route remains labeled review-required for real electrical and CAD checks.
+12. Export the `.mfcad.json` project, import it again, and confirm the new label, dimensions, parent or joint metadata, recipe metadata, viewport sketch state, hole/fastener metadata, drawing/FEA preview extension, and visible wiring survive the round trip.
 
 ## Requirements-driven resizing proof
 

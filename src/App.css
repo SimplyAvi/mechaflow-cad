@@ -1595,6 +1595,280 @@ small,
   padding: 14px;
 }
 
+.full-canvas-shell .workspace-topbar {
+  background: rgba(2, 6, 23, 0.68);
+  border-bottom: 1px solid rgba(125, 211, 252, 0.18);
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 0.48fr);
+  padding: 10px 14px;
+}
+
+.full-canvas-shell .brand-block h1 {
+  font-size: clamp(1.25rem, 2vw, 2rem);
+  max-width: 520px;
+}
+
+.full-canvas-shell .brand-block p:last-child {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+}
+
+.full-canvas-shell .tool-rail {
+  display: none;
+}
+
+.full-canvas-shell .cockpit-task-card {
+  justify-self: end;
+  max-width: 390px;
+}
+
+.full-canvas-action-bar {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.72);
+  border-bottom: 1px solid rgba(125, 211, 252, 0.16);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(230px, 0.72fr) max-content minmax(420px, 1.2fr) minmax(320px, 0.82fr);
+  padding: 8px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 18;
+}
+
+.canvas-workspace-status {
+  align-items: center;
+  display: grid;
+  gap: 2px 8px;
+  grid-template-columns: auto 1fr;
+  min-width: 0;
+}
+
+.canvas-workspace-status strong,
+.canvas-workspace-status small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-workspace-status small {
+  color: #b7d7ea;
+  grid-column: 2;
+}
+
+.status-dot {
+  background: #34d399;
+  border-radius: 999px;
+  box-shadow: 0 0 0 7px rgba(52, 211, 153, 0.14);
+  height: 10px;
+  width: 10px;
+}
+
+.blank-plane-action,
+.canvas-drawer-buttons button,
+.canvas-mode-switcher button {
+  background: rgba(15, 23, 42, 0.64);
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 999px;
+  color: #e0f2fe;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 38px;
+  padding: 7px 11px;
+}
+
+.blank-plane-action {
+  background: linear-gradient(135deg, #38bdf8, #34d399);
+  border: 0;
+  color: #03111f;
+}
+
+.canvas-drawer-buttons,
+.canvas-mode-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.canvas-drawer-buttons button {
+  border-radius: 14px;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  line-height: 1.1;
+  min-width: 76px;
+}
+
+.canvas-drawer-buttons button small {
+  color: #9fb8ca;
+  font-size: 0.62rem;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-drawer-buttons button[aria-pressed="true"],
+.canvas-mode-switcher button[aria-pressed="true"] {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(125, 211, 252, 0.72);
+}
+
+.full-canvas-cockpit {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 10px 14px 14px;
+  position: relative;
+}
+
+.full-canvas-cockpit .canvas-column {
+  min-height: 0;
+}
+
+.full-canvas-cockpit .cad-sidebar,
+.full-canvas-cockpit .context-sidebar {
+  background: rgba(2, 6, 23, 0.94);
+  border-color: rgba(125, 211, 252, 0.28);
+  bottom: 16px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.48);
+  max-height: none;
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  top: 156px;
+  transform: translateY(10px) scale(0.98);
+  transition: opacity 160ms ease, transform 160ms ease;
+  width: min(400px, calc(100vw - 32px));
+  z-index: 22;
+}
+
+.full-canvas-cockpit .cad-sidebar {
+  left: 16px;
+}
+
+.full-canvas-cockpit .context-sidebar {
+  right: 16px;
+}
+
+.canvas-drawer-project .cad-sidebar,
+.canvas-drawer-context .context-sidebar {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.full-canvas-shell .primary-viewer {
+  min-height: calc(100vh - 188px);
+  padding: 14px;
+}
+
+.full-canvas-shell .viewer-toolbar {
+  align-items: center;
+}
+
+.full-canvas-shell .viewer-toolbar > div:first-child small {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+}
+
+.full-canvas-shell .cad-workspace-frame {
+  height: calc(100vh - 350px);
+  margin: 10px 0 0;
+  min-height: 520px;
+}
+
+.full-canvas-shell .selected-part-canvas-card,
+.full-canvas-shell .command-dock,
+.full-canvas-shell .visual-authoring-dock,
+.full-canvas-shell .mode-deck {
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity 160ms ease, transform 160ms ease;
+  z-index: 24;
+}
+
+.full-canvas-shell .selected-part-canvas-card,
+.full-canvas-shell .visual-authoring-dock,
+.full-canvas-shell .mode-deck {
+  bottom: 16px;
+  max-height: min(74vh, 720px);
+  overflow: auto;
+  right: 16px;
+  width: min(820px, calc(100vw - 32px));
+}
+
+.full-canvas-shell .command-dock {
+  bottom: 16px;
+  left: 50%;
+  max-width: min(920px, calc(100vw - 32px));
+  width: 920px;
+}
+
+.canvas-drawer-context .selected-part-canvas-card,
+.canvas-drawer-tools .visual-authoring-dock,
+.canvas-drawer-requirements .visual-authoring-dock,
+.canvas-drawer-assembly .visual-authoring-dock,
+.canvas-drawer-command .command-dock,
+.canvas-drawer-context .mode-deck {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.canvas-drawer-drawing .viewport-anchored-editor,
+.canvas-drawer-part .viewport-anchored-editor {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+.full-canvas-shell:not(.canvas-drawer-part):not(.canvas-drawer-drawing) .viewport-anchored-editor {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(16px) scale(0.98);
+}
+
+.canvas-drawer-drawing .viewport-anchored-editor {
+  max-height: calc(100% - 96px);
+}
+
+.canvas-drawer-drawing .viewport-output-preview {
+  border-color: rgba(45, 212, 191, 0.42);
+}
+
+@media (max-width: 1180px) {
+  .full-canvas-action-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .full-canvas-shell .cockpit-task-card {
+    display: none;
+  }
+
+  .full-canvas-cockpit .cad-sidebar,
+  .full-canvas-cockpit .context-sidebar {
+    top: 188px;
+  }
+}
+
+@media (max-width: 900px) {
+  .full-canvas-shell .workspace-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .full-canvas-shell .primary-viewer {
+    min-height: 720px;
+  }
+
+  .full-canvas-shell .cad-workspace-frame {
+    height: auto;
+  }
+}
+
 .cad-sidebar,
 .context-sidebar,
 .canvas-column {
@@ -2995,6 +3269,241 @@ small,
   cursor: grabbing;
 }
 
+.on-canvas-annotation-card {
+  background: linear-gradient(145deg, rgba(3, 7, 18, 0.9), rgba(8, 47, 73, 0.86));
+  border: 1px solid rgba(45, 212, 191, 0.34);
+  border-radius: 16px;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.36), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 8px;
+  left: 14px;
+  max-width: min(390px, 34vw);
+  padding: 11px;
+  position: absolute;
+  top: 54px;
+  z-index: 5;
+}
+
+.annotation-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.annotation-heading span,
+.on-canvas-annotation-card dt {
+  color: #7dd3fc;
+  font-size: 0.63rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.annotation-heading strong {
+  color: #f8fafc;
+  font-size: 0.94rem;
+}
+
+.on-canvas-annotation-card dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.on-canvas-annotation-card div {
+  min-width: 0;
+}
+
+.on-canvas-annotation-card dd {
+  color: #dbeafe;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  margin: 2px 0 0;
+}
+
+.viewport-anchored-editor {
+  background: linear-gradient(145deg, rgba(2, 6, 23, 0.92), rgba(8, 47, 73, 0.9));
+  border: 1px solid rgba(125, 211, 252, 0.32);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 10px;
+  max-height: calc(100% - 126px);
+  overflow: auto;
+  padding: 12px;
+  position: absolute;
+  right: 14px;
+  top: 54px;
+  width: min(360px, calc(100% - 28px));
+  z-index: 6;
+}
+
+.viewport-editor-heading,
+.viewport-section-heading,
+.viewport-operation-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.viewport-editor-heading strong,
+.viewport-editor-heading small,
+.viewport-section-heading strong,
+.viewport-section-heading small {
+  display: block;
+}
+
+.viewport-editor-heading small,
+.viewport-section-heading small,
+.viewport-output-preview li,
+.viewport-output-preview p,
+.viewport-output-preview code,
+.hole-placement-summary small {
+  color: #b7d7ea;
+  line-height: 1.4;
+}
+
+.viewport-editor-section,
+.viewport-output-preview,
+.hole-placement-summary {
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.viewport-dimension-grid,
+.drawing-dimension-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lifecycle-map-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lifecycle-map-grid article {
+  background: rgba(2, 6, 23, 0.42);
+  border: 1px solid rgba(45, 212, 191, 0.14);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+}
+
+.lifecycle-map-grid article strong {
+  color: #dff9ff;
+  font-size: 0.76rem;
+}
+
+.lifecycle-map-grid article small {
+  color: #b7d7ea;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+
+.viewport-operation-row {
+  justify-content: flex-start;
+}
+
+.viewport-anchored-editor input,
+.viewport-anchored-editor select {
+  background: rgba(2, 6, 23, 0.9);
+}
+
+.viewport-operation-row button,
+.viewport-primary-action {
+  background: rgba(56, 189, 248, 0.13);
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 999px;
+  color: #e0f2fe;
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.viewport-operation-row button[aria-pressed="true"],
+.viewport-primary-action {
+  background: linear-gradient(135deg, #38bdf8, #34d399);
+  border: 0;
+  color: #03111f;
+}
+
+.viewport-output-preview ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.drawing-dimension-list {
+  margin: 0;
+}
+
+.drawing-dimension-list div {
+  background: rgba(2, 6, 23, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.drawing-dimension-list dt {
+  color: #a7cfe8;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.drawing-dimension-list dd {
+  display: grid;
+  gap: 3px;
+  margin: 4px 0 0;
+}
+
+.viewport-output-preview code {
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 12px;
+  display: block;
+  font-size: 0.68rem;
+  max-height: 145px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.hole-placement-overlay circle {
+  fill: rgba(15, 23, 42, 0.78);
+  stroke: #fbbf24;
+  stroke-width: 2.2;
+}
+
+.hole-placement-overlay line {
+  stroke: rgba(251, 191, 36, 0.82);
+  stroke-dasharray: 4 3;
+  stroke-width: 1.4;
+}
+
+.hole-placement-overlay text {
+  fill: #fef3c7;
+  font-size: 10px;
+}
+
+@media (max-width: 900px) {
+  .viewport-anchored-editor {
+    margin: 10px 12px;
+    max-height: none;
+    position: static;
+    width: auto;
+  }
+}
+
 .canvas-backplate {
   fill: rgba(2, 6, 23, 0.18);
 }
@@ -3771,4 +4280,86 @@ small,
 
 .inspector-panel .meta-grid dd > span {
   display: block;
+}
+
+/* Final full-canvas overrides: keep older cockpit rules from shrinking the model plane. */
+.input-first-shell.full-canvas-shell .workspace-topbar {
+  background: rgba(2, 6, 23, 0.68);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 390px);
+  padding: 10px 14px;
+}
+
+.input-first-shell.full-canvas-shell .tool-rail {
+  display: none;
+}
+
+.input-first-shell.full-canvas-shell .project-cockpit.full-canvas-cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 10px 14px 14px;
+}
+
+.input-first-shell.full-canvas-shell .canvas-column {
+  grid-column: 1;
+  width: 100%;
+}
+
+.input-first-shell.full-canvas-shell .primary-viewer {
+  min-height: calc(100vh - 188px);
+  padding: 14px;
+}
+
+.input-first-shell.full-canvas-shell .primary-viewer .viewer-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(260px, 0.62fr) minmax(0, 1.38fr);
+}
+
+.input-first-shell.full-canvas-shell .primary-viewer .viewer-toolbar > div:first-child {
+  min-width: 0;
+}
+
+.input-first-shell.full-canvas-shell .primary-viewer .viewer-toolbar > div:first-child h2,
+.input-first-shell.full-canvas-shell .primary-viewer .viewer-toolbar > div:first-child small {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+}
+
+.input-first-shell.full-canvas-shell .primary-viewer .viewer-controls {
+  justify-content: flex-end;
+  max-width: none;
+}
+
+.input-first-shell.full-canvas-shell .primary-viewer .viewer-controls label {
+  min-width: 82px;
+}
+
+.input-first-shell.full-canvas-shell .primary-viewer .viewer-controls input[type='range'] {
+  max-width: 82px;
+}
+
+.input-first-shell.full-canvas-shell .cad-workspace-frame {
+  height: calc(100vh - 350px);
+  margin: 10px 0 0;
+  min-height: 560px;
+}
+
+.input-first-shell.full-canvas-shell .cad-sidebar,
+.input-first-shell.full-canvas-shell .context-sidebar {
+  max-height: none;
+  position: fixed;
+}
+
+@media (max-width: 1180px) {
+  .input-first-shell.full-canvas-shell .workspace-topbar,
+  .input-first-shell.full-canvas-shell .primary-viewer .viewer-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .input-first-shell.full-canvas-shell .cad-workspace-frame {
+    height: 620px;
+  }
 }

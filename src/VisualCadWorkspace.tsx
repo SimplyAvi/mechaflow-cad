@@ -1,4 +1,4 @@
-import { useMemo, useRef, type CSSProperties, type PointerEvent, type WheelEvent } from 'react';
+import { useMemo, useRef, type CSSProperties, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 import type { RobotArmLoadFindingStatus } from './lib/loadSizing';
 import type { AuthoringUnit, Part, PartAuthoringData, PartAuthoringDimensions, WiringRoute } from './types';
 import { formatFeatureRecipeCallout, formatLength, lengthFromMm } from './lib/visualAuthoring';
@@ -23,6 +23,7 @@ interface VisualCadWorkspaceProps {
   onViewChange: (view: ViewState) => void;
   onSelectPart: (partId: string) => void;
   onNudgeSelected: (delta: { x: number; y: number; z: number }) => void;
+  children?: ReactNode;
 }
 
 interface ProjectedPoint {
@@ -369,13 +370,85 @@ function DimensionOverlay({ part, units, project, focused }: { part: Part; units
   const label = part.authoring.primitive === 'cylinder_joint'
     ? `Diameter ${formatLength(part.authoring.dimensionsMm.diameterMm ?? dims.width, units)}`
     : `Length ${formatLength(dims.length, units)}`;
+  const holeOffset = part.authoring.holePattern?.offsetFromBottomMm;
+  const clampedHoleOffset = holeOffset == null ? null : clamp(holeOffset, 0, dims.height);
+  const holePoint = clampedHoleOffset == null ? null : project({
+    x: center.x,
+    y: center.y - dims.width / 2 - 3,
+    z: center.z - dims.height / 2 + clampedHoleOffset,
+  });
+  const holeLabel = part.authoring.holePattern
+    ? `${part.authoring.holePattern.fastenerLabel}: ${formatLength(part.authoring.holePattern.holeDiameterMm, units)} hole, ${formatLength(part.authoring.holePattern.offsetFromBottomMm, units)} from bottom`
+    : null;
   return (
     <g className="dimension-overlay" aria-hidden="true">
       <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
       <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{label}</text>
       <line x1={heightStart.x} y1={heightStart.y} x2={heightEnd.x} y2={heightEnd.y} />
       <text x={heightEnd.x + 8} y={heightEnd.y}>Height {formatLength(dims.height, units)}</text>
+      {holePoint && holeLabel ? (
+        <g className="hole-placement-overlay">
+          <circle cx={holePoint.x} cy={holePoint.y} r="7" />
+          <line x1={holePoint.x + 9} y1={holePoint.y - 2} x2={holePoint.x + 112} y2={holePoint.y - 28} />
+          <text x={holePoint.x + 118} y={holePoint.y - 30}>{holeLabel}</text>
+        </g>
+      ) : null}
     </g>
+  );
+}
+
+function onCanvasLoadSummary(part: Part, loadStatus?: RobotArmLoadFindingStatus): string {
+  const sizingCriterion = part.designCriteria.find((criterion) => criterion.id === 'requirement-sizing-upgrade');
+  if (sizingCriterion) return `${sizingCriterion.label}: ${sizingCriterion.value}`;
+  if (loadStatus === 'undersized') return 'Load check: undersized for current payload plus self-weight requirement';
+  if (loadStatus === 'watch') return 'Load check: watch current payload plus self-weight requirement';
+  return `FEA readiness: ${part.analysisReadiness.state.replaceAll('_', ' ')}`;
+}
+
+function OnCanvasEngineeringAnnotations({ part, units, loadStatus }: { part: Part; units: AuthoringUnit; loadStatus?: RobotArmLoadFindingStatus }) {
+  const dimensions = partLabelDimension(part, units);
+  const sketch = part.authoring.sketchState;
+  const feature = part.authoring.featureRecipe;
+  const holePattern = part.authoring.holePattern;
+  const materialCriterion = part.designCriteria.find((criterion) => criterion.id === 'material-strength');
+  const holeCriterion = part.designCriteria.find((criterion) => criterion.id === 'hole-fastener-placement');
+  const featureSummary = sketch
+    ? `${sketch.plane}, ${sketch.profile}, ${sketch.operation}`
+    : feature
+      ? `${feature.plane}, ${feature.profile}, feature recipe`
+      : 'Sketch and feature annotations review required';
+  const holeSummary = holePattern
+    ? `${holePattern.count}x ${formatLength(holePattern.holeDiameterMm, units)} for ${holePattern.fastenerLabel}, ${formatLength(holePattern.offsetFromBottomMm, units)} from bottom, ${holePattern.centeredOnWidth ? 'centered' : 'offset'}`
+    : holeCriterion?.value ?? 'Hole and fastener fit review required';
+  return (
+    <aside className="on-canvas-annotation-card" aria-label="On-canvas selected part annotations">
+      <div className="annotation-heading">
+        <span>On-model annotations</span>
+        <strong>{part.name}</strong>
+      </div>
+      <dl>
+        <div>
+          <dt>Size</dt>
+          <dd>{dimensions}</dd>
+        </div>
+        <div>
+          <dt>Constraints and feature</dt>
+          <dd>{featureSummary}</dd>
+        </div>
+        <div>
+          <dt>Hole and fastener fit</dt>
+          <dd>{holeSummary}</dd>
+        </div>
+        <div>
+          <dt>Material and process</dt>
+          <dd>{part.material}; {part.manufacturingProcess}. {materialCriterion?.value ?? 'properties review required'}</dd>
+        </div>
+        <div>
+          <dt>Load and FEA context</dt>
+          <dd>{onCanvasLoadSummary(part, loadStatus)}</dd>
+        </div>
+      </dl>
+    </aside>
   );
 }
 
@@ -439,6 +512,7 @@ export function VisualCadWorkspace({
   onViewChange,
   onSelectPart,
   onNudgeSelected,
+  children,
 }: VisualCadWorkspaceProps) {
   const dragRef = useRef<{ x: number; y: number; view: ViewState; mode: 'orbit' | 'pan' } | null>(null);
   const project = useProjection(view);
@@ -507,6 +581,7 @@ export function VisualCadWorkspace({
         <span>Shift-drag to pan</span>
         <span>Wheel or slider to zoom</span>
       </div>
+      {selectedPart ? <OnCanvasEngineeringAnnotations loadStatus={loadHighlights[selectedPart.id]} part={selectedPart} units={units} /> : null}
       <svg
         aria-label="Visual CAD authoring canvas"
         className="visual-cad-canvas"
@@ -597,6 +672,7 @@ export function VisualCadWorkspace({
         {selectedPart ? <DimensionOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
         {selectedPart ? <FeatureRecipeOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
       </svg>
+      {children}
       <div className="canvas-status-row" aria-live="polite">
         <strong>{selectedPart?.name ?? 'No part selected'}</strong>
         <span>{selectedPart ? partLabelDimension(selectedPart, units) : 'Select or create a part to edit geometry.'}</span>

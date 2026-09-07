@@ -119,6 +119,10 @@ When a part changes, the system should re-check available evidence against the t
 
 Current frontend MVP behavior includes deterministic robot-arm load triage for a 50 lb to 75 lb upsize path. It accounts for payload plus visible assembly self-weight, safety factor, and reach, then highlights undersized or affected actuator, fastener, joint, sleeve, bracket, link, and end-effector checks with editable local upgrade suggestions. These checks remain seeded heuristics and review-required, not FEA, certification, supplier warranty, or a production rating.
 
+Current frontend MVP behavior also keeps selected-part edits beside the 3D model. Users can change dimensions, sketch plane/profile/extrude/cut state, material/process, and fastener-aware hole placement from a viewport-anchored inspector. The viewport exposes build-ready metadata previews for individual parts: machinist drawing/export details and structured FEA inputs containing geometry, material, load requirements, self-weight, selected fasteners, connection assumptions, and review-required notes. These previews are metadata contracts, not released drawings or solver outputs.
+
+The full-canvas frontend shell keeps the 3D modeling plane as the dominant workspace. Users can start from a blank part-design plane or open an existing assembly, then reveal Project, Part, Tools, Load, Drawing/FEA, Assembly, Command, or Review controls as contextual pop-outs instead of reading every panel at once. On-model annotations keep selected-part size, constraints/features, hole placement, fastener fit, material/process, and load/FEA context visible directly in the working plane while side drawers support advanced editing. The selected-part viewport also shows a CAD lifecycle map that ties public CAD process concepts to MechaFlow data persistence, API handoff fields, and future worker boundaries without claiming proprietary compatibility.
+
 ### Material and manufacturing substitution
 
 The platform should let users compare compatible material and process options.
@@ -266,11 +270,12 @@ The MVP succeeds if a user can:
 3. Open, import, reopen, or load a local ready-example project.
 4. View and manipulate an exploded robot assembly concept.
 5. Select a part and inspect task, material, manufacturing, wiring, and review labels.
-6. Preview and apply a compatible material/process substitution through validated contracts.
-7. See BOM, manufacturing, wiring, analysis readiness, job queue, and report panels update with honest estimate and review-required labels.
-8. Run local-safe pre-solver and solver-readiness fixture paths without claiming project FEA.
-9. Export and import a `.mfcad.json` file that preserves the meaningful MVP state.
-10. Pass the local and CI validation policy for changed surfaces.
+6. Edit selected-part dimensions, sketch state, hole placement, fastener choice, material/process, drawing preview, and FEA-input metadata from the viewport beside the 3D model.
+7. Preview and apply a compatible material/process substitution through validated contracts.
+8. See BOM, manufacturing, wiring, analysis readiness, job queue, and report panels update with honest estimate and review-required labels.
+9. Run local-safe pre-solver and solver-readiness fixture paths without claiming project FEA.
+10. Export and import a `.mfcad.json` file that preserves the meaningful MVP state.
+11. Pass the local and CI validation policy for changed surfaces.
 
 ## Future acceptance criteria for real analysis
 

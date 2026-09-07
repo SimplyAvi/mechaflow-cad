@@ -49,20 +49,49 @@ Owner files:
 - `src/lib/api.ts` for backend and mock API calls.
 - `src/lib/backendMapper.ts` for mapping backend panel data into cockpit state.
 - `src/lib/visualAuthoring.ts` for browser-side unit conversion, primitive creation, geometry mutation, assembly metadata, visible wire-route creation, local project-file export projection, and remapping authored backend project data into React state.
+- `src/lib/partOutputs.ts` for deterministic viewport hole/fastener defaults, selected-part machinist drawing previews, and structured FEA-input previews.
 - `src/lib/designIntent.ts` for local design-intent chip extraction.
 - `src/data/backendPanelData.json`, `src/data/mockDesign.ts`, and `src/data/readyExamples.ts` for local fallback demo state.
 - `src/*.test.tsx`, `src/lib/*.test.ts`, and `src/data/*.test.ts` for frontend behavior coverage.
 
 Current behavior:
 
-- Opens directly into a visual CAD authoring cockpit with compact CAD-style sidebars.
-- Supports unit selection, primitive creation, selected geometry edits, motor and connector placement, parent and joint metadata, orbit, pan, zoom, explode, and visible wire routing.
-- Supports a guided sketch-first part flow, local catalog matching, editable feature recipes, focus-selected inspection, and assembly placement metadata.
+- Opens directly into a full-canvas visual CAD authoring cockpit with contextual pop-out drawers instead of always-visible sidebars.
+- Supports unit selection, primitive creation, on-model engineering annotations, viewport-anchored selected geometry edits, motor and connector placement, parent and joint metadata, orbit, pan, zoom, explode, and visible wire routing.
+- Supports a guided sketch-first part flow, local catalog matching, editable feature recipes, visual plane/profile/extrude/cut state, focus-selected inspection, and assembly placement metadata.
+- Supports fastener-aware hole placement examples and build-output previews for individual parts: machinist drawing metadata plus FEA-input data carrying geometry dimensions, material, load requirements, self-weight, constraints, fasteners, and review notes.
 - Supports deterministic requirement resizing for the robot-arm demo: payload plus assembly self-weight, safety factor, reach, actuator torque, fastener, joint, sleeve, bracket, link, and end-effector checks with local upgrade catalog fixes that remain review-required.
 - Supports new prompt concepts, local project import/export, recent project reopen, reference catalog path, and repository-local ready examples.
 - Treats reference images as local metadata only.
 - Groups advanced panels by Design, Analysis, Manufacturing, Reports, and Backend modes.
 - Connects to the FastAPI backend when `VITE_API_BASE_URL` is set, otherwise falls back to bundled or Node mock data.
+
+### Public CAD process mapping
+
+This mapping is conceptual and original to MechaFlow. It is based on public CAD process references such as SOLIDWORKS help topics for sketch dimensions and relations, extrude feature workflows, configurations and design tables, materials in configurations, smart fasteners, neutral export formats, and simulation bolt connectors; Onshape help topics for standard content, mates, drawings, document history, and structural simulation; and FreeCAD documentation for Sketcher constraints, PartDesign feature modeling, drawing/TechDraw, and FEM preparation. It does not copy proprietary UI, assets, file formats, or compatibility claims.
+
+- Plane selection, sketches, dimensions, and relations map to on-model dimension/constraint annotations, viewport `sketchState`, editable dimension callouts, current units, and `part.dimensions.metadata.viewport_sketch_state`. Future FreeCAD workers can consume this as intent, but the MVP does not claim a solved parametric sketch.
+- Extrude, cut, revolve, chamfer, fillet, feature history, and configurations map to `PartAuthoringFeatureRecipe` steps, feature callouts, load-sizing upgrade criteria, and project-file extension `visual_authoring_mvp.cad_lifecycle_map`. Requirement upsize snapshots act as deterministic configuration intent until a real CAD/configuration worker exists.
+- Materials, properties, standard hardware, and fasteners map to `materials`, `manufacturing_options`, deterministic local fastener options, `hole_pattern`, `fasteners`, BOM rows, and drawing/FEA previews. Standards-grade claims remain review-required until licensed standards data and supplier validation are wired.
+- Assemblies, mates, constraints, drawings, BOM, and exports map to `assemblies`, `nodes`, transforms, selected parent and joint type, visible wiring routes, `bom_items`, `analysis_readiness_previews`, and `.mfcad.json` exports. Released STEP, DXF, PDF, certified drawing, or supplier packages are future worker outputs.
+- Simulation setup maps to on-model load/FEA annotations, FEA-input previews, `analysis_readiness_previews`, active task requirements, self-weight estimates, material properties, load cases, constraints, fasteners, connector assumptions, local pre-solver jobs, and solver input specs. The MVP preserves enough assembly context for later analysis but does not run or certify full assembly FEA.
+
+Public reference pages used for this concept map include:
+
+- <https://help.solidworks.com/2025/English/SWConnected/swdotworks/c_dimensions_relations_top.htm>
+- <https://help.solidworks.com/2021/english/SolidWorks/sldworks/r_extrude_propertymanager.htm>
+- <https://help.solidworks.com/2025/english/SolidWorks/sldworks/c_Design_Table_Configurations.htm>
+- <https://help.solidworks.com/2025/english/SWConnected/swdotworks/r_Materials_in_Configurations.htm>
+- <https://help.solidworks.com/2025/english/SWConnected/swdotworks/t_adding_smart_fasteners.htm>
+- <https://help.solidworks.com/2025/English/SWConnected/swdotworks/c_export_files.htm>
+- <https://help.solidworks.com/2025/English/SolidWorks/cworks/c_Bolt_Connectors_Formulation.htm>
+- <https://cad.onshape.com/help/Content/Assembly/standard_content.htm>
+- <https://cad.onshape.com/help/Content/Assembly/mates.htm>
+- <https://cad.onshape.com/help/Content/Drawing/drawings.htm>
+- <https://cad.onshape.com/help/Content/Assembly/simulation.htm>
+- <https://wiki.freecad.org/Sketcher_Workbench>
+- <https://wiki.freecad.org/PartDesign_Workbench>
+- <https://wiki.freecad.org/FEM_Workbench>
 
 ### Node mock and desktop shell
 
@@ -117,6 +146,7 @@ Seed records are demo and planning inputs. They must preserve license status, so
 - Effective material or dimension changes clear stored part mass until a CAD worker recalculates it.
 - BOM, manufacturing, readiness, reports, and queue panels are derived from project state and seed manufacturing options. Cost and lead-time values are ranges, not exact quotes.
 - Wiring review checks recorded route evidence against MVP thresholds. It is not exact electrical validation or CAD clearance proof.
+- Viewport-authored sketch state, hole patterns, selected fasteners, and drawing/FEA previews are deterministic metadata contracts. They are not released drawings, source CAD, or solver results.
 - Pre-solver readiness packages future solver inputs and review notes. It is not FEA.
 - The CalculiX fixture can execute a deterministic generated deck if `ccx` exists. It proves executable plumbing only.
 - Full project FEA remains blocked until project geometry prep, meshing, solve execution, result extraction, and engineering review exist.

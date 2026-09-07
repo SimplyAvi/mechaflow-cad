@@ -10,7 +10,7 @@ import {
   runLocalSolverReadinessAnalysis,
   type MaterialSubstitutionResult,
 } from './lib/api';
-import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, ReferenceDesign, UsdRange } from './types';
+import type { AdvisoryReport, Assembly, LocalSolverReadinessSummary, MaterialOption, Part, PartAuthoringFeatureRecipe, PartAuthoringHolePattern, PartAuthoringSketchState, ReferenceDesign, UsdRange } from './types';
 import {
   applyRobotArmLoadFixesToProject,
   assessRobotArmLoadRequirement,
@@ -19,6 +19,15 @@ import {
   type RobotArmLoadSizingFinding,
   type RobotArmLoadSizingResult,
 } from './lib/loadSizing';
+import {
+  buildDefaultHolePattern,
+  buildPartOutputPreview,
+  defaultSketchStateForPart,
+  fastenerCatalogOptions,
+  normalizeHolePattern,
+  type PartOutputPreview,
+} from './lib/partOutputs';
+import { cadLifecycleMappings } from './lib/cadLifecycleMap';
 import { readyExamples, buildReadyExampleDesign, isolateOfflineDesign, type ReadyExampleId } from './data/readyExamples';
 import { localRobotArmPartCatalog, matchLocalPartCatalog, type LocalPartCatalogMatch } from './data/localPartCatalog';
 import { mockReferenceDesign } from './data/mockDesign';
@@ -44,7 +53,7 @@ import {
   updateProjectUnits,
   formatFeatureRecipeCallout,
 } from './lib/visualAuthoring';
-import type { AuthoringUnit, BackendProject, CADJointType, CADPrimitiveShape } from './types';
+import type { AuthoringUnit, BackendManufacturingOption, BackendMaterial, BackendProject, CADJointType, CADPrimitiveShape } from './types';
 import './App.css';
 
 const formatCurrency = (value: number): string => {
@@ -69,6 +78,45 @@ const formatUsdRange = (range: UsdRange): string => {
 const formatMeasurement = (value: number, maximumFractionDigits = 2): string => new Intl.NumberFormat('en-US', {
   maximumFractionDigits,
 }).format(value);
+
+const viewportSketchPlanes = ['Front plane', 'Top plane', 'Right plane', 'Offset plane through selected part'];
+const viewportSketchProfiles = ['Centered rectangle profile with construction centerlines', 'Concentric circle profile with bore', 'Rounded slot cut profile', 'Two-hole bolt pattern sketch'];
+
+const sketchOperationLabel: Record<PartAuthoringSketchState['operation'], string> = {
+  sketch: 'Sketch profile',
+  extrude: 'Extrude selected profile',
+  cut: 'Cut or drill feature',
+  finish: 'Finish edges',
+};
+
+const recipeFromSketchState = (part: Part, state: PartAuthoringSketchState): PartAuthoringFeatureRecipe => {
+  const base = part.authoring.featureRecipe ?? {
+    id: `recipe-viewport-${part.id}`,
+    name: 'Viewport sketch, extrude, cut, and finish proxy',
+    plane: state.plane,
+    profile: state.profile,
+    history: [],
+    callouts: [],
+  };
+  const operationKind = state.operation === 'extrude' ? 'extrude' : state.operation === 'cut' ? 'cut' : state.operation === 'finish' ? 'finish' : 'sketch';
+  const operationStep = {
+    id: `viewport-${state.operation}`,
+    label: sketchOperationLabel[state.operation],
+    value: `${state.profile}; ${state.constraintSummary}${state.extrudeDepthMm == null ? '' : `; depth ${formatMeasurement(state.extrudeDepthMm)} mm`}`,
+    kind: operationKind,
+  } satisfies PartAuthoringFeatureRecipe['history'][number];
+  const seededCallouts: PartAuthoringFeatureRecipe['callouts'] = [];
+  if (part.authoring.dimensionsMm.diameterMm) seededCallouts.push({ id: 'od', label: 'Outer diameter', value: `${formatMeasurement(part.authoring.dimensionsMm.diameterMm)} mm`, kind: 'sketch' });
+  if (part.authoring.dimensionsMm.lengthMm) seededCallouts.push({ id: 'length', label: 'Length', value: `${formatMeasurement(part.authoring.dimensionsMm.lengthMm)} mm`, kind: 'sketch' });
+  if (part.authoring.dimensionsMm.heightMm) seededCallouts.push({ id: 'height', label: 'Extrude height', value: `${formatMeasurement(part.authoring.dimensionsMm.heightMm)} mm`, kind: 'extrude' });
+  return {
+    ...base,
+    plane: state.plane,
+    profile: state.profile,
+    history: [...base.history.filter((step) => step.id !== operationStep.id), operationStep],
+    callouts: base.callouts.length > 0 ? base.callouts : seededCallouts,
+  };
+};
 
 const formatLeadTimeRange = (range?: { min: number | null; max: number | null } | null): string => {
   if (!range || (range.min == null && range.max == null)) return 'lead time review required';
@@ -206,6 +254,7 @@ const isSuccessfulLocalAnalysisJob = (job: ReferenceDesign['analysisJobs'][numbe
 );
 
 type WorkspaceMode = 'design' | 'analysis' | 'manufacturing' | 'reports' | 'backend';
+type CanvasDrawer = 'none' | 'project' | 'part' | 'tools' | 'requirements' | 'drawing' | 'assembly' | 'command' | 'context';
 type SpeechState = 'idle' | 'listening' | 'unsupported' | 'error';
 type ReferenceImageSource = 'upload' | 'drop';
 
@@ -394,6 +443,7 @@ function App() {
   });
   const [exportedEvidence, setExportedEvidence] = useState<ExportedEvidenceSignature | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('design');
+  const [activeCanvasDrawer, setActiveCanvasDrawer] = useState<CanvasDrawer>('part');
   const [intentText, setIntentText] = useState('');
   const [intentMessage, setIntentMessage] = useState<string | null>('Robot arm demo is loaded. Describe a new mechanism or add a reference image to start faster.');
   const [partMatchQuery, setPartMatchQuery] = useState('joint motor');
@@ -549,11 +599,16 @@ function App() {
       .filter((finding) => finding.partId === selectedPart?.id)
       .sort((left, right) => rank[right.status] - rank[left.status] || (right.utilization ?? 0) - (left.utilization ?? 0))[0];
   }, [loadSizingResult, selectedPart?.id]);
+  const selectedPartOutputPreview = useMemo(() => (
+    selectedPart ? buildPartOutputPreview(selectedPart, design?.units ?? 'mm', design?.task ?? mockReferenceDesign.task, loadSizingResult, selectedLoadSizingFinding) : null
+  ), [design?.task, design?.units, loadSizingResult, selectedLoadSizingFinding, selectedPart]);
 
   const selectPart = (partId: string) => {
     setSelectedPartId(partId);
     setSubstitutionPreview(null);
     setFocusedPartId((current) => current == null ? current : partId);
+    setActiveCanvasDrawer('part');
+    setAuthoringMessage(`Selected ${activeAssembly?.parts.find((part) => part.id === partId)?.name ?? partId} for contextual visual editing beside the 3D plane.`);
     markDemoStep('select-part');
   };
 
@@ -617,6 +672,27 @@ function App() {
           ? { heightMm: valueMm }
           : { diameterMm: valueMm };
     updateSelectedPartGeometry({ dimensions }, `${selectedPart.name} ${key} set to ${rawValue} ${design.units}.`);
+    markDemoStep('viewport-edit');
+  };
+
+  const updateSelectedHolePattern = (updates: Partial<PartAuthoringHolePattern>, message?: string) => {
+    if (!design || !selectedPart) return;
+    const holePattern = normalizeHolePattern(selectedPart, updates);
+    const fasteners = [holePattern.fastenerSpec, ...selectedPart.fasteners.filter((fastener) => fastener !== holePattern.fastenerSpec)].slice(0, 6);
+    updateSelectedPartGeometry({ holePattern, fasteners }, message ?? `${selectedPart.name} hole pattern set to ${formatLength(holePattern.offsetFromBottomMm, design.units)} from the bottom and ${holePattern.centeredOnWidth ? 'centered' : 'offset'} with ${holePattern.fastenerLabel}.`);
+    markDemoStep('viewport-edit');
+  };
+
+  const updateSelectedSketchState = (updates: Partial<PartAuthoringSketchState>, message?: string) => {
+    if (!design || !selectedPart) return;
+    const base = selectedPart.authoring.sketchState ?? defaultSketchStateForPart(selectedPart);
+    const sketchState: PartAuthoringSketchState = {
+      ...base,
+      ...updates,
+      notes: updates.notes ?? base.notes,
+    };
+    updateSelectedPartGeometry({ sketchState, featureRecipe: recipeFromSketchState(selectedPart, sketchState) }, message ?? `${selectedPart.name} ${sketchOperationLabel[sketchState.operation].toLowerCase()} updated on ${sketchState.plane}.`);
+    markDemoStep('viewport-edit');
   };
 
   const commitSelectedPartLabel = (rawLabel: string) => {
@@ -654,6 +730,55 @@ function App() {
       selectedPartId: created.partId,
       message: 'Created a new visual assembly with a base plate on the XYZ grid. Add links, joints, motors, and wires from the palette.',
     });
+    setActiveCanvasDrawer('tools');
+  };
+
+  const startBlankPartDesignPlane = () => {
+    if (!design || !selectedPart) return;
+    const createdAssembly = createAssemblyWithBase(design.backendProject);
+    const createdPart = createPrimitivePart(createdAssembly.project, createdAssembly.assemblyId, 'cylinder_joint', null);
+    if (!createdPart.partId) return;
+    const withoutBase = deleteVisualPart(createdPart.project, createdAssembly.assemblyId, createdAssembly.partId);
+    const sketchState: PartAuthoringSketchState = {
+      plane: 'Front plane',
+      profile: 'Concentric circle profile with bore',
+      constraintSummary: 'Blank part plane starts with concentric OD and bore constraints plus editable height.',
+      extrudeDepthMm: 72,
+      operation: 'sketch',
+      notes: ['Blank part design plane created from the full-canvas quick action.'],
+    };
+    const blankPartSeed: Part = {
+      ...selectedPart,
+      id: createdPart.partId,
+      name: 'Blank sleeve part design plane',
+      authoring: {
+        ...selectedPart.authoring,
+        primitive: 'cylinder_joint',
+        featureRecipe: null,
+        dimensionsMm: { lengthMm: 72, widthMm: 72, heightMm: 72, diameterMm: 72, thicknessMm: 12 },
+      },
+    };
+    const holePattern = buildDefaultHolePattern(blankPartSeed);
+    const labeledProject = updatePartGeometry(withoutBase.project, createdPart.partId, {
+      label: 'Blank sleeve part design plane',
+      dimensions: { lengthMm: 72, widthMm: 72, heightMm: 72, diameterMm: 72, thicknessMm: 12 },
+      position: { x: 0, y: 0, z: 42 },
+      sketchState,
+      featureRecipe: recipeFromSketchState(blankPartSeed, sketchState),
+      holePattern,
+      fasteners: [holePattern.fastenerSpec],
+    });
+    commitAuthoredProject(labeledProject, {
+      selectedAssemblyId: createdAssembly.assemblyId,
+      selectedPartId: createdPart.partId,
+      message: 'Opened a blank part-design plane with one editable sleeve proxy on the full-canvas workspace.',
+    });
+    setFocusedPartId(createdPart.partId);
+    setExplodePercent(0);
+    setViewZoom(1.45);
+    setViewPan({ x: 0, y: 24 });
+    setActiveCanvasDrawer('part');
+    markDemoStep('viewport-edit');
   };
 
   const duplicateSelectedPart = () => {
@@ -1290,6 +1415,15 @@ function App() {
       canMarkReviewed: true,
     },
     {
+      id: 'viewport-edit',
+      label: 'Edit dimensions in the 3D viewport',
+      status: demoStepReviews.has('viewport-edit') ? 'complete' : 'available',
+      summary: `${selectedPart.name} has viewport-anchored dimension, sketch, hole, fastener, material, drawing, and FEA-input controls beside the 3D plane.`,
+      anchor: '#viewport-selected-editor',
+      actionLabel: 'Open viewport editor',
+      canMarkReviewed: true,
+    },
+    {
       id: 'load-resizing',
       label: 'Resize from 50 lb to 75 lb',
       status: demoStepReviews.has('load-resizing') ? 'complete' : loadSizingResult?.summaryStatus === 'undersized' ? 'available' : 'review',
@@ -1410,7 +1544,7 @@ function App() {
   const activeMode = workspaceModes.find((mode) => mode.id === workspaceMode) ?? workspaceModes[0];
 
   return (
-    <main className="app-shell input-first-shell">
+    <main className={`app-shell input-first-shell full-canvas-shell canvas-drawer-${activeCanvasDrawer}`}>
       <header className="workspace-topbar">
         <div className="brand-block">
           <span className="app-mark" aria-hidden="true">MF</span>
@@ -1423,11 +1557,12 @@ function App() {
             </p>
           </div>
         </div>
-        <nav className="tool-rail" aria-label="Workspace tool modes">
+        <nav className="tool-rail" aria-hidden="true" aria-label="Workspace tool modes">
           {workspaceModes.map((mode) => (
             <button
               aria-pressed={workspaceMode === mode.id}
               className={workspaceMode === mode.id ? 'active' : ''}
+              tabIndex={-1}
               key={mode.id}
               onClick={() => setWorkspaceMode(mode.id)}
               title={mode.summary}
@@ -1445,7 +1580,16 @@ function App() {
         </div>
       </header>
 
-      <section className="project-cockpit" aria-label="Input-first CAD cockpit">
+      <FullCanvasActionBar
+        activeDrawer={activeCanvasDrawer}
+        activeMode={workspaceMode}
+        onBlankPart={startBlankPartDesignPlane}
+        onDrawerChange={setActiveCanvasDrawer}
+        onModeChange={setWorkspaceMode}
+        selectedPartName={selectedPart.name}
+      />
+
+      <section className={`project-cockpit full-canvas-cockpit canvas-drawer-${activeCanvasDrawer}`} aria-label="Full-canvas contextual CAD cockpit">
         <aside className="panel cad-sidebar project-browser" id="project-browser" aria-label="Project and example browser">
           <p className="eyebrow">Project browser</p>
           <h2>Start small</h2>
@@ -1598,7 +1742,32 @@ function App() {
               units={design.units}
               view={{ yawDeg: rotationDeg, pitchDeg: orbitPitchDeg, zoom: viewZoom, panX: viewPan.x, panY: viewPan.y }}
               wiringRoutes={visibleDesign.wiringRoutes}
-            />
+            >
+              {selectedPartOutputPreview ? (
+                <ViewportAnchoredPartEditor
+                  activeTask={design.task}
+                  dimensionDrafts={dimensionDrafts}
+                  fastenerOptions={fastenerCatalogOptions}
+                  loadSizingFinding={selectedLoadSizingFinding}
+                  loadSizingResult={loadSizingResult}
+                  materials={design.backendProject.materials}
+                  onDimensionChange={updateSelectedDimension}
+                  onHolePatternChange={updateSelectedHolePattern}
+                  onMaterialChange={(materialId) => updateSelectedPartGeometry({ materialId }, `${selectedPart.name} material set from the viewport inspector.`)}
+                  onProcessChange={(process) => updateSelectedPartGeometry({ manufacturingProcess: process }, `${selectedPart.name} manufacturing process set to ${process.replaceAll('_', ' ')} from the viewport inspector.`)}
+                  onSetCenteredTwoInchHole={() => {
+                    const nextPattern = normalizeHolePattern(selectedPart, { offsetFromBottomMm: lengthToMm(2, 'in'), centeredOnWidth: true });
+                    updateSelectedHolePattern(nextPattern, `${selectedPart.name} hole pattern set to 2 in from the bottom and centered with ${nextPattern.fastenerLabel}.`);
+                  }}
+                  onSketchStateChange={updateSelectedSketchState}
+                  outputPreview={selectedPartOutputPreview}
+                  part={selectedPart}
+                  processOptions={selectedPartProcessOptions}
+                  processValue={selectedPartProcessValue}
+                  units={design.units}
+                />
+              ) : null}
+            </VisualCadWorkspace>
             <SelectedPartCanvasCard
               activeTask={design.task}
               assemblyParts={activeAssembly.parts}
@@ -2117,6 +2286,314 @@ function App() {
   );
 }
 
+function FullCanvasActionBar({
+  activeDrawer,
+  activeMode,
+  onBlankPart,
+  onDrawerChange,
+  onModeChange,
+  selectedPartName,
+}: {
+  activeDrawer: CanvasDrawer;
+  activeMode: WorkspaceMode;
+  onBlankPart: () => void;
+  onDrawerChange: (drawer: CanvasDrawer) => void;
+  onModeChange: (mode: WorkspaceMode) => void;
+  selectedPartName: string;
+}) {
+  const drawerButtons: Array<{ id: CanvasDrawer; label: string; detail: string }> = [
+    { id: 'project', label: 'Project', detail: 'open/load/recent' },
+    { id: 'part', label: 'Part', detail: selectedPartName },
+    { id: 'tools', label: 'Tools', detail: 'sketch/catalog/place' },
+    { id: 'requirements', label: 'Load', detail: '50 lb to 75 lb' },
+    { id: 'drawing', label: 'Drawing/FEA', detail: 'part outputs' },
+    { id: 'assembly', label: 'Assembly', detail: 'joints/wires' },
+    { id: 'command', label: 'Command', detail: 'prompt/images' },
+    { id: 'context', label: 'Review', detail: 'criteria/readiness' },
+  ];
+  return (
+    <nav className="full-canvas-action-bar" aria-label="Full-canvas contextual actions">
+      <div className="canvas-workspace-status">
+        <span className="status-dot" aria-hidden="true" />
+        <strong>3D modeling plane primary</strong>
+        <small>Open contextual pop-outs only when you need project, part, requirement, drawing, or assembly controls.</small>
+      </div>
+      <button className="blank-plane-action" onClick={onBlankPart} type="button">Start blank part plane</button>
+      <div className="canvas-drawer-buttons">
+        {drawerButtons.map((button) => (
+          <button
+            aria-pressed={activeDrawer === button.id}
+            key={button.id}
+            onClick={() => onDrawerChange(activeDrawer === button.id ? 'none' : button.id)}
+            type="button"
+          >
+            <span>{button.label}</span>
+            <small>{button.detail}</small>
+          </button>
+        ))}
+      </div>
+      <div className="canvas-mode-switcher" aria-label="Progressive mode switcher">
+        {workspaceModes.map((mode) => (
+          <button
+            aria-pressed={activeMode === mode.id}
+            key={mode.id}
+            onClick={() => {
+              onModeChange(mode.id);
+              onDrawerChange(mode.id === 'design' ? 'part' : 'context');
+            }}
+            type="button"
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function ViewportAnchoredPartEditor({
+  activeTask,
+  dimensionDrafts,
+  fastenerOptions,
+  loadSizingFinding,
+  loadSizingResult,
+  materials,
+  onDimensionChange,
+  onHolePatternChange,
+  onMaterialChange,
+  onProcessChange,
+  onSetCenteredTwoInchHole,
+  onSketchStateChange,
+  outputPreview,
+  part,
+  processOptions,
+  processValue,
+  units,
+}: {
+  activeTask: ReferenceDesign['task'];
+  dimensionDrafts: Record<string, string>;
+  fastenerOptions: typeof fastenerCatalogOptions;
+  loadSizingFinding?: RobotArmLoadSizingFinding;
+  loadSizingResult: RobotArmLoadSizingResult | null;
+  materials: BackendMaterial[];
+  onDimensionChange: (key: 'length' | 'width' | 'height' | 'diameter', rawValue: string) => void;
+  onHolePatternChange: (updates: Partial<PartAuthoringHolePattern>, message?: string) => void;
+  onMaterialChange: (materialId: string) => void;
+  onProcessChange: (process: string) => void;
+  onSetCenteredTwoInchHole: () => void;
+  onSketchStateChange: (updates: Partial<PartAuthoringSketchState>, message?: string) => void;
+  outputPreview: PartOutputPreview;
+  part: Part;
+  processOptions: BackendManufacturingOption[];
+  processValue: string;
+  units: AuthoringUnit;
+}) {
+  const dimensions = part.authoring.dimensionsMm;
+  const holePattern = part.authoring.holePattern ?? buildDefaultHolePattern(part);
+  const sketchState = part.authoring.sketchState ?? defaultSketchStateForPart(part);
+  const sketchPlanes = viewportSketchPlanes.includes(sketchState.plane) ? viewportSketchPlanes : [sketchState.plane, ...viewportSketchPlanes];
+  const sketchProfiles = viewportSketchProfiles.includes(sketchState.profile) ? viewportSketchProfiles : [sketchState.profile, ...viewportSketchProfiles];
+  const dimensionFields = part.authoring.primitive === 'cylinder_joint'
+    ? [['diameter', dimensions.diameterMm ?? dimensions.widthMm ?? 0], ['height', dimensions.heightMm ?? dimensions.lengthMm ?? 0]] as const
+    : [['length', dimensions.lengthMm ?? 0], ['width', dimensions.widthMm ?? dimensions.diameterMm ?? 0], ['height', dimensions.heightMm ?? dimensions.thicknessMm ?? 0]] as const;
+  const sketchDepthValue = sketchState.extrudeDepthMm == null ? '' : Number(lengthFromMm(sketchState.extrudeDepthMm, units).toFixed(3));
+  return (
+    <aside className="viewport-anchored-editor" id="viewport-selected-editor" aria-label="Viewport-anchored selected part editing">
+      <div className="viewport-editor-heading">
+        <div>
+          <p className="eyebrow">Viewport inspector</p>
+          <strong>{part.name}</strong>
+          <small>Dimension callouts, sketch operations, holes, material, drawing, and FEA inputs stay beside the 3D profile.</small>
+        </div>
+        <span className="units-badge">{units}</span>
+      </div>
+
+      <section className="viewport-editor-section" aria-label="Viewport dimension handles">
+        <div className="viewport-section-heading">
+          <strong>Editable dimension handles</strong>
+          <small>Displayed on the rendered profile</small>
+        </div>
+        <div className="viewport-dimension-grid">
+          {dimensionFields.map(([key, value]) => (
+            <label className="field-row compact-field" key={key}>
+              <span>{key}</span>
+              <input
+                aria-label={`Viewport ${key} dimension in ${units}`}
+                min="0.001"
+                onChange={(event) => onDimensionChange(key, event.target.value)}
+                step="0.1"
+                type="number"
+                value={dimensionDrafts[`${part.id}:${units}:${key}`] ?? Number(lengthFromMm(Number(value), units).toFixed(3))}
+              />
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="viewport-editor-section" aria-label="Visual sketch and feature operations">
+        <div className="viewport-section-heading">
+          <strong>Pick plane, sketch, extrude, cut</strong>
+          <small>Visual CAD operation metadata</small>
+        </div>
+        <label className="field-row compact-field">
+          <span>Plane</span>
+          <select aria-label="Sketch plane for selected part" onChange={(event) => onSketchStateChange({ plane: event.target.value, operation: 'sketch' })} value={sketchState.plane}>
+            {sketchPlanes.map((plane) => <option key={plane} value={plane}>{plane}</option>)}
+          </select>
+        </label>
+        <label className="field-row compact-field">
+          <span>2D geometry</span>
+          <select aria-label="Sketch profile for selected part" onChange={(event) => onSketchStateChange({ profile: event.target.value, operation: 'sketch' })} value={sketchState.profile}>
+            {sketchProfiles.map((profile) => <option key={profile} value={profile}>{profile}</option>)}
+          </select>
+        </label>
+        <label className="field-row compact-field">
+          <span>Extrude depth</span>
+          <input
+            aria-label={`Viewport extrude depth in ${units}`}
+            min="0.001"
+            onChange={(event) => {
+              const nextDepth = Number(event.target.value);
+              if (Number.isFinite(nextDepth) && nextDepth > 0) onSketchStateChange({ extrudeDepthMm: lengthToMm(nextDepth, units), operation: 'extrude' });
+            }}
+            step="0.1"
+            type="number"
+            value={sketchDepthValue}
+          />
+        </label>
+        <div className="viewport-operation-row" aria-label="Sketch operation buttons">
+          {(['sketch', 'extrude', 'cut', 'finish'] as const).map((operation) => (
+            <button
+              aria-pressed={sketchState.operation === operation}
+              key={operation}
+              onClick={() => onSketchStateChange({ operation }, `${part.name} ${sketchOperationLabel[operation].toLowerCase()} selected from the viewport editor.`)}
+              type="button"
+            >
+              {sketchOperationLabel[operation]}
+            </button>
+          ))}
+        </div>
+        <p className="microcopy">{sketchState.constraintSummary}</p>
+      </section>
+
+      <section className="viewport-editor-section lifecycle-map-preview" aria-label="CAD lifecycle mapping preview">
+        <div className="viewport-section-heading">
+          <strong>CAD lifecycle map</strong>
+          <small>Public CAD process mapped to MechaFlow data</small>
+        </div>
+        <div className="lifecycle-map-grid">
+          {cadLifecycleMappings.map((mapping) => (
+            <article key={mapping.id}>
+              <strong>{mapping.publicCadConcept}</strong>
+              <small>{mapping.mechaflowMvpRepresentation}</small>
+              <small>{mapping.apiAndWorkerBoundary}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="viewport-editor-section" aria-label="Hole and fastener placement from viewport">
+        <div className="viewport-section-heading">
+          <strong>Hole and fastener logic</strong>
+          <small>Example: 2 in from bottom, centered</small>
+        </div>
+        <label className="field-row compact-field">
+          <span>Bolt or screw</span>
+          <select
+            aria-label="Viewport fastener size"
+            onChange={(event) => onHolePatternChange({ fastenerId: event.target.value })}
+            value={holePattern.fastenerId}
+          >
+            {fastenerOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select>
+        </label>
+        <label className="field-row compact-field">
+          <span>Bottom offset</span>
+          <input
+            aria-label={`Viewport hole offset from bottom in ${units}`}
+            min="0.001"
+            onChange={(event) => {
+              const nextOffset = Number(event.target.value);
+              if (Number.isFinite(nextOffset) && nextOffset > 0) onHolePatternChange({ offsetFromBottomMm: lengthToMm(nextOffset, units), centeredOnWidth: true });
+            }}
+            step="0.1"
+            type="number"
+            value={Number(lengthFromMm(holePattern.offsetFromBottomMm, units).toFixed(3))}
+          />
+        </label>
+        <div className="hole-placement-summary">
+          <strong>{holePattern.count}x {formatLength(holePattern.holeDiameterMm, units)} clearance</strong>
+          <small>{holePattern.fastenerSpec}; {holePattern.centeredOnWidth ? 'centered on width' : 'offset placement needs review'}.</small>
+        </div>
+        <button className="viewport-primary-action" onClick={onSetCenteredTwoInchHole} type="button">Set hole 2 in from bottom centered</button>
+      </section>
+
+      <section className="viewport-editor-section" aria-label="Viewport material and process controls">
+        <div className="viewport-section-heading">
+          <strong>Material and process</strong>
+          <small>FEA and drawing input metadata</small>
+        </div>
+        <label className="field-row compact-field">
+          <span>Material</span>
+          <select aria-label="Viewport selected part material" onChange={(event) => onMaterialChange(event.target.value)} value={part.authoring.materialId ?? ''}>
+            {materials.map((material) => <option key={material.id} value={material.id}>{material.name}</option>)}
+          </select>
+        </label>
+        <label className="field-row compact-field">
+          <span>Process</span>
+          <select aria-label="Viewport selected part process" onChange={(event) => onProcessChange(event.target.value)} value={processValue}>
+            {processOptions.map((option) => <option key={option.id} value={option.process}>{option.process.replaceAll('_', ' ')}</option>)}
+          </select>
+        </label>
+      </section>
+
+      <section className="viewport-output-preview drawing-preview" id="part-drawing-output" aria-label="Machinist drawing preview">
+        <div className="viewport-section-heading">
+          <strong>Machinist drawing preview</strong>
+          <small>{outputPreview.drawing.drawingNumber}</small>
+        </div>
+        <dl className="drawing-dimension-list">
+          {outputPreview.drawing.dimensions.slice(0, 5).map((dimension) => (
+            <div key={dimension.label}>
+              <dt>{dimension.label}</dt>
+              <dd>{dimension.value}<small>{dimension.note}</small></dd>
+            </div>
+          ))}
+        </dl>
+        <ul>
+          {outputPreview.drawing.holeCallouts.map((callout) => <li key={callout}>{callout}</li>)}
+          {outputPreview.drawing.fastenerCallouts.slice(0, 2).map((callout) => <li key={callout}>Fastener: {callout}</li>)}
+          <li>Material: {outputPreview.drawing.material}; process: {outputPreview.drawing.process}.</li>
+        </ul>
+      </section>
+
+      <section className="viewport-output-preview fea-preview" id="fea-input-preview" aria-label="FEA input preview">
+        <div className="viewport-section-heading">
+          <strong>FEA input preview</strong>
+          <small>{outputPreview.feaInput.units}</small>
+        </div>
+        <dl className="mini-metric-grid">
+          <div>
+            <dt>Payload</dt>
+            <dd>{activeTask.targetPayloadLb == null ? 'review' : `${formatMeasurement(activeTask.targetPayloadLb)} lb`}</dd>
+          </div>
+          <div>
+            <dt>Self-weight</dt>
+            <dd>{loadSizingResult == null ? 'run sizing' : `${formatMeasurement(loadSizingResult.requirement.assemblySelfWeightLb)} lb`}</dd>
+          </div>
+          <div>
+            <dt>Review load</dt>
+            <dd>{loadSizingResult == null ? 'review' : `${formatMeasurement(loadSizingResult.designReviewLoadLb)} lb`}</dd>
+          </div>
+        </dl>
+        <p>Payload plus self-weight, material properties, selected fasteners, hole placement, constraints, and sketch dimensions are preserved as pre-solver input metadata.</p>
+        <code>{JSON.stringify({ geometry: outputPreview.feaInput.geometry, loads: outputPreview.feaInput.loads, fasteners: outputPreview.feaInput.fasteners.slice(0, 3), constraints: outputPreview.feaInput.constraints.slice(0, 2) }, null, 2)}</code>
+        {loadSizingFinding ? <small className={`runner-note status-${loadSizingFinding.status}`}>Selected requirement check: {loadSizingFinding.componentRole} is {loadSizingFinding.status}.</small> : null}
+      </section>
+    </aside>
+  );
+}
+
 function RequirementSizingPanel({
   automaticSelfWeightLb,
   onApplyAllFixes,
@@ -2397,9 +2874,9 @@ function CanvasToolPalette({
         ))}
         <button onClick={onCreateAssembly} type="button">New assembly</button>
         <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Label {selectedPartName}</button>
-        <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Dimensions</button>
-        <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Move/nudge</button>
-        <button onClick={() => jumpTo('#selected-geometry-editor')} type="button">Rotate</button>
+        <button onClick={() => jumpTo('#viewport-selected-editor')} type="button">Dimensions</button>
+        <button onClick={() => jumpTo('#viewport-selected-editor')} type="button">Move/nudge</button>
+        <button onClick={() => jumpTo('#viewport-selected-editor')} type="button">Rotate</button>
         <button onClick={() => jumpTo('#units-targets-editor')} type="button">Units</button>
         <button onClick={() => jumpTo('#assembly-authoring-editor')} type="button">Joint link</button>
         <button onClick={() => jumpTo('#assembly-authoring-editor')} type="button">Wire route</button>
@@ -2545,6 +3022,8 @@ function SelectedPartCanvasCard({
   const materialStrengthCriterion = part.designCriteria.find((criterion) => criterion.id === 'material-strength');
   const catalogMatchCriterion = part.designCriteria.find((criterion) => criterion.id === 'catalog-match');
   const featureRecipeCriterion = part.designCriteria.find((criterion) => criterion.id === 'feature-recipe');
+  const viewportSketchCriterion = part.designCriteria.find((criterion) => criterion.id === 'viewport-sketch-operation');
+  const holeFastenerCriterion = part.designCriteria.find((criterion) => criterion.id === 'hole-fastener-placement');
   const sizingUpgradeCriterion = part.designCriteria.find((criterion) => criterion.id === 'requirement-sizing-upgrade');
   const parentPart = part.authoring.parentPartId ? assemblyParts.find((candidate) => candidate.id === part.authoring.parentPartId) : null;
   const warnings = reviewWarningsForPart(part, selectedOption);
@@ -2559,6 +3038,8 @@ function SelectedPartCanvasCard({
         <p>{part.purpose}</p>
         <small>Primitive proxy: {primitiveLabel(part.authoring.primitive)} in {part.subassembly}. This is authored visual geometry and project metadata, not a full parametric CAD kernel.</small>
         {part.authoring.featureRecipe ? <small>Sketch recipe: {part.authoring.featureRecipe.name}. {part.authoring.featureRecipe.plane} includes {part.authoring.featureRecipe.callouts.map((callout) => `${callout.label} ${formatFeatureRecipeCallout(part, callout, units)}`).join(', ')}.</small> : null}
+        {viewportSketchCriterion ? <small>{viewportSketchCriterion.label}: {viewportSketchCriterion.value}. {viewportSketchCriterion.plainEnglish}</small> : null}
+        {holeFastenerCriterion ? <small>{holeFastenerCriterion.label}: {holeFastenerCriterion.value}. {holeFastenerCriterion.plainEnglish}</small> : null}
         {catalogMatchCriterion ? <small>Local catalog match: {catalogMatchCriterion.value}. {catalogMatchCriterion.plainEnglish}</small> : null}
         {loadSizingFinding ? <small>Requirement sizing: {loadSizingFinding.status} - requires {formatMeasurement(loadSizingFinding.requiredValue)} {loadSizingFinding.unit}, rated {loadSizingFinding.ratedValue == null ? 'review required' : `${formatMeasurement(loadSizingFinding.ratedValue)} ${loadSizingFinding.unit}`}. {loadSizingFinding.reason}</small> : null}
         {sizingUpgradeCriterion ? <small>{sizingUpgradeCriterion.label}: {sizingUpgradeCriterion.value}. {sizingUpgradeCriterion.plainEnglish}</small> : null}
@@ -2617,11 +3098,13 @@ function SelectedPartCanvasCard({
             <li>Heat: {thermalLimit == null ? thermalCriterion?.value ?? 'temperature review required' : `${formatMeasurement(thermalLimit)} C screening limit`}.</li>
           </ul>
         </article>
-        {featureRecipeCriterion ? (
+        {featureRecipeCriterion || viewportSketchCriterion || holeFastenerCriterion ? (
           <article>
-            <strong>Sketch and feature history</strong>
-            <p>{featureRecipeCriterion.plainEnglish}</p>
-            <small>{featureRecipeCriterion.sourceConfidence}</small>
+            <strong>Sketch, hole, and feature history</strong>
+            {featureRecipeCriterion ? <p>{featureRecipeCriterion.plainEnglish}</p> : null}
+            {viewportSketchCriterion ? <p>{viewportSketchCriterion.plainEnglish}</p> : null}
+            {holeFastenerCriterion ? <p>{holeFastenerCriterion.plainEnglish}</p> : null}
+            <small>{featureRecipeCriterion?.sourceConfidence ?? viewportSketchCriterion?.sourceConfidence ?? holeFastenerCriterion?.sourceConfidence}</small>
           </article>
         ) : null}
         {loadSizingFinding ? (

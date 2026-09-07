@@ -17,12 +17,39 @@ import {
 describe('visual authoring project helpers', () => {
   it('exports seeded and edited canvas metadata into portable project files', () => {
     const unitProject = updateProjectUnits(mockReferenceDesign.backendProject, 'in');
-    const labeledProject = updatePartGeometry(unitProject, 'part-palm-plate', { label: 'Bench-mounted base proxy' });
+    const holePattern = {
+      id: 'hole-pattern-part-palm-plate',
+      label: 'Centered clearance hole from viewport',
+      fastenerId: 'm6-socket-head',
+      fastenerLabel: 'M6 socket head screw',
+      fastenerSpec: 'M6 class 10.9 socket head cap screw',
+      holeDiameterMm: 6.6,
+      offsetFromBottomMm: 50.8,
+      centeredOnWidth: true,
+      count: 2,
+      source: 'viewport-fastener-default',
+      notes: ['Hole placed 2 in from bottom in the viewport editor.'],
+    };
+    const sketchState = {
+      plane: 'Front plane',
+      profile: 'Centered rectangle profile with construction centerlines',
+      constraintSummary: 'Centered profile with hole center constrained on width.',
+      extrudeDepthMm: 10,
+      operation: 'cut' as const,
+      notes: ['Viewport sketch metadata.'],
+    };
+    const labeledProject = updatePartGeometry(unitProject, 'part-palm-plate', {
+      label: 'Bench-mounted base proxy',
+      fasteners: [holePattern.fastenerSpec],
+      holePattern,
+      sketchState,
+    });
     const design = remapDesignFromProject(mockReferenceDesign, labeledProject);
 
     const projectFile = buildLocalProjectFile(design);
     const firstPart = projectFile.project.assemblies[0]!.parts[0]!;
     const visual = firstPart.metadata.visual_authoring as Record<string, unknown>;
+    const visualExtension = projectFile.extensions.visual_authoring_mvp as Record<string, unknown>;
 
     expect(projectFile.project.units).toBe('in');
     expect(firstPart.name).toBe('Bench-mounted base proxy');
@@ -30,9 +57,26 @@ describe('visual authoring project helpers', () => {
     expect(visual).toEqual(expect.objectContaining({
       primitive: 'base_plate',
       joint_type: 'unassigned',
+      hole_pattern: expect.objectContaining({ offsetFromBottomMm: 50.8, centeredOnWidth: true }),
+      sketch_state: expect.objectContaining({ plane: 'Front plane', operation: 'cut' }),
     }));
     expect(visual.position_mm).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number), z: expect.any(Number) }));
+    expect(firstPart.dimensions.metadata.visual_hole_pattern).toEqual(expect.objectContaining({ fastenerLabel: 'M6 socket head screw' }));
     expect(firstPart.dimensions.length_mm).toBe(design.assemblies[0]!.parts[0]!.authoring.dimensionsMm.lengthMm);
+    expect(design.assemblies[0]!.parts[0]!.designCriteria.some((criterion) => criterion.id === 'hole-fastener-placement')).toBe(true);
+    expect(visualExtension.part_outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        drawing: expect.objectContaining({ title: expect.stringMatching(/machinist drawing preview/i) }),
+        feaInput: expect.objectContaining({ title: expect.stringMatching(/FEA input preview/i) }),
+      }),
+    ]));
+    expect(visualExtension.cad_lifecycle_map).toEqual(expect.objectContaining({
+      source_note: expect.stringMatching(/not SOLIDWORKS compatibility/i),
+      mappings: expect.arrayContaining([
+        expect.objectContaining({ id: 'plane-sketch-dimensions' }),
+        expect.objectContaining({ id: 'simulation-fea-setup' }),
+      ]),
+    }));
   });
 
   it('creates motor primitives and persisted visual wire routes', () => {

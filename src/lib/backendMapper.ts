@@ -32,6 +32,8 @@ import type {
   Part,
   PartAuthoringFeatureRecipe,
   PartAuthoringFeatureStep,
+  PartAuthoringHolePattern,
+  PartAuthoringSketchState,
   PartVisual,
   ReferenceDesign,
   RiskLevel,
@@ -352,6 +354,50 @@ const featureRecipeFromMetadata = (value: unknown): PartAuthoringFeatureRecipe |
   return { id, name, plane, profile, history, callouts };
 };
 
+const holePatternFromMetadata = (value: unknown): PartAuthoringHolePattern | null => {
+  const record = metadataRecord(value);
+  const id = stringMetadata(record.id);
+  const label = stringMetadata(record.label);
+  const fastenerId = stringMetadata(record.fastenerId ?? record.fastener_id);
+  const fastenerLabel = stringMetadata(record.fastenerLabel ?? record.fastener_label);
+  const fastenerSpec = stringMetadata(record.fastenerSpec ?? record.fastener_spec);
+  const holeDiameterMm = numberMetadata(record.holeDiameterMm ?? record.hole_diameter_mm);
+  const offsetFromBottomMm = numberMetadata(record.offsetFromBottomMm ?? record.offset_from_bottom_mm);
+  if (!id || !label || !fastenerId || !fastenerLabel || !fastenerSpec || holeDiameterMm == null || offsetFromBottomMm == null) return null;
+  const notes = Array.isArray(record.notes) ? record.notes.filter((note): note is string => typeof note === 'string') : [];
+  return {
+    id,
+    label,
+    fastenerId,
+    fastenerLabel,
+    fastenerSpec,
+    holeDiameterMm,
+    offsetFromBottomMm,
+    centeredOnWidth: Boolean(record.centeredOnWidth ?? record.centered_on_width),
+    count: numberMetadata(record.count) ?? 1,
+    source: stringMetadata(record.source) ?? 'viewport-fastener-default',
+    notes,
+  };
+};
+
+const sketchStateFromMetadata = (value: unknown): PartAuthoringSketchState | null => {
+  const record = metadataRecord(value);
+  const plane = stringMetadata(record.plane);
+  const profile = stringMetadata(record.profile);
+  const constraintSummary = stringMetadata(record.constraintSummary ?? record.constraint_summary);
+  const operation = record.operation;
+  if (!plane || !profile || !constraintSummary) return null;
+  const notes = Array.isArray(record.notes) ? record.notes.filter((note): note is string => typeof note === 'string') : [];
+  return {
+    plane,
+    profile,
+    constraintSummary,
+    extrudeDepthMm: numberMetadata(record.extrudeDepthMm ?? record.extrude_depth_mm),
+    operation: operation === 'extrude' || operation === 'cut' || operation === 'finish' ? operation : 'sketch',
+    notes,
+  };
+};
+
 const defaultPositionFromVisual = (visual: PartVisual, index: number) => ({
   x: Math.round((visual.x - 50) * 10),
   y: Math.round((50 - visual.y) * 8),
@@ -386,6 +432,8 @@ const authoringFor = (part: BackendPart, index: number, visual: PartVisual) => {
     connectorId: stringMetadata(visualAuthoring.connector_id) ?? null,
     authored: Boolean(visualAuthoring.authored ?? part.metadata.created_by_visual_authoring),
     featureRecipe: featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe),
+    holePattern: holePatternFromMetadata(visualAuthoring.hole_pattern ?? part.dimensions.metadata.visual_hole_pattern),
+    sketchState: sketchStateFromMetadata(visualAuthoring.sketch_state ?? part.metadata.visual_sketch_state),
   };
 };
 
@@ -432,6 +480,8 @@ const buildDesignCriteria = (
   const visualAuthoring = metadataRecord(part.metadata.visual_authoring);
   const featureRecipe = featureRecipeFromMetadata(visualAuthoring.feature_recipe ?? part.metadata.feature_recipe);
   const dimensionMetadata = metadataRecord(part.dimensions.metadata);
+  const holePattern = holePatternFromMetadata(visualAuthoring.hole_pattern ?? dimensionMetadata.visual_hole_pattern);
+  const sketchState = sketchStateFromMetadata(visualAuthoring.sketch_state ?? part.metadata.visual_sketch_state);
   const actuatorTorqueNm = numberMetadata(demoCriteria.actuator_torque_nm) ?? numberMetadata(dimensionMetadata.nominal_output_torque_nm);
   const sizingUpgrade = metadataRecord(part.metadata.requirement_sizing_upgrade);
   const sizingUpgradeName = stringMetadata(sizingUpgrade.upgrade_name);
@@ -516,6 +566,26 @@ const buildDesignCriteria = (
       sourceConfidence: criterionSource('Local guided part recipe', 'estimated_from_heuristic'),
     });
   }
+  if (sketchState) {
+    criteria.push({
+      id: 'viewport-sketch-operation',
+      label: 'Viewport sketch operation',
+      value: `${sketchState.operation} on ${sketchState.plane}`,
+      status: 'estimated',
+      plainEnglish: `${sketchState.profile}. Constraints: ${sketchState.constraintSummary}. Extrude depth ${sketchState.extrudeDepthMm == null ? 'review required' : `${formatMeasurement(sketchState.extrudeDepthMm)} mm`}.`,
+      sourceConfidence: criterionSource('Viewport-anchored visual CAD operation metadata', 'estimated_from_heuristic'),
+    });
+  }
+  if (holePattern) {
+    criteria.push({
+      id: 'hole-fastener-placement',
+      label: 'Hole and fastener placement',
+      value: `${holePattern.count}x ${formatMeasurement(holePattern.holeDiameterMm)} mm clearance hole for ${holePattern.fastenerLabel}`,
+      status: 'estimated',
+      plainEnglish: `Hole center is ${formatMeasurement(holePattern.offsetFromBottomMm)} mm from the bottom${holePattern.centeredOnWidth ? ' and centered on width' : ''}. Fastener source: ${holePattern.source}. Verify edge distance, fit, preload, and tolerance before release.`,
+      sourceConfidence: criterionSource('Viewport fastener placement rule', 'estimated_from_heuristic'),
+    });
+  }
   if (catalogName) {
     criteria.push({
       id: 'catalog-match',
@@ -537,6 +607,10 @@ const buildFallbackAnalysisReadiness = (
 ): AnalysisReadinessPreview => {
   const demoCriteria = demoDesignCriteria(part);
   const demoLoadCapacityLb = numberMetadata(demoCriteria.load_capacity_lb);
+  const visualAuthoring = metadataRecord(part.metadata.visual_authoring);
+  const dimensionMetadata = metadataRecord(part.dimensions.metadata);
+  const holePattern = holePatternFromMetadata(visualAuthoring.hole_pattern ?? dimensionMetadata.visual_hole_pattern);
+  const sketchState = sketchStateFromMetadata(visualAuthoring.sketch_state ?? part.metadata.visual_sketch_state);
   const hasPayloadTask = task.kind === 'lift_payload' && typeof task.target_value === 'number';
   const hasGeometry = typeof part.source_file === 'string'
     && part.source_file.trim() !== ''
@@ -584,7 +658,7 @@ const buildFallbackAnalysisReadiness = (
       name: 'Fixture and fastener support set',
       constraint_type: 'pinned',
       target_part_ids: [part.id],
-      region: part.related_fasteners.join(', ') || 'fixture faces need CAD naming',
+      region: part.related_fasteners.join(', ') || holePattern?.fastenerSpec || 'fixture faces need CAD naming',
       degrees_of_freedom: ['translation_x', 'translation_y', 'translation_z'],
       confidence: 'estimated_from_heuristic',
       review_required: true,
@@ -613,7 +687,11 @@ const buildFallbackAnalysisReadiness = (
       freecad_document: 'future FreeCAD document or STEP import path',
       gmsh_model: 'future Gmsh .geo or API-generated mesh model',
       calculix_input_deck: 'future CalculiX .inp deck',
-      notes: ['Units and coordinate frames must be normalized by the worker before solve.'],
+      notes: [
+        'Units and coordinate frames must be normalized by the worker before solve.',
+        ...(sketchState ? [`Viewport sketch operation: ${sketchState.operation} on ${sketchState.plane}; ${sketchState.profile}.`] : []),
+        ...(holePattern ? [`Viewport hole pattern: ${holePattern.count}x ${holePattern.holeDiameterMm} mm clearance for ${holePattern.fastenerLabel}, ${holePattern.offsetFromBottomMm} mm from bottom.`] : []),
+      ],
     },
     expected_result_artifacts: [
       { kind: 'geometry_prep', title: 'FreeCAD analysis geometry package', file_format: 'STEP or BREP plus part-map JSON', produced_by: 'freecad-fea-prep-worker', replaces_demo_estimate: true, review_required_before_release: true },
@@ -633,6 +711,7 @@ const buildFallbackAnalysisReadiness = (
     review_required: [
       'Named faces, contact regions, and fixture assumptions must be reviewed in CAD before solving.',
       'A qualified reviewer must approve any factor-of-safety interpretation before release.',
+      ...(holePattern ? ['Viewport hole and fastener metadata must be confirmed against edge distance, tolerance, preload, and supplier specifications.'] : []),
       ...blockingReview,
     ],
     recommended_job_request: {

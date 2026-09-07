@@ -20,7 +20,7 @@ The business direction is cloud-assisted, not cloud-dependent. Local-first CAD p
 
 The repository now contains a working local MVP foundation plus planning docs:
 
-- A Vite, React, and TypeScript cockpit in `src/` with a visual-authoring-first opening, SVG XYZ grid, orbit/pan/zoom/explode controls, selectable and editable primitives, unit selection, guided sketch-first part recipes, deterministic local catalog matching, 50 lb to 75 lb requirements-driven load resizing with catalog-backed upgrade suggestions, motor and connector placement, visible wire routing, compact CAD-style sidebars, design intent command line, reference-image intake, project/example paths, and mode buttons for Design, Analysis, Manufacturing, Reports, and Backend surfaces.
+- A Vite, React, and TypeScript cockpit in `src/` with a full-canvas visual-authoring opening, SVG XYZ grid, orbit/pan/zoom/explode controls, selectable and editable primitives, unit selection, on-model engineering annotations, viewport-anchored selected-part dimension handles, sketch plane/profile/extrude/cut controls, fastener-aware hole placement, machinist drawing, FEA-input, and CAD lifecycle previews, guided sketch-first part recipes, deterministic local catalog matching, 50 lb to 75 lb requirements-driven load resizing with catalog-backed upgrade suggestions, motor and connector placement, visible wire routing, contextual CAD drawers, design intent command line, reference-image intake, project/example paths, and mode buttons for Design, Analysis, Manufacturing, Reports, and Backend surfaces.
 - A Node mock backend in `scripts/mock-backend.mjs` for one-command desktop and frontend work.
 - An Electron desktop-openable path in `desktop/` and `scripts/desktop-dev.mjs`, launched with `npm start`.
 - A FastAPI backend in `backend/mechaflow_api/` with project, catalog, panel-data, material substitution, wiring/electronics, report, analysis-readiness, analysis job queue, project-file import/export, local pre-solver, and CalculiX solver-readiness fixture contracts.
@@ -50,21 +50,23 @@ The product direction is visual-authoring first, input-first, and 3D-first:
 3. Create base plates, beams, joints, brackets, motors, connectors, electronics blocks, or tool plates on the XYZ grid.
 4. Use the guided part studio for plane, sketch, dimensions, extrude, cut, chamfer, catalog match, and assembly handoff metadata.
 5. Resize a load-bearing robot-arm requirement from 50 lb to 75 lb with payload plus assembly self-weight, safety factor, affected-part highlights, and deterministic upgrade suggestions that stay review-required.
-6. Select geometry, edit dimensions and position, connect parent and joint metadata, and route visible wire polylines between parts.
-7. Type a design intent in one command line and receive extracted chips when possible.
-8. Add reference photos or images as local metadata without any reconstruction claim.
-9. Choose one project path from the left sidebar: new prompt concept, open/import `.mfcad.json`, recent project, reference catalog, or repository-local ready example.
-10. Use contextual sidebars instead of modal-heavy setup screens.
+6. Select geometry and edit dimensions, material/process, sketch plane/profile/extrude/cut state, and centered fastener holes from the viewport-anchored inspector without scrolling away from the 3D model. Use the full-canvas action bar to open only the Project, Part, Tools, Load, Drawing/FEA, Assembly, Command, or Review pop-out that is relevant.
+7. Preview a build-ready part drawing and FEA-input packet with units, dimensions, hole/fastener specs, material, process, loads, self-weight, constraints, and review-required notes.
+8. Type a design intent in one command line and receive extracted chips when possible.
+9. Add reference photos or images as local metadata without any reconstruction claim.
+10. Choose one project path from the left sidebar: new prompt concept, open/import `.mfcad.json`, recent project, reference catalog, or repository-local ready example.
+11. Use contextual sidebars instead of modal-heavy setup screens.
 
 ### In-cockpit workflow
 
 1. Orbit, pan, zoom, explode, and inspect the robot arm assembly.
 2. Select a part from the visual model or model tree.
 3. Create or edit visual primitives, place motors and connectors, and route visible wiring as persisted review-required project data.
-4. Review task criteria, material, manufacturing, stiffness, heat, source confidence, review-required values, and linked wiring data.
-5. Preview compatible material and process substitutions before applying them.
-6. Check downstream panels for BOM, manufacturing, wiring/electronics, pre-solver readiness, queue recommendations, and reports.
-7. Export and import a `.mfcad.json` file so the desktop workflow can be saved, reopened, and shared.
+4. Keep selected-part dimensions, constraints/features, hole placement, fastener choice, material/process, load and FEA context visible directly on the model canvas, with drawing preview, FEA-input preview, and CAD lifecycle map available beside the 3D profile.
+5. Review task criteria, material, manufacturing, stiffness, heat, source confidence, review-required values, and linked wiring data.
+6. Preview compatible material and process substitutions before applying them.
+7. Check downstream panels for BOM, manufacturing, wiring/electronics, pre-solver readiness, queue recommendations, and reports.
+8. Export and import a `.mfcad.json` file so the desktop workflow can be saved, reopened, and shared.
 
 Read [User experience](docs/user-experience.md), [Frontend development](docs/frontend.md), [Desktop demo](docs/desktop.md), and [Captain demo](docs/captain-demo.md) before changing these flows.
 

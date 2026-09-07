@@ -19,7 +19,7 @@ The current product direction is visual-authoring first, input-first, and 3D-fir
 - Reference images are accepted as local context only.
 - Advanced Analysis, Manufacturing, Reports, and Backend surfaces are progressively disclosed through mode buttons.
 
-This direction is implemented in `src/App.tsx`, `src/VisualCadWorkspace.tsx`, and `src/lib/visualAuthoring.ts`, and visually covered by the desktop checklist in [Desktop demo](desktop.md). Screenshot evidence for the visual CAD authoring MVP is stored at `docs/screenshots/visual-cad-authoring-mvp.png` and `docs/screenshots/visual-cad-authoring-tools.png`.
+This direction is implemented in `src/App.tsx`, `src/VisualCadWorkspace.tsx`, `src/lib/visualAuthoring.ts`, and `src/lib/partOutputs.ts`, and visually covered by the desktop checklist in [Desktop demo](desktop.md). Screenshot evidence for the visual CAD authoring MVP is stored at `docs/screenshots/visual-cad-authoring-mvp.png` and `docs/screenshots/visual-cad-authoring-tools.png`.
 
 ## Primary workflow
 
@@ -60,7 +60,7 @@ Examples:
 - Fit wires through a rotating joint.
 - Be serviceable without full disassembly.
 
-Task chips and panels should stay visible during part inspection and edits.
+Task chips and panels should stay contextual during part inspection and edits so the 3D plane remains dominant.
 
 ### 4. Add reference images
 
@@ -79,26 +79,29 @@ The user can:
 
 - Choose millimeters, centimeters, meters, or inches as working units.
 - Create base plates, beams, joints, brackets, motors, connectors, electronics, and tools from the primitive palette.
-- Edit length, width, height, XYZ position, Z rotation, material, and manufacturing process for the selected primitive.
+- See length, width, height or diameter, constraints/features, hole placement, fastener fit, material/process, and load/FEA context directly on the model canvas, then edit those values from the viewport-anchored selected-part editor without leaving the model.
 - Connect a selected part to a parent with fixed, revolute, prismatic, tool-mount, or unassigned joint metadata.
 - Route visible wire harness polylines between parts and persist the route as connector, wire segment, route, and harness BOM data.
 - Play, toggle, or scrub exploded-view state.
 - Orbit with yaw and pitch controls, shift-drag to pan, and wheel or slider to zoom.
 - Run requirement sizing triage for payload plus assembly self-weight, safety factor, reach, actuator torque, fasteners, hinges, sleeves, arm links, brackets, and end-effector parts.
+- Preview individual part machinist drawing/export metadata and structured FEA inputs while the selected part stays visible.
 - Select a concrete part in the visual model.
 - Select a part from the model tree or by keyboard focus on canvas geometry.
-- See selected-part highlighting in the canvas, model tree, near-canvas detail card, and inspector.
+- See selected-part highlighting in the canvas and viewport editor, with model tree, detail card, and inspector available through contextual Project and Review drawers.
 - Inspect linked wiring, electronics, fasteners, and dependent parts when known.
 
 The MVP visual seed is a robot arm with a wrist gripper. The legacy project id remains `project-open-gripper-demo` for backend and smoke-test compatibility.
 
 ### 6. Inspect a part
 
-The near-canvas selected-part card and inspector should show:
+The model canvas annotations, viewport-anchored editor, and contextual Review drawer should show:
 
 - Purpose and why the part or material is in the design.
 - Active task role and available thresholds for payload, reach, safety factor, stiffness or yield guidance, heat or temperature limit, load cases, constraints, manufacturing criteria, and wiring or serviceability criteria.
 - Primitive or role, material, manufacturing process, and dimensions.
+- Sketch plane/profile, constraints, extrude/cut state, hole offset, screw/bolt selection, clearance diameter, material/process, and load/FEA context directly on or over the working plane when authored.
+- Machinist drawing/export preview and FEA-input preview for the selected part.
 - Weight or review-required mass.
 - Estimated cost range or review-required cost.
 - Lead-time range where seeded.
@@ -110,7 +113,7 @@ The near-canvas selected-part card and inspector should show:
 
 ### 7. Modify the part
 
-The user can compare or change:
+The user can compare or change without leaving the 3D profile:
 
 - Requirement payload, self-weight estimate, reach, and safety-factor assumptions.
 - Deterministic local upgrade suggestions for undersized actuator, fastener, joint, sleeve, bracket, link, and end-effector checks.
@@ -126,6 +129,7 @@ The user can compare or change:
 - Manufacturing process.
 - Surface treatment.
 - Wiring path.
+- Part drawing and FEA-input metadata that carries dimensions, material, load, self-weight, fastener, and constraint assumptions.
 
 Current MVP substitution and visual authoring flow:
 
@@ -196,6 +200,7 @@ Backend mode should expose API handoff details for workers without distracting f
 - Reference image intake.
 - Compact project paths.
 - Contextual selected-part inspector.
+- Viewport-anchored selected-part dimension, sketch, hole, drawing, and FEA-input editor.
 - Mode rail.
 
 ### Reference design page or panel
@@ -213,7 +218,7 @@ Backend mode should expose API handoff details for workers without distracting f
 - Visual CAD viewer.
 - Primitive palette.
 - Unit selector.
-- Dimension and XYZ position controls.
+- Viewport-anchored dimension, sketch plane/profile, extrude/cut, hole, fastener, material/process, drawing, and FEA-input controls.
 - Parent and joint controls.
 - Visible wiring route controls.
 - Exploded-view controls.

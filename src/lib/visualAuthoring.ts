@@ -18,10 +18,15 @@ import type {
   CADJointType,
   CADPrimitiveShape,
   Part,
+  PartAuthoringFeatureRecipe,
   PartAuthoringFeatureStep,
+  PartAuthoringHolePattern,
+  PartAuthoringSketchState,
   ReferenceDesign,
 } from '../types';
 import type { LocalPartCatalogItem, LocalPartCatalogMatch } from '../data/localPartCatalog';
+import { buildCadLifecycleExportMap } from './cadLifecycleMap';
+import { buildAllPartOutputPreviews } from './partOutputs';
 import { mapProjectPanelDataToReferenceDesign } from './backendMapper';
 
 export const unitOptions: Array<{ value: AuthoringUnit; label: string; factorToMm: number }> = [
@@ -253,6 +258,8 @@ const projectWithDesignAuthoring = (design: ReferenceDesign): BackendProject => 
       assigned_to_part_id: source.authoring.assignedToPartId,
       connector_id: source.authoring.connectorId,
       feature_recipe: source.authoring.featureRecipe,
+      hole_pattern: source.authoring.holePattern,
+      sketch_state: source.authoring.sketchState,
     });
     part.dimensions = {
       ...part.dimensions,
@@ -261,6 +268,11 @@ const projectWithDesignAuthoring = (design: ReferenceDesign): BackendProject => 
       height_mm: source.authoring.dimensionsMm.heightMm ?? part.dimensions.height_mm,
       diameter_mm: source.authoring.dimensionsMm.diameterMm ?? part.dimensions.diameter_mm,
       thickness_mm: source.authoring.dimensionsMm.thicknessMm ?? part.dimensions.thickness_mm,
+      metadata: {
+        ...(isRecord(part.dimensions.metadata) ? part.dimensions.metadata : {}),
+        visual_hole_pattern: source.authoring.holePattern,
+        viewport_sketch_state: source.authoring.sketchState,
+      },
     };
   }
   return next;
@@ -285,6 +297,8 @@ export const buildLocalProjectFile = (design: ReferenceDesign): BackendProjectFi
     visual_authoring_mvp: {
       renderer: 'react-svg-xyz-grid',
       limitation: 'MVP visual primitives only. Future FreeCAD workers must replace this with real CAD geometry artifacts.',
+      part_outputs: buildAllPartOutputPreviews(design),
+      cad_lifecycle_map: buildCadLifecycleExportMap(),
     },
   },
 });
@@ -347,6 +361,10 @@ export const updatePartGeometry = (
     materialId?: string;
     manufacturingProcess?: string;
     label?: string;
+    holePattern?: PartAuthoringHolePattern | null;
+    sketchState?: PartAuthoringSketchState | null;
+    featureRecipe?: PartAuthoringFeatureRecipe | null;
+    fasteners?: string[];
   },
 ): BackendProject => {
   const next = cloneProject(project);
@@ -364,7 +382,10 @@ export const updatePartGeometry = (
         z: updates.rotationZDeg,
       };
     }
-    const nextDimensions = { ...part.dimensions };
+    const nextDimensions = {
+      ...part.dimensions,
+      metadata: { ...(isRecord(part.dimensions.metadata) ? part.dimensions.metadata : {}) },
+    };
     if (updates.dimensions) {
       if (positiveFiniteValue(updates.dimensions.lengthMm)) nextDimensions.length_mm = updates.dimensions.lengthMm;
       if (positiveFiniteValue(updates.dimensions.widthMm)) nextDimensions.width_mm = updates.dimensions.widthMm;
@@ -374,6 +395,20 @@ export const updatePartGeometry = (
     }
     const metadata = { ...(isRecord(part.metadata) ? part.metadata : {}) };
     if (updates.manufacturingProcess) metadata.preferred_manufacturing_process = updates.manufacturingProcess;
+    if (updates.holePattern !== undefined) {
+      visual.hole_pattern = updates.holePattern;
+      nextDimensions.metadata.visual_hole_pattern = updates.holePattern;
+      metadata.viewport_hole_pattern = updates.holePattern;
+    }
+    if (updates.sketchState !== undefined) {
+      visual.sketch_state = updates.sketchState;
+      nextDimensions.metadata.viewport_sketch_state = updates.sketchState;
+      metadata.visual_sketch_state = updates.sketchState;
+    }
+    if (updates.featureRecipe !== undefined) {
+      visual.feature_recipe = updates.featureRecipe;
+      metadata.feature_recipe = updates.featureRecipe;
+    }
     const nextName = typeof updates.label === 'string' && updates.label.trim() !== ''
       ? updates.label.trim()
       : part.name;
@@ -383,6 +418,7 @@ export const updatePartGeometry = (
       material_id: updates.materialId ?? part.material_id,
       dimensions: nextDimensions,
       mass_kg: updates.dimensions || updates.materialId ? null : part.mass_kg,
+      related_fasteners: updates.fasteners ?? part.related_fasteners,
       metadata,
     };
   });
