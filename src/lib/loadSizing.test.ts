@@ -54,4 +54,21 @@ describe('requirements-driven robot-arm load sizing', () => {
     expect(fixedLink.metadata.demo_design_criteria).toEqual(expect.objectContaining({ load_capacity_lb: expect.any(Number) }));
     expect(fixedDesign.assembly.parts.find((part) => part.id === 'part-shoulder-servo-actuator')?.designCriteria.some((criterion) => criterion.id === 'actuator-torque')).toBe(true);
   });
+
+  it('rates a mixed fastener set from its smallest metric size', () => {
+    const sourcePart = mockReferenceDesign.assembly.parts.find((part) => part.fasteners.length > 0)!;
+    const mixedFastenerPart = { ...sourcePart, fasteners: ['M4 socket head screw', 'M10 anchor bolt'] };
+    const assessment = assessRobotArmLoadRequirement([mixedFastenerPart], {
+      payloadLb: 75,
+      assemblySelfWeightLb: 1,
+      reachMeters: 0.65,
+      safetyFactor: 2,
+    });
+
+    expect(assessment.findings).toContainEqual(expect.objectContaining({
+      checkKind: 'fastener_capacity',
+      ratedValue: 54,
+      evidence: expect.stringContaining('Smallest parsed metric fastener is M4'),
+    }));
+  });
 });

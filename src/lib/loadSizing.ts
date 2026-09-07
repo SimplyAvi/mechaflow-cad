@@ -171,16 +171,16 @@ const statusFromUtilization = (utilization: number | null): RobotArmLoadFindingS
   return 'ok';
 };
 
-const largestFastenerSize = (fasteners: string[]): number | null => {
+const smallestFastenerSize = (fasteners: string[]): number | null => {
   const sizes = fasteners.flatMap((fastener) => {
     const match = fastener.match(/m(\d+)/i);
     return match ? [Number(match[1])] : [];
   }).filter((value) => Number.isFinite(value) && value > 0);
-  return sizes.length === 0 ? null : Math.max(...sizes);
+  return sizes.length === 0 ? null : Math.min(...sizes);
 };
 
 const fastenerRatedLb = (fasteners: string[]): number | null => {
-  const size = largestFastenerSize(fasteners);
+  const size = smallestFastenerSize(fasteners);
   if (size == null) return null;
   if (size >= 10) return 240;
   if (size >= 8) return 170;
@@ -308,7 +308,7 @@ const fastenerFindingForPart = (
   const utilization = rated == null ? null : required / rated;
   const status = statusFromUtilization(utilization);
   if (status === 'ok' && category !== 'actuator') return null;
-  const largestSize = largestFastenerSize(part.fasteners);
+  const smallestSize = smallestFastenerSize(part.fasteners);
   return {
     id: `${part.id}-fastener-capacity`,
     partId: part.id,
@@ -322,9 +322,9 @@ const fastenerFindingForPart = (
     unit: 'lb',
     utilization: utilization == null ? null : round(utilization, 2),
     reason: `${part.name} has ${part.fasteners.join(', ')}. The smallest visible screw family must be reviewed when payload increases.`,
-    evidence: largestSize == null
+    evidence: smallestSize == null
       ? 'No metric fastener size was parsed from the local seed strings, so this remains editable and review-required.'
-      : `Largest parsed metric fastener is M${largestSize}. Rating is a deterministic local screen for fastener material and size, not a standards table.`,
+      : `Smallest parsed metric fastener is M${smallestSize}. Rating is a deterministic local screen for fastener material and size, not a standards table.`,
     fix: fixFor('fastener_set', status),
   };
 };
