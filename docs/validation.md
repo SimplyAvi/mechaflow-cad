@@ -54,6 +54,12 @@ npm run smoke
 npm run captain:smoke
 ```
 
+For future Precision CAD Canvas reboot-section publication branches, also run the branch-ancestry check documented in `docs/reboot-section-publication.md`:
+
+```sh
+npm run publication:path -- --candidate <publication-branch> --target origin/main --supported-base <accepted-reboot-base>
+```
+
 ## Manual desktop demo coverage
 
 CI uses `xvfb-run` to provide a headless display for the Electron smoke path and disables Electron's Linux setuid sandbox only for the GitHub-hosted runner, where the downloaded helper cannot retain its required ownership and mode. That proves the one-command desktop launcher can start the mock API, Vite frontend, and Electron shell noninteractively without claiming a full desktop security environment.
