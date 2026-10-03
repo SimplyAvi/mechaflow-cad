@@ -1,6 +1,8 @@
-import { useMemo, useRef, type CSSProperties, type PointerEvent, type WheelEvent } from 'react';
+import { useMemo, useRef, type CSSProperties, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import type { CanvasEditableKind, PartLifecycleEvidence } from './lib/designLifecycle';
+import type { RobotArmLoadFindingStatus } from './lib/loadSizing';
 import type { AuthoringUnit, Part, PartAuthoringData, PartAuthoringDimensions, WiringRoute } from './types';
-import { formatLength, lengthFromMm } from './lib/visualAuthoring';
+import { formatFeatureRecipeCallout, formatLength, lengthFromMm } from './lib/visualAuthoring';
 
 interface ViewState {
   yawDeg: number;
@@ -14,12 +16,18 @@ interface VisualCadWorkspaceProps {
   parts: Part[];
   wiringRoutes: WiringRoute[];
   selectedPartId: string;
+  focusedPartId: string | null;
   units: AuthoringUnit;
   explodePercent: number;
+  activeCanvasEditKind: CanvasEditableKind;
+  lifecycleEvidence?: PartLifecycleEvidence;
+  loadHighlights?: Record<string, RobotArmLoadFindingStatus>;
   view: ViewState;
+  onSelectCanvasEdit: (kind: CanvasEditableKind) => void;
   onViewChange: (view: ViewState) => void;
   onSelectPart: (partId: string) => void;
   onNudgeSelected: (delta: { x: number; y: number; z: number }) => void;
+  children?: ReactNode;
 }
 
 interface ProjectedPoint {
@@ -101,6 +109,8 @@ const primitiveDimensions = (part: Part): { length: number; width: number; heigh
   };
 };
 
+const focusOffset = (focused: boolean): Point3D => focused ? { x: 0, y: -36, z: 74 } : { x: 0, y: 0, z: 0 };
+
 const connectorCenter = (part: Part): Point3D => ({
   x: part.authoring.positionMm.x,
   y: part.authoring.positionMm.y,
@@ -142,13 +152,14 @@ function useProjection(view: ViewState) {
   };
 }
 
-function boxFaces(part: Part, explodePercent: number, project: (point: Point3D) => ProjectedPoint): BoxFace[] {
+function boxFaces(part: Part, explodePercent: number, project: (point: Point3D) => ProjectedPoint, focused: boolean): BoxFace[] {
   const dims = primitiveDimensions(part);
   const explode = explodePercent / 100;
+  const offset = focusOffset(focused);
   const center = {
-    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode,
-    y: part.authoring.positionMm.y,
-    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode,
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode + offset.z,
   };
   const half = { x: dims.length / 2, y: dims.width / 2, z: dims.height / 2 };
   const corners = {
@@ -239,24 +250,29 @@ function PrimitiveSurfaceDetails({ part, faces }: { part: Part; faces: BoxFace[]
   return null;
 }
 
-function VisualBox({ part, selected, explodePercent, project, onSelect }: {
+function VisualBox({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect, showLabel }: {
   part: Part;
   selected: boolean;
+  focused: boolean;
+  focusDimmed: boolean;
   explodePercent: number;
+  loadStatus?: RobotArmLoadFindingStatus;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
+  showLabel: boolean;
 }) {
-  const faces = boxFaces(part, explodePercent, project);
+  const faces = boxFaces(part, explodePercent, project, focused);
+  const offset = focusOffset(focused);
   const labelPoint = project({
-    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * (explodePercent / 100),
-    y: part.authoring.positionMm.y,
-    z: part.authoring.positionMm.z + partHeight(part) + 18 + (part.visual.explodeY ?? 0) * 1.5 * (explodePercent / 100),
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * (explodePercent / 100) + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + partHeight(part) + 18 + (part.visual.explodeY ?? 0) * 1.5 * (explodePercent / 100) + offset.z,
   });
   const style = { '--cad-color': part.authoring.color } as CSSProperties;
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-${part.authoring.primitive} risk-${part.stressRisk} ${selected ? 'selected' : ''}`}
+      className={`cad-primitive primitive-${part.authoring.primitive} risk-${part.stressRisk} ${loadStatus ? `load-highlight-${loadStatus}` : ''} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -272,26 +288,33 @@ function VisualBox({ part, selected, explodePercent, project, onSelect }: {
       <title>{`${part.name}: ${part.purpose}`}</title>
       {faces.map((face) => <polygon className={face.className} key={face.className} points={pointString(face.points)} />)}
       <PrimitiveSurfaceDetails faces={faces} part={part} />
+      {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={labelPoint.x} cy={labelPoint.y - 22} r="20" /> : null}
       {selected ? <circle className="selected-part-pulse" cx={labelPoint.x} cy={labelPoint.y - 22} r="18" /> : null}
-      <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text>
-      {selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
+      {showLabel && !selected ? <text className="cad-part-label" x={labelPoint.x} y={labelPoint.y}>{part.name}</text> : null}
+      {showLabel && loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={labelPoint.x} y={labelPoint.y - 36}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
+      {!showLabel && selected ? <text className="selected-part-tag" x={labelPoint.x} y={labelPoint.y + 18}>selected - {part.authoring.primitive.replaceAll('_', ' ')}</text> : null}
     </g>
   );
 }
 
-function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
+function VisualCylinder({ part, selected, focused, focusDimmed, explodePercent, loadStatus, project, onSelect, showLabel }: {
   part: Part;
   selected: boolean;
+  focused: boolean;
+  focusDimmed: boolean;
   explodePercent: number;
+  loadStatus?: RobotArmLoadFindingStatus;
   project: (point: Point3D) => ProjectedPoint;
   onSelect: () => void;
+  showLabel: boolean;
 }) {
   const dims = primitiveDimensions(part);
   const explode = explodePercent / 100;
+  const offset = focusOffset(focused);
   const center = {
-    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode,
-    y: part.authoring.positionMm.y,
-    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode,
+    x: part.authoring.positionMm.x + (part.visual.explodeX ?? 0) * 2.4 * explode + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + (part.visual.explodeY ?? 0) * 1.5 * explode + offset.z,
   };
   const top = project({ x: center.x, y: center.y, z: center.z + dims.height / 2 });
   const bottom = project({ x: center.x, y: center.y, z: center.z - dims.height / 2 });
@@ -303,7 +326,7 @@ function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
   return (
     <g
       aria-label={`Select ${part.name} geometry`}
-      className={`cad-primitive primitive-cylinder_joint risk-${part.stressRisk} ${selected ? 'selected' : ''}`}
+      className={`cad-primitive primitive-cylinder_joint risk-${part.stressRisk} ${loadStatus ? `load-highlight-${loadStatus}` : ''} ${selected ? 'selected' : ''} ${focused ? 'focused-part' : ''} ${focusDimmed ? 'focus-dimmed' : ''}`}
       onClick={onSelect}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -320,17 +343,31 @@ function VisualCylinder({ part, selected, explodePercent, project, onSelect }: {
       <path className="cylinder-wall" d={`M ${top.x - rx} ${top.y} L ${bottom.x - rx} ${bottom.y} Q ${bottom.x} ${bottom.y + ry} ${bottom.x + rx} ${bottom.y} L ${top.x + rx} ${top.y}`} />
       <ellipse className="face-side" cx={bottom.x} cy={bottom.y} rx={rx} ry={ry} />
       <ellipse className="face-top" cx={top.x} cy={top.y} rx={rx} ry={ry} />
-      <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />
+      {part.authoring.featureRecipe ? (
+        <g className="sleeve-feature-details" aria-hidden="true">
+          <ellipse className="sleeve-bore" cx={top.x} cy={top.y} rx={rx * 0.48} ry={ry * 0.48} />
+          <line className="slot-cut" x1={top.x - rx * 0.72} y1={top.y - ry * 0.92} x2={top.x + rx * 0.72} y2={top.y + ry * 0.58} />
+          <line className="slot-cut secondary" x1={top.x - rx * 0.52} y1={bottom.y - ry * 0.42} x2={top.x + rx * 0.52} y2={bottom.y + ry * 0.68} />
+          <ellipse className="chamfer-ring" cx={top.x} cy={top.y} rx={rx * 0.92} ry={ry * 0.92} />
+        </g>
+      ) : <circle className="pivot-dot" cx={top.x} cy={top.y} r="5" />}
+      {loadStatus && loadStatus !== 'ok' ? <circle className={`load-alert-ring load-${loadStatus}`} cx={top.x} cy={top.y} r={Math.max(22, rx * 0.82)} /> : null}
       {selected ? <circle className="selected-part-pulse" cx={top.x} cy={top.y} r={Math.max(18, rx * 0.72)} /> : null}
-      <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text>
-      {selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
+      {showLabel && !selected ? <text className="cad-part-label" x={top.x} y={top.y - ry - 10}>{part.name}</text> : null}
+      {showLabel && loadStatus && loadStatus !== 'ok' ? <text className={`load-alert-tag load-${loadStatus}`} x={top.x} y={top.y - ry - 28}>{loadStatus === 'undersized' ? 'needs resize' : 'watch load'}</text> : null}
+      {!showLabel && selected ? <text className="selected-part-tag" x={top.x} y={top.y - ry + 8}>selected - cylinder joint</text> : null}
     </g>
   );
 }
 
-function DimensionOverlay({ part, units, project }: { part: Part; units: AuthoringUnit; project: (point: Point3D) => ProjectedPoint }) {
+function DimensionOverlay({ part, units, project, focused }: { part: Part; units: AuthoringUnit; project: (point: Point3D) => ProjectedPoint; focused: boolean }) {
   const dims = primitiveDimensions(part);
-  const center = part.authoring.positionMm;
+  const offset = focusOffset(focused);
+  const center = {
+    x: part.authoring.positionMm.x + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + offset.z,
+  };
   const half = dims.length / 2;
   const start = project({ x: center.x - half, y: center.y - dims.width / 2 - 28, z: center.z + dims.height / 2 + 10 });
   const end = project({ x: center.x + half, y: center.y - dims.width / 2 - 28, z: center.z + dims.height / 2 + 10 });
@@ -339,12 +376,144 @@ function DimensionOverlay({ part, units, project }: { part: Part; units: Authori
   const label = part.authoring.primitive === 'cylinder_joint'
     ? `Diameter ${formatLength(part.authoring.dimensionsMm.diameterMm ?? dims.width, units)}`
     : `Length ${formatLength(dims.length, units)}`;
+  const holeOffset = part.authoring.holePattern?.offsetFromBottomMm;
+  const clampedHoleOffset = holeOffset == null ? null : clamp(holeOffset, 0, dims.height);
+  const holePoint = clampedHoleOffset == null ? null : project({
+    x: center.x,
+    y: center.y - dims.width / 2 - 3,
+    z: center.z - dims.height / 2 + clampedHoleOffset,
+  });
+  const holeLabel = part.authoring.holePattern
+    ? `${part.authoring.holePattern.fastenerLabel}: ${formatLength(part.authoring.holePattern.holeDiameterMm, units)} hole, ${formatLength(part.authoring.holePattern.offsetFromBottomMm, units)} from bottom`
+    : null;
   return (
     <g className="dimension-overlay" aria-hidden="true">
       <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
       <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{label}</text>
       <line x1={heightStart.x} y1={heightStart.y} x2={heightEnd.x} y2={heightEnd.y} />
       <text x={heightEnd.x + 8} y={heightEnd.y}>Height {formatLength(dims.height, units)}</text>
+      {holePoint && holeLabel ? (
+        <g className="hole-placement-overlay">
+          <circle cx={holePoint.x} cy={holePoint.y} r="7" />
+          <line x1={holePoint.x + 9} y1={holePoint.y - 2} x2={holePoint.x + 112} y2={holePoint.y - 28} />
+          <text x={holePoint.x + 118} y={holePoint.y - 30}>{holeLabel}</text>
+        </g>
+      ) : null}
+    </g>
+  );
+}
+
+function onCanvasLoadSummary(part: Part, loadStatus?: RobotArmLoadFindingStatus): string {
+  const sizingCriterion = part.designCriteria.find((criterion) => criterion.id === 'requirement-sizing-upgrade');
+  if (sizingCriterion) return `${sizingCriterion.label}: ${sizingCriterion.value}`;
+  if (loadStatus === 'undersized') return 'Load check: undersized for current payload plus self-weight requirement';
+  if (loadStatus === 'watch') return 'Load check: watch current payload plus self-weight requirement';
+  return `FEA readiness: ${part.analysisReadiness.state.replaceAll('_', ' ')}`;
+}
+
+function OnCanvasEngineeringAnnotations({
+  activeCanvasEditKind,
+  lifecycleEvidence,
+  loadStatus,
+  onSelectCanvasEdit,
+  part,
+  units,
+}: {
+  activeCanvasEditKind: CanvasEditableKind;
+  lifecycleEvidence?: PartLifecycleEvidence;
+  loadStatus?: RobotArmLoadFindingStatus;
+  onSelectCanvasEdit: (kind: CanvasEditableKind) => void;
+  part: Part;
+  units: AuthoringUnit;
+}) {
+  const dimensions = partLabelDimension(part, units);
+  const sketch = part.authoring.sketchState;
+  const feature = part.authoring.featureRecipe;
+  const holePattern = part.authoring.holePattern;
+  const materialCriterion = part.designCriteria.find((criterion) => criterion.id === 'material-strength');
+  const holeCriterion = part.designCriteria.find((criterion) => criterion.id === 'hole-fastener-placement');
+  const featureSummary = sketch
+    ? `${sketch.plane}, ${sketch.profile}, ${sketch.operation}`
+    : feature
+      ? `${feature.plane}, ${feature.profile}, feature recipe`
+      : 'Sketch and feature annotations review required';
+  const holeSummary = holePattern
+    ? `${holePattern.count}x ${formatLength(holePattern.holeDiameterMm, units)} for ${holePattern.fastenerLabel}, ${formatLength(holePattern.offsetFromBottomMm, units)} from bottom, ${holePattern.centeredOnWidth ? 'centered' : 'offset'}`
+    : holeCriterion?.value ?? 'Hole and fastener fit review required';
+  return (
+    <aside className="on-canvas-annotation-card" aria-label="On-canvas selected part annotations">
+      <div className="annotation-heading">
+        <span>On-model annotations</span>
+        <strong>{part.name}</strong>
+      </div>
+      <div className="on-canvas-click-targets" aria-label="Clickable on-model dimensions and constraints">
+        {(lifecycleEvidence?.items ?? [
+          { editableKind: 'dimension' as const, label: 'Size', value: dimensions, definitionState: 'provisional', provenance: 'inferred' },
+          { editableKind: 'constraint' as const, label: 'Constraints and feature', value: featureSummary, definitionState: 'provisional', provenance: 'inferred' },
+          { editableKind: 'hole' as const, label: 'Hole and fastener fit', value: holeSummary, definitionState: 'under-defined', provenance: 'unresolved' },
+          { editableKind: 'material' as const, label: 'Material and process', value: `${part.material}; ${part.manufacturingProcess}. ${materialCriterion?.value ?? 'properties review required'}`, definitionState: 'fully-defined', provenance: 'inferred' },
+          { editableKind: 'load' as const, label: 'Load and FEA context', value: onCanvasLoadSummary(part, loadStatus), definitionState: 'provisional', provenance: 'estimated' },
+        ]).slice(0, 8).map((item) => (
+          <button
+            aria-pressed={activeCanvasEditKind === item.editableKind}
+            key={`${item.editableKind}-${item.label}`}
+            onClick={() => onSelectCanvasEdit(item.editableKind)}
+            type="button"
+          >
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+            <small>{item.definitionState} - {item.provenance}</small>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function FeatureRecipeOverlay({ part, project, focused, units }: { part: Part; project: (point: Point3D) => ProjectedPoint; focused: boolean; units: AuthoringUnit }) {
+  const recipe = part.authoring.featureRecipe;
+  if (!recipe) return null;
+  const dims = primitiveDimensions(part);
+  const offset = focusOffset(focused);
+  const center = {
+    x: part.authoring.positionMm.x + offset.x,
+    y: part.authoring.positionMm.y + offset.y,
+    z: part.authoring.positionMm.z + offset.z,
+  };
+  const planeY = center.y - dims.width / 2 - 44;
+  const plane = [
+    project({ x: center.x - dims.length * 0.68, y: planeY, z: center.z - dims.height * 0.72 }),
+    project({ x: center.x + dims.length * 0.68, y: planeY, z: center.z - dims.height * 0.72 }),
+    project({ x: center.x + dims.length * 0.68, y: planeY, z: center.z + dims.height * 0.92 }),
+    project({ x: center.x - dims.length * 0.68, y: planeY, z: center.z + dims.height * 0.92 }),
+  ];
+  const anchor = project({ x: center.x - dims.length * 0.55, y: planeY, z: center.z + dims.height * 1.08 });
+  return (
+    <g className="feature-recipe-overlay" aria-hidden="true">
+      <polygon className="sketch-plane" points={pointString(plane)} />
+      <text className="sketch-plane-label" x={anchor.x} y={anchor.y}>{recipe.plane}: sketch profile</text>
+      {recipe.callouts.slice(0, 5).map((callout, index) => {
+        const targetOffsets = [[-0.4, 0.72], [0.1, 0.18], [0.42, -0.26], [0.66, 0.92], [-0.72, -0.78]] as const;
+        const labelOffsets = [[-2.05, 1.55], [-1.85, 0.42], [1.55, -0.72], [1.7, 1.7], [-1.9, -1.55]] as const;
+        const [targetX, targetZ] = targetOffsets[index] ?? targetOffsets.at(-1)!;
+        const [labelX, labelZ] = labelOffsets[index] ?? labelOffsets.at(-1)!;
+        const target = project({
+          x: center.x + targetX * dims.length,
+          y: planeY,
+          z: center.z + targetZ * dims.height,
+        });
+        const label = project({
+          x: center.x + labelX * dims.length,
+          y: planeY - 22,
+          z: center.z + labelZ * dims.height,
+        });
+        return (
+          <g className={`feature-callout kind-${callout.kind}`} key={callout.id}>
+            <line x1={label.x} y1={label.y} x2={target.x} y2={target.y} />
+            <text x={label.x} y={label.y}>{callout.label}: {formatFeatureRecipeCallout(part, callout, units)}</text>
+          </g>
+        );
+      })}
     </g>
   );
 }
@@ -353,17 +522,25 @@ export function VisualCadWorkspace({
   parts,
   wiringRoutes,
   selectedPartId,
+  focusedPartId,
   units,
   explodePercent,
+  activeCanvasEditKind,
+  lifecycleEvidence,
+  loadHighlights = {},
   view,
+  onSelectCanvasEdit,
   onViewChange,
   onSelectPart,
   onNudgeSelected,
+  children,
 }: VisualCadWorkspaceProps) {
   const dragRef = useRef<{ x: number; y: number; view: ViewState; mode: 'orbit' | 'pan' } | null>(null);
   const project = useProjection(view);
   const partsById = useMemo(() => new Map(parts.map((part) => [part.id, part])), [parts]);
   const selectedPart = partsById.get(selectedPartId) ?? parts[0];
+  const effectiveFocusedPartId = focusedPartId && partsById.has(focusedPartId) ? focusedPartId : null;
+  const annotationPartIds = new Set([selectedPartId, effectiveFocusedPartId].filter((partId): partId is string => partId != null));
   const sortedParts = useMemo(() => [...parts].sort((left, right) => {
     const leftDepth = project(left.authoring.positionMm).depth + (left.visual.zIndex ?? 0);
     const rightDepth = project(right.authoring.positionMm).depth + (right.visual.zIndex ?? 0);
@@ -426,6 +603,16 @@ export function VisualCadWorkspace({
         <span>Shift-drag to pan</span>
         <span>Wheel or slider to zoom</span>
       </div>
+      {selectedPart ? (
+        <OnCanvasEngineeringAnnotations
+          activeCanvasEditKind={activeCanvasEditKind}
+          lifecycleEvidence={lifecycleEvidence}
+          loadStatus={loadHighlights[selectedPart.id]}
+          onSelectCanvasEdit={onSelectCanvasEdit}
+          part={selectedPart}
+          units={units}
+        />
+      ) : null}
       <svg
         aria-label="Visual CAD authoring canvas"
         className="visual-cad-canvas"
@@ -461,7 +648,9 @@ export function VisualCadWorkspace({
               <g className={`joint-connection joint-${part.authoring.jointType}`} key={`${part.id}-joint`}>
                 <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
                 <circle cx={end.x} cy={end.y} r="6" />
-                <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{part.authoring.jointType}</text>
+                {annotationPartIds.has(part.id) || (part.authoring.parentPartId != null && annotationPartIds.has(part.authoring.parentPartId))
+                  ? <text x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>{part.authoring.jointType}</text>
+                  : null}
               </g>
             );
           })}
@@ -474,36 +663,53 @@ export function VisualCadWorkspace({
               <g className={`wire-route status-${route.reviewStatus}`} key={route.id}>
                 <polyline points={pointString(points)} />
                 {points.map((point, pointIndex) => <circle key={`${route.id}-${pointIndex}`} cx={point.x} cy={point.y} r={pointIndex === 0 || pointIndex === points.length - 1 ? 5 : 3} />)}
-                <text x={points[Math.min(1, points.length - 1)]!.x + 8} y={points[Math.min(1, points.length - 1)]!.y - 8}>{index + 1}. {route.name}</text>
+                {route.connectedParts.some((partId) => annotationPartIds.has(partId))
+                  ? <text x={points[Math.min(1, points.length - 1)]!.x + 8} y={points[Math.min(1, points.length - 1)]!.y - 8}>{index + 1}. {route.name}</text>
+                  : null}
               </g>
             );
           })}
         </g>
         <g className="cad-primitives" filter="url(#cad-soft-shadow)">
-          {sortedParts.map((part) => part.authoring.primitive === 'cylinder_joint'
-            ? (
-              <VisualCylinder
-                explodePercent={explodePercent}
-                key={part.id}
-                onSelect={() => onSelectPart(part.id)}
-                part={part}
-                project={project}
-                selected={part.id === selectedPartId}
-              />
-            )
-            : (
-              <VisualBox
-                explodePercent={explodePercent}
-                key={part.id}
-                onSelect={() => onSelectPart(part.id)}
-                part={part}
-                project={project}
-                selected={part.id === selectedPartId}
-              />
-            ))}
+          {sortedParts.map((part) => {
+            const focused = effectiveFocusedPartId === part.id;
+            const focusDimmed = effectiveFocusedPartId != null && !focused;
+            const loadStatus = loadHighlights[part.id];
+            return part.authoring.primitive === 'cylinder_joint'
+              ? (
+                <VisualCylinder
+                  explodePercent={explodePercent}
+                  focused={focused}
+                  focusDimmed={focusDimmed}
+                  key={part.id}
+                  loadStatus={loadStatus}
+                  onSelect={() => onSelectPart(part.id)}
+                  part={part}
+                  project={project}
+                  selected={part.id === selectedPartId}
+                  showLabel={annotationPartIds.has(part.id)}
+                />
+              )
+              : (
+                <VisualBox
+                  explodePercent={explodePercent}
+                  focused={focused}
+                  focusDimmed={focusDimmed}
+                  key={part.id}
+                  loadStatus={loadStatus}
+                  onSelect={() => onSelectPart(part.id)}
+                  part={part}
+                  project={project}
+                  selected={part.id === selectedPartId}
+                  showLabel={annotationPartIds.has(part.id)}
+                />
+              );
+          })}
         </g>
-        {selectedPart ? <DimensionOverlay part={selectedPart} project={project} units={units} /> : null}
+        {selectedPart ? <DimensionOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
+        {selectedPart ? <FeatureRecipeOverlay focused={effectiveFocusedPartId === selectedPart.id} part={selectedPart} project={project} units={units} /> : null}
       </svg>
+      {children}
       <div className="canvas-status-row" aria-live="polite">
         <strong>{selectedPart?.name ?? 'No part selected'}</strong>
         <span>{selectedPart ? partLabelDimension(selectedPart, units) : 'Select or create a part to edit geometry.'}</span>

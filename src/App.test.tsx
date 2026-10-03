@@ -12,13 +12,21 @@ describe('MechaFlow input-first cockpit', () => {
     vi.unstubAllGlobals();
   });
 
-  it('launches into a simple 3D-first workspace with prompt, sidebars, and no advanced wall', async () => {
+  it('launches into a full-canvas 3D-first workspace with contextual controls', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
 
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Author a visual robot or machine on the XYZ grid/i })).toBeInTheDocument();
+    expect(container.querySelector('.full-canvas-cockpit')).not.toBeNull();
+    expect(screen.getByRole('navigation', { name: /Full-canvas contextual actions/i })).toHaveTextContent(/3D modeling plane primary/i);
+    expect(screen.getByRole('button', { name: /Start blank part plane/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/On-model annotations/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Dimension definition/i);
+    expect(screen.getByLabelText(/Synchronized left-side inspector/i)).toHaveTextContent(/under-defined/i);
+    expect(screen.getByLabelText(/Synchronized left-side inspector/i)).toHaveTextContent(/user-defined/i);
+    expect(screen.getByLabelText(/Synchronized left-side inspector/i)).toHaveTextContent(/requirements-incomplete/i);
     expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /New from prompt/i })).toBeInTheDocument();
     expect(screen.getByText(/Open local project/i)).toBeInTheDocument();
@@ -28,6 +36,10 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('50 lb payload, 8 s cycle, 0.65 m reach');
     expect(screen.getByText(/Reference only. No photo-to-CAD reconstruction/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Canvas CAD tool palette/i)).toHaveTextContent(/Tool plate/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/Editable dimension handles/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/Machinist drawing preview/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/FEA input preview/i);
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/CAD lifecycle map/i);
     expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Selected actual part/i);
     expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Task criteria and thresholds/i);
     expect(screen.getByLabelText(/Visual CAD primitive palette/i)).toHaveTextContent(/Motor/i);
@@ -36,6 +48,84 @@ describe('MechaFlow input-first cockpit', () => {
     expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BOM and cost/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/MVP coverage guide/i)).not.toBeInTheDocument();
+  });
+
+  it('opens contextual full-canvas drawers and starts from a blank part-design plane', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    const actionBar = await screen.findByRole('navigation', { name: /Full-canvas contextual actions/i });
+    expect(container.querySelector('.canvas-drawer-part')).not.toBeNull();
+
+    await user.click(within(actionBar).getByRole('button', { name: /Load50 lb to 75 lb/i }));
+    expect(container.querySelector('.canvas-drawer-requirements')).not.toBeNull();
+
+    await user.click(within(actionBar).getByRole('button', { name: /Projectopen\/load\/recent/i }));
+    expect(container.querySelector('.canvas-drawer-project')).not.toBeNull();
+
+    await user.click(within(actionBar).getByRole('button', { name: /Start blank part plane/i }));
+    expect(await screen.findByText(/Opened a blank part-design plane/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Viewport-anchored selected part editing/i)).toHaveTextContent(/Blank sleeve part design plane/i);
+  });
+
+  it('syncs clicked on-canvas annotations with the left-side inspector', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const annotations = await screen.findByLabelText(/On-canvas selected part annotations/i);
+    await user.click(within(annotations).getByRole('button', { name: /Sketch relations/i }));
+    const leftInspector = screen.getByLabelText(/Synchronized left-side inspector/i);
+    expect(leftInspector).toHaveTextContent(/Sketch relations/i);
+    expect(within(leftInspector).getByLabelText(/Sketch definition state/i)).toBeInTheDocument();
+
+    await user.selectOptions(within(leftInspector).getByLabelText(/Sketch definition state/i), 'over-defined');
+    expect(await screen.findByText(/sketch definition marked over-defined/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/over-defined - user-defined/i);
+
+    await user.click(within(screen.getByLabelText(/On-canvas selected part annotations/i)).getByRole('button', { name: /Dimension definition/i }));
+    const syncedDimension = within(screen.getByLabelText(/Synchronized left-side inspector/i)).getByLabelText(/Synchronized canvas length dimension in mm/i);
+    await user.clear(syncedDimension);
+    await user.type(syncedDimension, '240');
+    expect(await screen.findByText(/length set to 240 mm/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/240 mm/);
+  });
+
+  it('edits selected-part dimensions, holes, and output metadata from the viewport', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const viewportEditor = await screen.findByLabelText(/Viewport-anchored selected part editing/i);
+    expect(viewportEditor).toHaveTextContent(/Pick plane, sketch, extrude, cut/i);
+    expect(within(viewportEditor).getByLabelText(/Sketch plane for selected part/i)).toHaveValue('Front plane');
+
+    const lengthInput = within(viewportEditor).getByLabelText(/Viewport length dimension in mm/i);
+    await user.clear(lengthInput);
+    await user.type(lengthInput, '230');
+    expect(await screen.findByText(/length set to 230 mm/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/230 mm/);
+
+    await user.selectOptions(within(viewportEditor).getByLabelText(/Sketch plane for selected part/i), 'Top plane');
+    expect(await screen.findByText(/sketch profile updated on Top plane/i)).toBeInTheDocument();
+    await user.selectOptions(within(viewportEditor).getByLabelText(/Viewport fastener size/i), 'm6-socket-head');
+    expect(await screen.findByText(/hole pattern set to 50.8 mm from the bottom and centered with M6 socket head screw/i)).toBeInTheDocument();
+    await user.click(within(viewportEditor).getByRole('button', { name: /Set hole 2 in from bottom centered/i }));
+    expect(await screen.findByText(/hole pattern set to 2 in from the bottom and centered with M6 socket head screw/i)).toBeInTheDocument();
+
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/M6 class 10.9 socket head cap screw/i);
+    expect(screen.getByLabelText(/Machinist drawing preview/i)).toHaveTextContent(/50.8 mm from bottom/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Hole and fastener fit/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/M6 socket head screw/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Material and process/i);
+    expect(screen.getByLabelText(/On-canvas selected part annotations/i)).toHaveTextContent(/Requirements and analysis/i);
+    expect(screen.getByLabelText(/FEA input preview/i)).toHaveTextContent(/Payload plus self-weight/i);
+    expect(screen.getByLabelText(/FEA input preview/i)).toHaveTextContent(/selected fasteners/i);
+    expect(screen.getByLabelText(/CAD lifecycle mapping preview/i)).toHaveTextContent(/Simulation setup with study type/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Hole and fastener placement/i);
   });
 
   it('authors units, primitives, dimensions, assembly links, and visible wiring locally', async () => {
@@ -73,6 +163,87 @@ describe('MechaFlow input-first cockpit', () => {
     await user.click(screen.getByRole('button', { name: /Route visible wire/i }));
     expect(await screen.findByText(/Created visible wire route/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Visible wire routes/i)).toHaveTextContent(/Wrist motor layout proxy/i);
+  });
+
+  it('matches an unknown part description locally and focuses the authored assembly handoff', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
+    await user.click(within(screen.getByLabelText(/Visual CAD primitive palette/i)).getByRole('button', { name: /^Motor$/i }));
+    expect(await screen.findByText(/Created motor block primitive/i)).toBeInTheDocument();
+
+    const catalogPanel = screen.getByLabelText(/Catalog matching for unknown part names/i);
+    await user.clear(within(catalogPanel).getByLabelText(/Plain-language part label or description/i));
+    await user.type(within(catalogPanel).getByLabelText(/Plain-language part label or description/i), '80 mm shoulder joint motor');
+
+    expect(within(catalogPanel).getAllByText(/Shoulder servo actuator/i).length).toBeGreaterThan(0);
+    expect(within(catalogPanel).getByText(/Bolts beside the shoulder yoke/i)).toBeInTheDocument();
+    await user.click(within(catalogPanel).getByRole('button', { name: /Apply to selected part/i }));
+
+    expect(await screen.findByText(/Matched "80 mm shoulder joint motor" to Integrated 80 mm shoulder servo actuator/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Local catalog match: Integrated 80 mm shoulder servo actuator/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Assembly link/i);
+
+    await user.click(screen.getByRole('button', { name: /Focus selected/i }));
+    expect(await screen.findByText(/is in focus: nearby parts are dimmed/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Clear focus/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('guides an approximate sleeve description into a rendered assembly placement', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByLabelText(/Guided visual part authoring flow/i)).toBeInTheDocument();
+    const studio = screen.getByLabelText(/Guided visual part authoring flow/i);
+    expect(studio).toHaveTextContent(/Sketch profile/i);
+    expect(studio).toHaveTextContent(/Cut diagonal slots/i);
+
+    const query = within(studio).getByLabelText(/What part do you want to author/i);
+    await user.clear(query);
+    await user.type(query, 'round arm connector');
+    expect(within(studio).getAllByText(/Lightened joint sleeve coupler with diagonal slots/i).length).toBeGreaterThan(0);
+
+    await user.click(within(studio).getByRole('button', { name: /Place matched part in assembly/i }));
+
+    expect(await screen.findByText(/Guided flow placed Lightened joint sleeve coupler with diagonal slots/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Sketch recipe: Sketch, extrude, slot-cut, chamfer sleeve/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Local catalog match: Lightened joint sleeve coupler with diagonal slots/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Assembly link/i);
+  });
+
+  it('resizes a 50 lb robot-arm requirement to 75 lb and offers catalog-backed fixes', async () => {
+    vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    const sizingPanel = await screen.findByLabelText(/Requirements-driven load resizing/i);
+    expect(sizingPanel).toHaveTextContent(/Requirement sizing triage/i);
+    expect(sizingPanel).toHaveTextContent(/payload plus self-weight/i);
+    expect(within(sizingPanel).getByLabelText(/Requirement payload target in pounds/i)).toHaveValue(50);
+
+    await user.click(within(sizingPanel).getByRole('button', { name: /Set demo target to 75 lb/i }));
+
+    expect(await screen.findByText(/Payload requirement set to 75 lb/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Active task/i)).toHaveTextContent(/75 lb payload/i);
+    const updatedSizingPanel = screen.getByLabelText(/Requirements-driven load resizing/i);
+    expect(within(updatedSizingPanel).getByLabelText(/Requirement payload target in pounds/i)).toHaveValue(75);
+    expect(updatedSizingPanel).toHaveTextContent(/Integrated shoulder servo actuator/i);
+    expect(updatedSizingPanel).toHaveTextContent(/Motor or servo torque path/i);
+    expect(updatedSizingPanel).toHaveTextContent(/Screws, bolts, and fastener material/i);
+    expect(updatedSizingPanel).toHaveTextContent(/undersized/i);
+    expect(within(screen.getByRole('img', { name: /Visual CAD authoring canvas/i })).queryAllByText(/watch load|needs resize/i)).toHaveLength(0);
+
+    await user.click(within(updatedSizingPanel).getByRole('button', { name: /Apply all deterministic fixes/i }));
+
+    expect(await screen.findByText(/Applied \d+ deterministic local upgrades for the 75 lb requirement/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Requirement sizing upgrade/i);
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/deterministic local upgrade catalog/i);
   });
 
   it('captures typed design intent into structured chips and starts a prompt concept honestly', async () => {
@@ -324,14 +495,14 @@ describe('MechaFlow input-first cockpit', () => {
     expect(await screen.findByText(/Preview only: BOM, manufacturing, readiness, and reports below show projected effects/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
     expect(screen.getByText(/BOM and cost preview/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$581.60-$1,761.46 open estimate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Apply validated substitution/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: /Apply validated substitution/i }));
 
     expect(await screen.findByText(/Applied substitution to the backend project/i)).toBeInTheDocument();
     expect(screen.queryByText(/BOM and cost preview/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '$418.60-$1,277.46 open estimate' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '$581.60-$1,761.46 open estimate' })).toBeInTheDocument();
   });
 
   it('imports a portable project file from the project browser and keeps data interactive', async () => {
@@ -422,7 +593,7 @@ describe('MechaFlow input-first cockpit', () => {
     );
 
     expect(await screen.findByText(/Project import failed: file is not valid JSON/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Robot arm visual MVP task-preserving edit demo/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Robot arm with catalog-matched servo actuator demo/i).length).toBeGreaterThan(0);
   });
 
   it('renders queue recommendations, planning estimates, and cached artifact links in analysis mode', async () => {
@@ -660,10 +831,10 @@ describe('MechaFlow input-first cockpit', () => {
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Author a visual robot or machine/i })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: '$1.37-$2.74 open estimate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '$1.57-$3.14 open estimate' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
-    expect(await screen.findByRole('heading', { name: '$1.37-$2.74 open estimate' })).toBeInTheDocument();
-    expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(16);
+    expect(await screen.findByRole('heading', { name: '$1.57-$3.14 open estimate' })).toBeInTheDocument();
+    expect(screen.getAllByText(/\$0\.10-\$0\.20 each/i)).toHaveLength(18);
   });
 
   it('renders missing backend engineering values as review-required inside contextual modes', async () => {

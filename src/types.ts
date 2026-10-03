@@ -6,6 +6,8 @@ export type AnalysisResultTrust = 'demo_estimate' | 'pre_solver_input' | 'solver
 export type AuthoringUnit = 'mm' | 'cm' | 'm' | 'in';
 export type CADPrimitiveShape = 'base_plate' | 'beam' | 'cylinder_joint' | 'bracket' | 'motor_block' | 'connector' | 'electronics' | 'tool';
 export type CADJointType = 'fixed' | 'revolute' | 'prismatic' | 'linear' | 'tool_mount' | 'unassigned';
+export type CADDefinitionState = 'under-defined' | 'fully-defined' | 'over-defined' | 'provisional' | 'requirements-incomplete';
+export type CADValueProvenance = 'user-defined' | 'inferred' | 'defaulted' | 'estimated' | 'unresolved' | 'invalid';
 
 export interface ReferenceDesign {
   id: string;
@@ -203,6 +205,56 @@ export interface PartAuthoringDimensions {
   thicknessMm: number | null;
 }
 
+export interface PartAuthoringFeatureStep {
+  id: string;
+  label: string;
+  value: string;
+  kind: 'sketch' | 'extrude' | 'cut' | 'finish' | 'placement' | 'revolve' | 'chamfer' | 'fillet';
+  provenance?: CADValueProvenance;
+}
+
+export interface PartAuthoringFeatureRecipe {
+  id: string;
+  name: string;
+  plane: string;
+  profile: string;
+  history: PartAuthoringFeatureStep[];
+  callouts: PartAuthoringFeatureStep[];
+  provenance?: CADValueProvenance;
+}
+
+export interface PartAuthoringProvenance {
+  dimensions?: Partial<Record<keyof PartAuthoringDimensions, CADValueProvenance>>;
+  material?: CADValueProvenance;
+  featureRecipe?: CADValueProvenance;
+  featureSteps?: Record<string, CADValueProvenance>;
+}
+
+export interface PartAuthoringHolePattern {
+  id: string;
+  label: string;
+  fastenerId: string;
+  fastenerLabel: string;
+  fastenerSpec: string;
+  holeDiameterMm: number;
+  offsetFromBottomMm: number;
+  centeredOnWidth: boolean;
+  count: number;
+  source: string;
+  notes: string[];
+}
+
+export interface PartAuthoringSketchState {
+  plane: string;
+  profile: string;
+  constraintSummary: string;
+  extrudeDepthMm: number | null;
+  operation: 'sketch' | 'extrude' | 'cut' | 'finish';
+  definitionState?: CADDefinitionState;
+  provenance?: CADValueProvenance;
+  notes: string[];
+}
+
 export interface PartAuthoringData {
   primitive: CADPrimitiveShape;
   positionMm: BackendVector3;
@@ -215,6 +267,10 @@ export interface PartAuthoringData {
   assignedToPartId: string | null;
   connectorId: string | null;
   authored: boolean;
+  featureRecipe: PartAuthoringFeatureRecipe | null;
+  holePattern: PartAuthoringHolePattern | null;
+  sketchState: PartAuthoringSketchState | null;
+  provenance?: PartAuthoringProvenance;
 }
 
 export interface CapabilityRating {

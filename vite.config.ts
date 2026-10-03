@@ -27,6 +27,9 @@ export default defineConfig(({ mode }) => {
       port,
       strictPort: true,
     },
+    build: {
+      chunkSizeWarningLimit: 650,
+    },
     test: {
       environment: 'jsdom',
       setupFiles: './src/test/setup.ts',

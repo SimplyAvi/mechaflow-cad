@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { matchLocalPartCatalog } from '../data/localPartCatalog';
 import { mockReferenceDesign } from '../data/mockDesign';
 import {
+  applyCatalogMatchToPart,
   buildLocalProjectFile,
   connectPartToParent,
   createAssemblyWithBase,
@@ -11,16 +13,46 @@ import {
   updatePartGeometry,
   updateProjectUnits,
 } from './visualAuthoring';
+import { buildPartLifecycleEvidence } from './designLifecycle';
 
 describe('visual authoring project helpers', () => {
   it('exports seeded and edited canvas metadata into portable project files', () => {
     const unitProject = updateProjectUnits(mockReferenceDesign.backendProject, 'in');
-    const labeledProject = updatePartGeometry(unitProject, 'part-palm-plate', { label: 'Bench-mounted base proxy' });
+    const holePattern = {
+      id: 'hole-pattern-part-palm-plate',
+      label: 'Centered clearance hole from viewport',
+      fastenerId: 'm6-socket-head',
+      fastenerLabel: 'M6 socket head screw',
+      fastenerSpec: 'M6 class 10.9 socket head cap screw',
+      holeDiameterMm: 6.6,
+      offsetFromBottomMm: 50.8,
+      centeredOnWidth: true,
+      count: 2,
+      source: 'viewport-fastener-default',
+      notes: ['Hole placed 2 in from bottom in the viewport editor.'],
+    };
+    const sketchState = {
+      plane: 'Front plane',
+      profile: 'Centered rectangle profile with construction centerlines',
+      constraintSummary: 'Centered profile with hole center constrained on width.',
+      extrudeDepthMm: 10,
+      operation: 'cut' as const,
+      definitionState: 'fully-defined' as const,
+      provenance: 'user-defined' as const,
+      notes: ['Viewport sketch metadata.'],
+    };
+    const labeledProject = updatePartGeometry(unitProject, 'part-palm-plate', {
+      label: 'Bench-mounted base proxy',
+      fasteners: [holePattern.fastenerSpec],
+      holePattern,
+      sketchState,
+    });
     const design = remapDesignFromProject(mockReferenceDesign, labeledProject);
 
     const projectFile = buildLocalProjectFile(design);
     const firstPart = projectFile.project.assemblies[0]!.parts[0]!;
     const visual = firstPart.metadata.visual_authoring as Record<string, unknown>;
+    const visualExtension = projectFile.extensions.visual_authoring_mvp as Record<string, unknown>;
 
     expect(projectFile.project.units).toBe('in');
     expect(firstPart.name).toBe('Bench-mounted base proxy');
@@ -28,9 +60,31 @@ describe('visual authoring project helpers', () => {
     expect(visual).toEqual(expect.objectContaining({
       primitive: 'base_plate',
       joint_type: 'unassigned',
+      hole_pattern: expect.objectContaining({ offsetFromBottomMm: 50.8, centeredOnWidth: true }),
+      sketch_state: expect.objectContaining({ plane: 'Front plane', operation: 'cut', definitionState: 'fully-defined', provenance: 'user-defined' }),
     }));
     expect(visual.position_mm).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number), z: expect.any(Number) }));
+    expect(firstPart.dimensions.metadata.visual_hole_pattern).toEqual(expect.objectContaining({ fastenerLabel: 'M6 socket head screw' }));
     expect(firstPart.dimensions.length_mm).toBe(design.assemblies[0]!.parts[0]!.authoring.dimensionsMm.lengthMm);
+    expect(design.assemblies[0]!.parts[0]!.authoring.sketchState).toEqual(expect.objectContaining({ definitionState: 'fully-defined', provenance: 'user-defined' }));
+    expect(design.assemblies[0]!.parts[0]!.designCriteria.some((criterion) => criterion.id === 'hole-fastener-placement')).toBe(true);
+    expect(visualExtension.part_outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        drawing: expect.objectContaining({ title: expect.stringMatching(/machinist drawing preview/i) }),
+        feaInput: expect.objectContaining({ title: expect.stringMatching(/FEA input preview/i) }),
+        lifecycleEvidence: expect.objectContaining({
+          automationBoundary: expect.stringMatching(/user-defined, inferred, defaulted, estimated, unresolved, or invalid/i),
+          items: expect.arrayContaining([expect.objectContaining({ editableKind: 'dimension' })]),
+        }),
+      }),
+    ]));
+    expect(visualExtension.cad_lifecycle_map).toEqual(expect.objectContaining({
+      source_note: expect.stringMatching(/not SOLIDWORKS compatibility/i),
+      mappings: expect.arrayContaining([
+        expect.objectContaining({ id: 'plane-sketch-dimensions' }),
+        expect.objectContaining({ id: 'simulation-fea-setup' }),
+      ]),
+    }));
   });
 
   it('creates motor primitives and persisted visual wire routes', () => {
@@ -45,6 +99,71 @@ describe('visual authoring project helpers', () => {
     expect(design.wiringRoutes.find((route) => route.id === routed.routeId)?.connectedParts)
       .toEqual(expect.arrayContaining([created.partId, 'part-palm-plate']));
     expect(routed.project.wire_segments.some((segment) => segment.from_endpoint?.part_id === created.partId || segment.to_endpoint?.part_id === created.partId)).toBe(true);
+  });
+
+  it('applies a local catalog match to a newly authored part while keeping it editable', () => {
+    const assemblyId = mockReferenceDesign.assembly.id;
+    const created = createPrimitivePart(mockReferenceDesign.backendProject, assemblyId, 'beam', 'part-palm-plate');
+    const match = matchLocalPartCatalog('joint motor')[0]!;
+    const matchedProject = applyCatalogMatchToPart(created.project, created.partId, match.item, { ...match, query: 'joint motor' });
+    const matchedPart = matchedProject.assemblies[0]!.parts.find((part) => part.id === created.partId)!;
+    const visual = matchedPart.metadata.visual_authoring as Record<string, unknown>;
+    const localMatch = matchedPart.metadata.local_catalog_match as Record<string, unknown>;
+
+    expect(matchedPart.name).toBe('Integrated 80 mm shoulder servo actuator');
+    expect(matchedPart.material_id).toBe('mat-servo-actuator-assembly');
+    expect(matchedProject.materials.some((material) => material.id === 'mat-servo-actuator-assembly')).toBe(true);
+    expect(matchedPart.dimensions.length_mm).toBe(86);
+    expect(matchedPart.source_file).toBeNull();
+    expect(matchedPart.manufacturing_options[0]?.process).toBe('off_the_shelf');
+    expect(visual.primitive).toBe('motor_block');
+    expect(visual.authored).toBe(true);
+    expect(localMatch.score).toBeGreaterThanOrEqual(70);
+    expect(localMatch.editable).toBe(true);
+    expect(localMatch.catalog_uri).toBe('local-catalog://catalog-shoulder-servo-actuator-80mm');
+
+    const design = remapDesignFromProject(mockReferenceDesign, matchedProject);
+    const selected = design.assembly.parts.find((part) => part.id === created.partId)!;
+    expect(selected.designCriteria.some((criterion) => criterion.id === 'catalog-match')).toBe(true);
+  });
+
+  it('persists guided sleeve feature recipes through visual project remapping', () => {
+    const assemblyId = mockReferenceDesign.assembly.id;
+    const created = createPrimitivePart(mockReferenceDesign.backendProject, assemblyId, 'cylinder_joint', 'part-shoulder-yoke');
+    const match = matchLocalPartCatalog('round arm connector with diagonal slots')[0]!;
+    const matchedProject = applyCatalogMatchToPart(created.project, created.partId, match.item, { ...match, query: 'round arm connector with diagonal slots' });
+    const matchedPart = matchedProject.assemblies[0]!.parts.find((part) => part.id === created.partId)!;
+    const visual = matchedPart.metadata.visual_authoring as Record<string, unknown>;
+
+    expect(match.item.id).toBe('catalog-lightened-joint-sleeve-coupler');
+    expect(visual.feature_recipe).toEqual(expect.objectContaining({ id: 'recipe-lightened-joint-sleeve-coupler' }));
+
+    const design = remapDesignFromProject(mockReferenceDesign, matchedProject);
+    const selected = design.assembly.parts.find((part) => part.id === created.partId)!;
+    expect(selected.authoring.featureRecipe?.history.some((step) => step.kind === 'cut')).toBe(true);
+    expect(selected.designCriteria.some((criterion) => criterion.id === 'feature-recipe')).toBe(true);
+    expect(buildPartLifecycleEvidence(selected, 'mm', design.task).items.find((item) => item.id === 'dimension-definition')?.provenance).toBe('defaulted');
+    expect(buildPartLifecycleEvidence(selected, 'mm', design.task).items.find((item) => item.id === 'material-process')?.provenance).toBe('defaulted');
+
+    const editedProject = updatePartGeometry(matchedProject, created.partId, {
+      dimensions: { diameterMm: 100 },
+      materialId: 'mat-aluminum-6061-t6',
+      featureRecipe: {
+        ...selected.authoring.featureRecipe!,
+        history: [...selected.authoring.featureRecipe!.history, {
+          id: 'viewport-chamfer',
+          label: 'Chamfer edge note',
+          value: '2 mm edge break',
+          kind: 'chamfer',
+          provenance: 'user-defined',
+        }],
+      },
+    });
+    const edited = remapDesignFromProject(mockReferenceDesign, editedProject).assembly.parts.find((part) => part.id === created.partId)!;
+    const editedEvidence = buildPartLifecycleEvidence(edited, 'mm', design.task);
+    expect(editedEvidence.items.find((item) => item.id === 'dimension-definition')?.provenance).toBe('user-defined');
+    expect(editedEvidence.items.find((item) => item.id === 'material-process')?.provenance).toBe('user-defined');
+    expect(editedEvidence.items.find((item) => item.id === 'feature-history')?.provenance).toBe('user-defined');
   });
 
   it('rejects parent links that would create an assembly cycle', () => {

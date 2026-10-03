@@ -1,25 +1,25 @@
 {
   "project": {
     "id": "project-open-gripper-demo",
-    "name": "Robot arm visual MVP task-preserving edit demo",
-    "description": "Local seed project for a desktop-openable robot arm visual MVP before solver-backed CAD workers are added.",
+    "name": "Robot arm with catalog-matched servo actuator demo",
+    "description": "Local seed project for a desktop-openable robot arm visual MVP with base, links, joints, shoulder servo actuator, motor harness, catalog matching, and authoring handoff before solver-backed CAD workers are added.",
     "reference_design_id": "ref-open-gripper-demo",
     "active_task": {
       "id": "task-lift-50lb",
       "kind": "lift_payload",
-      "description": "Lift and place a 50 lb payload at 0.65 m reach with advisory safety-factor tracking.",
+      "description": "Lift and place a 50 lb payload at 0.65 m reach while preserving shoulder servo, wiring, and safety-factor review criteria.",
       "target_value": 50,
       "unit": "lb",
       "safety_factor_min": 2,
       "validation_method": "heuristic",
       "assumptions": [
-        "Static payload approximation until FEA, actuator torque, and motion workers are wired."
+        "Static payload approximation until FEA, actuator torque curves, and motion workers are wired."
       ]
     },
     "assemblies": [
       {
         "id": "asm-open-gripper-demo",
-        "name": "Six-part robot arm with wrist gripper visual MVP",
+        "name": "Nine-part robot arm with shoulder servo and wrist gripper visual MVP",
         "root_node_id": "node-base",
         "nodes": [
           {
@@ -155,6 +155,28 @@
                 "z": 0
               }
             }
+          },
+          {
+            "id": "node-shoulder-servo",
+            "name": "Shoulder servo actuator",
+            "assembly_id": "asm-open-gripper-demo",
+            "part_id": "part-shoulder-servo-actuator",
+            "part_ids": [
+              "part-shoulder-servo-actuator"
+            ],
+            "child_assembly_ids": [],
+            "exploded_transform": {
+              "translation_mm": {
+                "x": -68,
+                "y": 58,
+                "z": 20
+              },
+              "rotation_deg": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              }
+            }
           }
         ],
         "parts": [
@@ -240,6 +262,25 @@
                 "color": "#64748b",
                 "rotationDeg": 0,
                 "zIndex": 2
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "base_plate",
+                "position_mm": {
+                  "x": -360,
+                  "y": -160,
+                  "z": 16
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                "color": "#64748b",
+                "parent_part_id": null,
+                "joint_type": "unassigned",
+                "assigned_to_part_id": null,
+                "connector_id": null
               }
             }
           },
@@ -300,7 +341,8 @@
             "related_fasteners": [
               "m6-shoulder-pin",
               "m5-yoke-left",
-              "m5-yoke-right"
+              "m5-yoke-right",
+              "m5-servo-mount-1"
             ],
             "wiring_route_ids": [
               "route-main-harness",
@@ -324,6 +366,117 @@
                 "color": "#38bdf8",
                 "rotationDeg": 0,
                 "zIndex": 6
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "cylinder_joint",
+                "position_mm": {
+                  "x": -235,
+                  "y": -60,
+                  "z": 64
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                "color": "#38bdf8",
+                "parent_part_id": "part-palm-plate",
+                "joint_type": "revolute",
+                "assigned_to_part_id": null,
+                "connector_id": null
+              }
+            }
+          },
+          {
+            "id": "part-shoulder-servo-actuator",
+            "name": "Integrated shoulder servo actuator",
+            "category": "off-the-shelf joint actuator",
+            "purpose": "Drives the shoulder axis beside the yoke so the robot arm demo includes the motor, gearbox, encoder, mounting face, and harness criteria needed for a credible assembly.",
+            "material_id": "mat-servo-actuator-assembly",
+            "dimensions": {
+              "length_mm": 86,
+              "width_mm": 80,
+              "height_mm": 80,
+              "diameter_mm": 64,
+              "thickness_mm": null,
+              "metadata": {
+                "nominal_output_torque_nm": 18.5,
+                "mounting_pattern_mm": "60 x 60",
+                "shaft_diameter_mm": 14,
+                "units": "mm"
+              }
+            },
+            "mass_kg": 0.82,
+            "manufacturing_options": [
+              {
+                "id": "mfg-shoulder-servo-buy",
+                "process": "off_the_shelf",
+                "description": "Buy matched shoulder servo actuator package with gearbox, encoder, and mounting pattern review.",
+                "cost": {
+                  "currency": "USD",
+                  "min": 145,
+                  "max": 420,
+                  "confidence": "estimated_from_heuristic"
+                },
+                "lead_time_days_min": 3,
+                "lead_time_days_max": 21,
+                "supplier_url": null,
+                "risk_notes": [
+                  "Torque curve, thermal rise, gearbox backlash, mounting bolts, and controller compatibility remain review-required."
+                ],
+                "confidence": "estimated_from_heuristic"
+              }
+            ],
+            "related_fasteners": [
+              "m5-servo-mount-1",
+              "m5-servo-mount-2",
+              "m5-servo-mount-3",
+              "m5-servo-mount-4"
+            ],
+            "wiring_route_ids": [
+              "route-shoulder-servo-power"
+            ],
+            "source_file": null,
+            "metadata": {
+              "preferred_manufacturing_process": "off_the_shelf",
+              "catalog_item_id": "catalog-shoulder-servo-actuator-80mm",
+              "catalog_uri": "local-catalog://catalog-shoulder-servo-actuator-80mm",
+              "demo_design_criteria": {
+                "load_capacity_lb": null,
+                "load_capacity_status": "review-required",
+                "load_capacity_note": "Servo actuator torque, thermal rise, backlash, mounting bolt shear, and controller fit are review-required. This seed gives visual placement and catalog metadata only."
+              },
+              "mvp_visual": {
+                "x": 21,
+                "y": 61,
+                "width": 13,
+                "height": 15,
+                "explodeX": -17,
+                "explodeY": 14,
+                "shape": "motor",
+                "color": "#fb7185",
+                "rotationDeg": 0,
+                "zIndex": 7
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "motor_block",
+                "position_mm": {
+                  "x": -285,
+                  "y": -88,
+                  "z": 70
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                "color": "#fb7185",
+                "parent_part_id": "part-shoulder-yoke",
+                "joint_type": "revolute",
+                "assigned_to_part_id": "part-shoulder-yoke",
+                "connector_id": "conn-shoulder-servo"
               }
             }
           },
@@ -406,6 +559,25 @@
                 "color": "#60a5fa",
                 "rotationDeg": -21,
                 "zIndex": 4
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "beam",
+                "position_mm": {
+                  "x": -88,
+                  "y": 24,
+                  "z": 112
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": -21
+                },
+                "color": "#60a5fa",
+                "parent_part_id": "part-shoulder-yoke",
+                "joint_type": "revolute",
+                "assigned_to_part_id": null,
+                "connector_id": null
               }
             }
           },
@@ -489,6 +661,25 @@
                 "color": "#a78bfa",
                 "rotationDeg": 0,
                 "zIndex": 7
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "cylinder_joint",
+                "position_mm": {
+                  "x": 110,
+                  "y": 112,
+                  "z": 118
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                "color": "#a78bfa",
+                "parent_part_id": "part-upper-arm-link",
+                "joint_type": "revolute",
+                "assigned_to_part_id": null,
+                "connector_id": "conn-elbow-service"
               }
             }
           },
@@ -571,6 +762,25 @@
                 "color": "#34d399",
                 "rotationDeg": -11,
                 "zIndex": 5
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "beam",
+                "position_mm": {
+                  "x": 245,
+                  "y": 155,
+                  "z": 120
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": -11
+                },
+                "color": "#34d399",
+                "parent_part_id": "part-elbow-joint",
+                "joint_type": "revolute",
+                "assigned_to_part_id": null,
+                "connector_id": null
               }
             }
           },
@@ -653,6 +863,25 @@
                 "color": "#f97316",
                 "rotationDeg": 2,
                 "zIndex": 8
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "tool",
+                "position_mm": {
+                  "x": 345,
+                  "y": 205,
+                  "z": 102
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 2
+                },
+                "color": "#f97316",
+                "parent_part_id": "part-forearm-link",
+                "joint_type": "tool_mount",
+                "assigned_to_part_id": null,
+                "connector_id": "conn-wrist-tool"
               }
             }
           },
@@ -737,6 +966,25 @@
                 "color": "#f472b6",
                 "rotationDeg": 4,
                 "zIndex": 9
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "tool",
+                "position_mm": {
+                  "x": 430,
+                  "y": 255,
+                  "z": 88
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 4
+                },
+                "color": "#f472b6",
+                "parent_part_id": "part-wrist-plate",
+                "joint_type": "tool_mount",
+                "assigned_to_part_id": null,
+                "connector_id": "conn-finger"
               }
             }
           },
@@ -785,7 +1033,8 @@
             "wiring_route_ids": [
               "route-finger-sensor",
               "route-main-harness",
-              "route-shoulder-encoder"
+              "route-shoulder-encoder",
+              "route-shoulder-servo-power"
             ],
             "source_file": "robot-arm-demo.step#controller-pcb-placeholder",
             "metadata": {
@@ -805,11 +1054,549 @@
                 "color": "#22c55e",
                 "rotationDeg": 0,
                 "zIndex": 3
+              },
+              "visual_authoring": {
+                "authored": false,
+                "primitive": "electronics",
+                "position_mm": {
+                  "x": -330,
+                  "y": -285,
+                  "z": 24
+                },
+                "rotation_deg": {
+                  "x": 0,
+                  "y": 0,
+                  "z": 0
+                },
+                "color": "#22c55e",
+                "parent_part_id": "part-palm-plate",
+                "joint_type": "fixed",
+                "assigned_to_part_id": null,
+                "connector_id": "conn-controller-main"
               }
             }
           }
         ],
-        "wiring_routes": [],
+        "wiring_routes": [
+          {
+            "id": "route-finger-sensor",
+            "name": "Finger force sensor lead",
+            "from_connector": {
+              "id": "conn-controller-tool",
+              "name": "Controller tool IO connector",
+              "pin_count": 8,
+              "part_id": "part-controller-pcb",
+              "component_id": "ec-controller-pcb",
+              "kind": "connector",
+              "gender": "board",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-finger",
+              "name": "Finger sensor connector",
+              "pin_count": 4,
+              "part_id": "part-finger-link",
+              "component_id": "ec-finger-force-sensor",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 1,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              {
+                "x": 200,
+                "y": -120,
+                "z": 0
+              },
+              {
+                "x": 650,
+                "y": -220,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 18,
+            "clearance_min_mm": 1.5,
+            "harness_bom": [
+              "bom-wire-finger-sensor-lead"
+            ],
+            "risk_notes": [
+              "Runs through wrist rotation and needs slack validation once CAD geometry exists."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-finger-sensor-lead"
+            ],
+            "electronics_component_ids": [
+              "ec-controller-pcb",
+              "ec-finger-force-sensor"
+            ],
+            "service_loop_mm": 20,
+            "diagram_ref": "wireviz://robot-arm/finger-sensor",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-controller-tool",
+                "part_id": "part-controller-pcb",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-finger",
+                "part_id": "part-finger-link",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          },
+          {
+            "id": "route-main-harness",
+            "name": "Main arm harness",
+            "from_connector": {
+              "id": "conn-controller-main",
+              "name": "Controller main harness connector",
+              "pin_count": 16,
+              "part_id": "part-controller-pcb",
+              "component_id": "ec-controller-pcb",
+              "kind": "connector",
+              "gender": "board",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8",
+                "P9",
+                "P10",
+                "P11",
+                "P12",
+                "P13",
+                "P14",
+                "P15",
+                "P16"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-elbow-service",
+              "name": "Elbow service loop connector",
+              "pin_count": 12,
+              "part_id": "part-elbow-joint",
+              "component_id": "ec-elbow-service-disconnect",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8",
+                "P9",
+                "P10",
+                "P11",
+                "P12"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              {
+                "x": 240,
+                "y": -100,
+                "z": 0
+              },
+              {
+                "x": 430,
+                "y": -170,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 25,
+            "clearance_min_mm": 3,
+            "harness_bom": [
+              "bom-wire-main-arm-harness"
+            ],
+            "risk_notes": [
+              "Service loop review required at shoulder and elbow before motion is trusted."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-main-arm-harness"
+            ],
+            "electronics_component_ids": [
+              "ec-controller-pcb",
+              "ec-elbow-service-disconnect"
+            ],
+            "service_loop_mm": 45,
+            "diagram_ref": "wireviz://robot-arm/main-harness",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-controller-main",
+                "part_id": "part-controller-pcb",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-elbow-service",
+                "part_id": "part-elbow-joint",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          },
+          {
+            "id": "route-shoulder-encoder",
+            "name": "Shoulder encoder pigtail",
+            "from_connector": {
+              "id": "conn-controller-encoder",
+              "name": "Controller encoder connector",
+              "pin_count": 6,
+              "part_id": "part-controller-pcb",
+              "component_id": "ec-controller-pcb",
+              "kind": "connector",
+              "gender": "board",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 1,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-shoulder-encoder",
+              "name": "Shoulder encoder connector",
+              "pin_count": 6,
+              "part_id": "part-shoulder-yoke",
+              "component_id": "ec-shoulder-encoder",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 1,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 0,
+                "y": 0,
+                "z": 0
+              },
+              {
+                "x": 160,
+                "y": -40,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 12,
+            "clearance_min_mm": 2,
+            "harness_bom": [
+              "bom-wire-shoulder-encoder"
+            ],
+            "risk_notes": [
+              "Encoder pigtail is visible so electrical review is not hidden by the mechanical model."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-shoulder-encoder"
+            ],
+            "electronics_component_ids": [
+              "ec-controller-pcb",
+              "ec-shoulder-encoder"
+            ],
+            "service_loop_mm": null,
+            "diagram_ref": "wireviz://robot-arm/shoulder-encoder",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-controller-encoder",
+                "part_id": "part-controller-pcb",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-shoulder-encoder",
+                "part_id": "part-shoulder-yoke",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          },
+          {
+            "id": "route-wrist-tool",
+            "name": "Wrist tool harness",
+            "from_connector": {
+              "id": "conn-elbow-service",
+              "name": "Elbow service loop connector",
+              "pin_count": 12,
+              "part_id": "part-elbow-joint",
+              "component_id": "ec-elbow-service-disconnect",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8",
+                "P9",
+                "P10",
+                "P11",
+                "P12"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "to_connector": {
+              "id": "conn-wrist-tool",
+              "name": "Wrist tool connector",
+              "pin_count": 8,
+              "part_id": "part-wrist-plate",
+              "component_id": "ec-wrist-tool-connector",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "P1",
+                "P2",
+                "P3",
+                "P4",
+                "P5",
+                "P6",
+                "P7",
+                "P8"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 2,
+              "mating_connector_id": null,
+              "notes": []
+            },
+            "path_points_mm": [
+              {
+                "x": 430,
+                "y": -170,
+                "z": 0
+              },
+              {
+                "x": 580,
+                "y": -200,
+                "z": 0
+              },
+              {
+                "x": 650,
+                "y": -220,
+                "z": 0
+              }
+            ],
+            "bend_radius_min_mm": 20,
+            "clearance_min_mm": null,
+            "harness_bom": [
+              "bom-wire-wrist-tool"
+            ],
+            "risk_notes": [
+              "Wrist route needs rotation sweep clearance after real geometry import."
+            ],
+            "confidence": "estimated_from_heuristic",
+            "wire_segment_ids": [
+              "wire-wrist-tool"
+            ],
+            "electronics_component_ids": [
+              "ec-elbow-service-disconnect",
+              "ec-wrist-tool-connector"
+            ],
+            "service_loop_mm": 30,
+            "diagram_ref": "wireviz://robot-arm/wrist-tool",
+            "rule_set_id": "rule-mvp-arm-harness",
+            "endpoints": [
+              {
+                "connector_id": "conn-elbow-service",
+                "part_id": "part-elbow-joint",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-wrist-tool",
+                "part_id": "part-wrist-plate",
+                "pin_label": null,
+                "role": "sink",
+                "notes": []
+              }
+            ]
+          },
+          {
+            "id": "route-shoulder-servo-power",
+            "name": "Shoulder servo power and encoder lead",
+            "from_connector": {
+              "id": "conn-controller-servo",
+              "name": "Controller shoulder servo connector",
+              "pin_count": 6,
+              "part_id": "part-controller-pcb",
+              "component_id": "ec-controller-pcb",
+              "kind": "connector",
+              "gender": "board",
+              "pin_labels": [
+                "24V",
+                "GND",
+                "U",
+                "V",
+                "ENC-A",
+                "ENC-B"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 6,
+              "mating_connector_id": "conn-shoulder-servo",
+              "notes": [
+                "Connector class only; exact pinout and current derating need ECAD review."
+              ]
+            },
+            "to_connector": {
+              "id": "conn-shoulder-servo",
+              "name": "Shoulder servo actuator connector",
+              "pin_count": 6,
+              "part_id": "part-shoulder-servo-actuator",
+              "component_id": "ec-shoulder-servo-actuator",
+              "kind": "connector",
+              "gender": "inline",
+              "pin_labels": [
+                "24V",
+                "GND",
+                "U",
+                "V",
+                "ENC-A",
+                "ENC-B"
+              ],
+              "voltage_rating_v": 24,
+              "current_rating_a": 6,
+              "mating_connector_id": "conn-controller-servo",
+              "notes": [
+                "Actuator connector geometry is a local seed placeholder."
+              ]
+            },
+            "endpoints": [
+              {
+                "connector_id": "conn-controller-servo",
+                "part_id": "part-controller-pcb",
+                "pin_label": null,
+                "role": "source",
+                "notes": []
+              },
+              {
+                "connector_id": "conn-shoulder-servo",
+                "part_id": "part-shoulder-servo-actuator",
+                "pin_label": null,
+                "role": "actuator",
+                "notes": []
+              }
+            ],
+            "path_points_mm": [
+              {
+                "x": -330,
+                "y": -285,
+                "z": 42
+              },
+              {
+                "x": -345,
+                "y": -188,
+                "z": 96
+              },
+              {
+                "x": -302,
+                "y": -118,
+                "z": 128
+              },
+              {
+                "x": -285,
+                "y": -88,
+                "z": 118
+              }
+            ],
+            "wire_segment_ids": [
+              "wire-shoulder-servo-power"
+            ],
+            "electronics_component_ids": [
+              "ec-controller-pcb",
+              "ec-shoulder-servo-actuator"
+            ],
+            "bend_radius_min_mm": 22,
+            "clearance_min_mm": 2.5,
+            "service_loop_mm": 34,
+            "rule_set_id": "rule-mvp-arm-harness",
+            "harness_bom": [
+              "bom-wire-shoulder-servo-power"
+            ],
+            "diagram_ref": "wireviz://robot-arm/shoulder-servo-power",
+            "risk_notes": [
+              "Servo harness route is a visual seed. Current, EMI, flex life, thermal, and CAD sweep validation remain review-required."
+            ],
+            "confidence": "estimated_from_heuristic"
+          }
+        ],
         "assembly_structure_confidence": "unknown_or_needs_review"
       },
       {
@@ -1032,6 +1819,37 @@
         "notes": [
           "PCB values are not load ratings; board mounting and connectors need review."
         ]
+      },
+      {
+        "id": "mat-servo-actuator-assembly",
+        "name": "Mixed servo actuator assembly",
+        "family": "mechatronic_actuator",
+        "properties": {
+          "density_kg_m3": null,
+          "elastic_modulus_gpa": null,
+          "yield_strength_mpa": null,
+          "ultimate_strength_mpa": null,
+          "poisson_ratio": null,
+          "thermal_conductivity_w_mk": null,
+          "max_service_temp_c": 80
+        },
+        "compatible_processes": [
+          "off_the_shelf"
+        ],
+        "cost": {
+          "currency": "USD",
+          "min": 145,
+          "max": 420,
+          "confidence": "estimated_from_heuristic"
+        },
+        "source": {
+          "label": "Repository-local robot-arm actuator fixture",
+          "url": null
+        },
+        "confidence": "estimated_from_heuristic",
+        "notes": [
+          "Represents a mixed off-the-shelf servo actuator assembly. Torque curves, thermal rise, backlash, and mounting fit require supplier review."
+        ]
       }
     ],
     "modifications": [],
@@ -1224,7 +2042,8 @@
         "connector_ids": [
           "conn-controller-tool",
           "conn-controller-main",
-          "conn-controller-encoder"
+          "conn-controller-encoder",
+          "conn-controller-servo"
         ],
         "bom_item_ids": [
           "bom-part-controller-pcb"
@@ -1300,6 +2119,23 @@
         "datasheet_url": null,
         "notes": [
           "Wrist connector needs rotation sweep clearance."
+        ],
+        "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "ec-shoulder-servo-actuator",
+        "name": "Shoulder servo actuator and encoder",
+        "component_type": "actuator",
+        "mounted_part_id": "part-shoulder-servo-actuator",
+        "connector_ids": [
+          "conn-shoulder-servo"
+        ],
+        "bom_item_ids": [
+          "bom-part-shoulder-servo-actuator"
+        ],
+        "datasheet_url": null,
+        "notes": [
+          "Torque curve, thermal rise, backlash, pinout, and controller compatibility are review-required."
         ],
         "confidence": "estimated_from_heuristic"
       }
@@ -1416,6 +2252,34 @@
           "Flex life is not validated by this MVP review."
         ],
         "confidence": "estimated_from_heuristic"
+      },
+      {
+        "id": "wire-shoulder-servo-power",
+        "name": "6-conductor shoulder servo power and encoder lead",
+        "conductor_count": 6,
+        "wire_gauge_awg": 22,
+        "length_mm": 280,
+        "signal_or_power": "24 V actuator power plus encoder feedback",
+        "color": "red",
+        "from_endpoint": {
+          "connector_id": "conn-controller-servo",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        "to_endpoint": {
+          "connector_id": "conn-shoulder-servo",
+          "part_id": "part-shoulder-servo-actuator",
+          "pin_label": null,
+          "role": "actuator",
+          "notes": []
+        },
+        "bom_item_id": "bom-wire-shoulder-servo-power",
+        "notes": [
+          "Length is estimated from visual route points. Current, EMI, flex life, and connector derating are review-required."
+        ],
+        "confidence": "estimated_from_heuristic"
       }
     ],
     "wiring_rules": [
@@ -1437,13 +2301,13 @@
     {
       "id": "task-lift-50lb",
       "kind": "lift_payload",
-      "description": "Lift and place a 50 lb payload at 0.65 m reach with advisory safety-factor tracking.",
+      "description": "Lift and place a 50 lb payload at 0.65 m reach while preserving shoulder servo, wiring, and safety-factor review criteria.",
       "target_value": 50,
       "unit": "lb",
       "safety_factor_min": 2,
       "validation_method": "heuristic",
       "assumptions": [
-        "Static payload approximation until FEA, actuator torque, and motion workers are wired."
+        "Static payload approximation until FEA, actuator torque curves, and motion workers are wired."
       ]
     },
     {
@@ -1787,6 +2651,44 @@
       "license_or_terms": "Harness or electronics BOM seed is heuristic and review-required, not a supplier quote.",
       "lead_time_days_min": 3,
       "lead_time_days_max": 10
+    },
+    {
+      "id": "bom-part-shoulder-servo-actuator",
+      "part_id": "part-shoulder-servo-actuator",
+      "name": "Integrated shoulder servo actuator",
+      "quantity": 1,
+      "unit": "each",
+      "supplier": null,
+      "supplier_part_number": "80-mm-servo-actuator-class",
+      "price": {
+        "currency": "USD",
+        "min": 145,
+        "max": 420,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Local off-the-shelf class estimate; not a supplier quote.",
+      "lead_time_days_min": 3,
+      "lead_time_days_max": 21
+    },
+    {
+      "id": "bom-wire-shoulder-servo-power",
+      "part_id": null,
+      "name": "Shoulder servo power and encoder lead",
+      "quantity": 1,
+      "unit": "each",
+      "supplier": null,
+      "supplier_part_number": null,
+      "price": {
+        "currency": "USD",
+        "min": 18,
+        "max": 64,
+        "confidence": "estimated_from_heuristic"
+      },
+      "datasheet_url": null,
+      "license_or_terms": "Harness estimate only; not a supplier quote.",
+      "lead_time_days_min": 4,
+      "lead_time_days_max": 14
     }
   ],
   "manufacturing_options": [
@@ -2111,6 +3013,31 @@
           "supplier_url": null,
           "risk_notes": [
             "Board support, connector strain relief, and thermal dissipation are review-required."
+          ],
+          "confidence": "estimated_from_heuristic"
+        }
+      ]
+    },
+    {
+      "part_id": "part-shoulder-servo-actuator",
+      "part_name": "Integrated shoulder servo actuator",
+      "material_id": "mat-servo-actuator-assembly",
+      "options": [
+        {
+          "id": "mfg-shoulder-servo-buy",
+          "process": "off_the_shelf",
+          "description": "Buy matched shoulder servo actuator package with gearbox, encoder, and mounting pattern review.",
+          "cost": {
+            "currency": "USD",
+            "min": 145,
+            "max": 420,
+            "confidence": "estimated_from_heuristic"
+          },
+          "lead_time_days_min": 3,
+          "lead_time_days_max": 21,
+          "supplier_url": null,
+          "risk_notes": [
+            "Torque curve, thermal rise, gearbox backlash, mounting bolts, and controller compatibility remain review-required."
           ],
           "confidence": "estimated_from_heuristic"
         }
@@ -2528,6 +3455,113 @@
           "notes": []
         }
       ]
+    },
+    {
+      "id": "route-shoulder-servo-power",
+      "name": "Shoulder servo power and encoder lead",
+      "from_connector": {
+        "id": "conn-controller-servo",
+        "name": "Controller shoulder servo connector",
+        "pin_count": 6,
+        "part_id": "part-controller-pcb",
+        "component_id": "ec-controller-pcb",
+        "kind": "connector",
+        "gender": "board",
+        "pin_labels": [
+          "24V",
+          "GND",
+          "U",
+          "V",
+          "ENC-A",
+          "ENC-B"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 6,
+        "mating_connector_id": "conn-shoulder-servo",
+        "notes": [
+          "Connector class only; exact pinout and current derating need ECAD review."
+        ]
+      },
+      "to_connector": {
+        "id": "conn-shoulder-servo",
+        "name": "Shoulder servo actuator connector",
+        "pin_count": 6,
+        "part_id": "part-shoulder-servo-actuator",
+        "component_id": "ec-shoulder-servo-actuator",
+        "kind": "connector",
+        "gender": "inline",
+        "pin_labels": [
+          "24V",
+          "GND",
+          "U",
+          "V",
+          "ENC-A",
+          "ENC-B"
+        ],
+        "voltage_rating_v": 24,
+        "current_rating_a": 6,
+        "mating_connector_id": "conn-controller-servo",
+        "notes": [
+          "Actuator connector geometry is a local seed placeholder."
+        ]
+      },
+      "endpoints": [
+        {
+          "connector_id": "conn-controller-servo",
+          "part_id": "part-controller-pcb",
+          "pin_label": null,
+          "role": "source",
+          "notes": []
+        },
+        {
+          "connector_id": "conn-shoulder-servo",
+          "part_id": "part-shoulder-servo-actuator",
+          "pin_label": null,
+          "role": "actuator",
+          "notes": []
+        }
+      ],
+      "path_points_mm": [
+        {
+          "x": -330,
+          "y": -285,
+          "z": 42
+        },
+        {
+          "x": -345,
+          "y": -188,
+          "z": 96
+        },
+        {
+          "x": -302,
+          "y": -118,
+          "z": 128
+        },
+        {
+          "x": -285,
+          "y": -88,
+          "z": 118
+        }
+      ],
+      "wire_segment_ids": [
+        "wire-shoulder-servo-power"
+      ],
+      "electronics_component_ids": [
+        "ec-controller-pcb",
+        "ec-shoulder-servo-actuator"
+      ],
+      "bend_radius_min_mm": 22,
+      "clearance_min_mm": 2.5,
+      "service_loop_mm": 34,
+      "rule_set_id": "rule-mvp-arm-harness",
+      "harness_bom": [
+        "bom-wire-shoulder-servo-power"
+      ],
+      "diagram_ref": "wireviz://robot-arm/shoulder-servo-power",
+      "risk_notes": [
+        "Servo harness route is a visual seed. Current, EMI, flex life, thermal, and CAD sweep validation remain review-required."
+      ],
+      "confidence": "estimated_from_heuristic"
     }
   ],
   "reports": [
@@ -2572,7 +3606,8 @@
       "connector_ids": [
         "conn-controller-tool",
         "conn-controller-main",
-        "conn-controller-encoder"
+        "conn-controller-encoder",
+        "conn-controller-servo"
       ],
       "bom_item_ids": [
         "bom-part-controller-pcb"
@@ -2648,6 +3683,23 @@
       "datasheet_url": null,
       "notes": [
         "Wrist connector needs rotation sweep clearance."
+      ],
+      "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "ec-shoulder-servo-actuator",
+      "name": "Shoulder servo actuator and encoder",
+      "component_type": "actuator",
+      "mounted_part_id": "part-shoulder-servo-actuator",
+      "connector_ids": [
+        "conn-shoulder-servo"
+      ],
+      "bom_item_ids": [
+        "bom-part-shoulder-servo-actuator"
+      ],
+      "datasheet_url": null,
+      "notes": [
+        "Torque curve, thermal rise, backlash, pinout, and controller compatibility are review-required."
       ],
       "confidence": "estimated_from_heuristic"
     }
@@ -2764,6 +3816,34 @@
         "Flex life is not validated by this MVP review."
       ],
       "confidence": "estimated_from_heuristic"
+    },
+    {
+      "id": "wire-shoulder-servo-power",
+      "name": "6-conductor shoulder servo power and encoder lead",
+      "conductor_count": 6,
+      "wire_gauge_awg": 22,
+      "length_mm": 280,
+      "signal_or_power": "24 V actuator power plus encoder feedback",
+      "color": "red",
+      "from_endpoint": {
+        "connector_id": "conn-controller-servo",
+        "part_id": "part-controller-pcb",
+        "pin_label": null,
+        "role": "source",
+        "notes": []
+      },
+      "to_endpoint": {
+        "connector_id": "conn-shoulder-servo",
+        "part_id": "part-shoulder-servo-actuator",
+        "pin_label": null,
+        "role": "actuator",
+        "notes": []
+      },
+      "bom_item_id": "bom-wire-shoulder-servo-power",
+      "notes": [
+        "Length is estimated from visual route points. Current, EMI, flex life, and connector derating are review-required."
+      ],
+      "confidence": "estimated_from_heuristic"
     }
   ],
   "wiring_rules": [
@@ -2783,7 +3863,7 @@
   "wiring_review": {
     "project_id": "project-open-gripper-demo",
     "status": "review_required",
-    "summary": "Reviewed 4 wiring routes with deterministic MVP heuristics. Clearance and bend checks are screening signals, not exact electrical or CAD validation.",
+    "summary": "Reviewed 5 wiring routes with deterministic MVP heuristics. Clearance and bend checks are screening signals, not exact electrical or CAD validation.",
     "route_reviews": [
       {
         "route_id": "route-finger-sensor",
@@ -3172,6 +4252,102 @@
         "review_required": [
           "Minimum clearance is missing or lacks a rule threshold, so CAD clearance review is required."
         ]
+      },
+      {
+        "route_id": "route-shoulder-servo-power",
+        "route_name": "Shoulder servo power and encoder lead",
+        "status": "pass",
+        "summary": "MVP wiring review passes recorded checks for the shoulder servo harness; review is still needed before release.",
+        "evidence": [
+          {
+            "check": "endpoint linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Both route endpoint connectors are linked to known project parts.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "part-controller-pcb",
+              "part-shoulder-servo-actuator"
+            ]
+          },
+          {
+            "check": "connector details",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route connectors are tied to electronics component records.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "conn-controller-servo",
+              "conn-shoulder-servo"
+            ]
+          },
+          {
+            "check": "route geometry",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Polyline path length is estimated from recorded route points. This is not routed CAD geometry.",
+            "measured_value": 252.1,
+            "threshold_value": null,
+            "units": "mm",
+            "related_ids": [
+              "route-shoulder-servo-power"
+            ]
+          },
+          {
+            "check": "clearance",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded minimum clearance meets the MVP heuristic threshold. This is not exact CAD validation.",
+            "measured_value": 2.5,
+            "threshold_value": 2,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "bend radius",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded bend radius meets the MVP heuristic threshold. Manufacturer cable data is still required.",
+            "measured_value": 22,
+            "threshold_value": 15,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "service loop",
+            "status": "pass",
+            "basis": "heuristic_estimate",
+            "message": "Recorded service-loop slack meets the MVP heuristic threshold.",
+            "measured_value": 34,
+            "threshold_value": 25,
+            "units": "mm",
+            "related_ids": []
+          },
+          {
+            "check": "BOM linkage",
+            "status": "pass",
+            "basis": "explicit_data",
+            "message": "Route wire segments link to harness BOM additions.",
+            "measured_value": null,
+            "threshold_value": null,
+            "units": null,
+            "related_ids": [
+              "bom-wire-shoulder-servo-power"
+            ]
+          }
+        ],
+        "bom_item_ids": [
+          "bom-wire-shoulder-servo-power"
+        ],
+        "endpoint_part_ids": [
+          "part-controller-pcb",
+          "part-shoulder-servo-actuator"
+        ],
+        "review_required": []
       }
     ],
     "generated_at": "2026-09-05T00:00:00Z",
