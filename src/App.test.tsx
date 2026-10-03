@@ -12,30 +12,39 @@ describe('MechaFlow input-first cockpit', () => {
     vi.unstubAllGlobals();
   });
 
-  it('launches into a simple 3D-first workspace with prompt, sidebars, and no advanced wall', async () => {
+  it('launches into a progressive 3D-first workspace and reveals secondary areas on request', async () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
+    const user = userEvent.setup();
 
     render(<App />);
 
     expect(await screen.findByRole('heading', { name: /Author a visual robot or machine on the XYZ grid/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Primary CAD flow/i)).toHaveTextContent(/Open a part, shape it, save it/i);
+    expect(screen.getByRole('button', { name: /Create or open/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add a sketch block/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Extrude and dimension/i })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('50 lb payload, 8 s cycle, 0.65 m reach');
+    expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/BOM and cost/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/MVP coverage guide/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByText(/Start or open/i));
     expect(screen.getByRole('button', { name: /New from prompt/i })).toBeInTheDocument();
     expect(screen.getByText(/Open local project/i)).toBeInTheDocument();
     expect(screen.getByText(/Ready examples/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Project and example browser/i)).toHaveTextContent(/Model tree/i);
-    expect(screen.getByLabelText(/Selected-part properties and context tools/i)).toHaveTextContent(/Context inspector/i);
-    expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('50 lb payload, 8 s cycle, 0.65 m reach');
-    expect(screen.getByText(/Reference only. No photo-to-CAD reconstruction/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Canvas CAD tool palette/i)).toHaveTextContent(/Tool plate/i);
-    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Selected actual part/i);
-    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Task criteria and thresholds/i);
+
+    await user.click(screen.getByText(/Sketch, extrude, assemble, and save/i));
     expect(screen.getByLabelText(/Visual CAD primitive palette/i)).toHaveTextContent(/Motor/i);
     expect(screen.getByLabelText(/Selected geometry inspector/i)).toHaveTextContent(/Rotation Z/i);
     expect(screen.getByLabelText(/Assembly and wiring authoring/i)).toHaveTextContent(/Route visible wire/i);
-    expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/BOM and cost/i)).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/MVP coverage guide/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByText(/Selected object/i));
+    expect(screen.getByLabelText(/Selected-part properties and context tools/i)).toHaveTextContent(/Context inspector/i);
+    await user.click(screen.getByText(/Selected part details/i));
+    expect(screen.getByLabelText(/Selected part detail card/i)).toHaveTextContent(/Task criteria and thresholds/i);
   });
 
   it('authors units, primitives, dimensions, assembly links, and visible wiring locally', async () => {
@@ -130,7 +139,7 @@ describe('MechaFlow input-first cockpit', () => {
     expect(within(gantryCard as HTMLElement).getByText(/no external CAD asset imported/i)).toBeInTheDocument();
     await user.click(within(gantryCard as HTMLElement).getByRole('button', { name: /Load/i }));
 
-    expect(await screen.findByText(/Compact gantry proxy assembly/i)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Compact gantry proxy assembly/i)).length).toBeGreaterThan(0);
     expect(screen.getByPlaceholderText(/Describe what you want to design/i)).toHaveValue('Design a compact pick-and-place gantry for 8 lb payload, 0.45 m travel, 3 s cycle, aluminum frame, local-only analysis.');
     expect(screen.getByLabelText(/Active task/i)).toHaveTextContent('8 lb payload, 3 s cycle, 0.45 m reach');
     expect(screen.getByText(/repository-local and does not import external CAD assets/i)).toBeInTheDocument();
@@ -145,7 +154,7 @@ describe('MechaFlow input-first cockpit', () => {
     const gantryCard = screen.getByText(/Compact pick-and-place gantry concept/i).closest('article');
     expect(gantryCard).not.toBeNull();
     await user.click(within(gantryCard as HTMLElement).getByRole('button', { name: /Load/i }));
-    await screen.findByText(/Compact gantry proxy assembly/i);
+    expect((await screen.findAllByText(/Compact gantry proxy assembly/i)).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: /Recent project/i }));
     expect(await screen.findByText(/Reopened Compact pick-and-place gantry concept from local recent-project history/i)).toBeInTheDocument();
@@ -170,18 +179,22 @@ describe('MechaFlow input-first cockpit', () => {
     expect(await screen.findByRole('img', { name: /Visual CAD authoring canvas/i })).toBeInTheDocument();
     expect(screen.queryByText(/Analysis job queue/i)).not.toBeInTheDocument();
 
+    await user.click(screen.getByText(/Switch advanced workspaces/i));
     await user.click(screen.getByRole('button', { name: /^Analysis$/i }));
     expect(await screen.findByText(/Analysis job queue/i)).toBeInTheDocument();
     expect(screen.getByText(/Local-first orchestration and cached reports/i)).toBeInTheDocument();
 
+    await user.click(screen.getByText(/Switch advanced workspaces/i));
     await user.click(screen.getByRole('button', { name: /^Manufacturing$/i }));
     expect(await screen.findByText(/BOM and cost/i)).toBeInTheDocument();
     expect(screen.getByText(/Wiring and electronics/i)).toBeInTheDocument();
 
+    await user.click(screen.getByText(/Switch advanced workspaces/i));
     await user.click(screen.getByRole('button', { name: /^Reports$/i }));
     expect(await screen.findByLabelText(/Project file import and export/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/MVP coverage guide/i)).toHaveTextContent(/Progressive tool coverage/i);
 
+    await user.click(screen.getByText(/Switch advanced workspaces/i));
     await user.click(screen.getByRole('button', { name: /^Backend$/i }));
     expect(await screen.findByText(/Ready for API handoff/i)).toBeInTheDocument();
   });

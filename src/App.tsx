@@ -382,6 +382,11 @@ function App() {
   });
   const [exportedEvidence, setExportedEvidence] = useState<ExportedEvidenceSignature | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('design');
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [startDrawerOpen, setStartDrawerOpen] = useState(false);
+  const [cadToolsOpen, setCadToolsOpen] = useState(false);
+  const [canvasToolsOpen, setCanvasToolsOpen] = useState(false);
+  const [contextDrawerOpen, setContextDrawerOpen] = useState(false);
   const [intentText, setIntentText] = useState('');
   const [intentMessage, setIntentMessage] = useState<string | null>('Robot arm demo is loaded. Describe a new mechanism or add a reference image to start faster.');
   const [referenceImages, setReferenceImages] = useState<ReferenceImageRecord[]>([]);
@@ -1164,6 +1169,20 @@ function App() {
   };
 
   const activeMode = workspaceModes.find((mode) => mode.id === workspaceMode) ?? workspaceModes[0];
+  const showCadTools = () => {
+    setWorkspaceMode('design');
+    setCanvasToolsOpen(true);
+    setCadToolsOpen(true);
+    window.setTimeout(() => document.querySelector('#progressive-cad-tools')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  };
+  const showStartDrawer = () => {
+    setStartDrawerOpen(true);
+    window.setTimeout(() => document.querySelector('#project-browser')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  };
+  const showContextDrawer = () => {
+    setContextDrawerOpen(true);
+    window.setTimeout(() => document.querySelector('#part-inspector')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+  };
 
   return (
     <main className="app-shell input-first-shell">
@@ -1179,20 +1198,33 @@ function App() {
             </p>
           </div>
         </div>
-        <nav className="tool-rail" aria-label="Workspace tool modes">
-          {workspaceModes.map((mode) => (
-            <button
-              aria-pressed={workspaceMode === mode.id}
-              className={workspaceMode === mode.id ? 'active' : ''}
-              key={mode.id}
-              onClick={() => setWorkspaceMode(mode.id)}
-              title={mode.summary}
-              type="button"
-            >
-              <span>{mode.label}</span>
-            </button>
-          ))}
-        </nav>
+        <details
+          className="workspace-mode-menu"
+          onToggle={(event) => setModeMenuOpen(event.currentTarget.open)}
+          open={modeMenuOpen}
+        >
+          <summary>
+            <span>{activeMode.label}</span>
+            <small>Switch advanced workspaces</small>
+          </summary>
+          <nav className="tool-rail" aria-label="Workspace tool modes">
+            {workspaceModes.map((mode) => (
+              <button
+                aria-pressed={workspaceMode === mode.id}
+                className={workspaceMode === mode.id ? 'active' : ''}
+                key={mode.id}
+                onClick={() => {
+                  setWorkspaceMode(mode.id);
+                  setModeMenuOpen(false);
+                }}
+                title={mode.summary}
+                type="button"
+              >
+                <span>{mode.label}</span>
+              </button>
+            ))}
+          </nav>
+        </details>
         <div className="task-card cockpit-task-card" aria-label="Active task">
           <span>Active task</span>
           <strong>{design.task.label}</strong>
@@ -1201,8 +1233,18 @@ function App() {
         </div>
       </header>
 
-      <section className="project-cockpit" aria-label="Input-first CAD cockpit">
+      <section className="project-cockpit viewport-first-cockpit" aria-label="Progressive viewport-first CAD cockpit">
         <aside className="panel cad-sidebar project-browser" id="project-browser" aria-label="Project and example browser">
+          <details
+            className="progressive-drawer start-project-drawer"
+            onToggle={(event) => setStartDrawerOpen(event.currentTarget.open)}
+            open={startDrawerOpen}
+          >
+            <summary>
+              <span>Start or open</span>
+              <small>New part, local file, recent work, examples, and model tree</small>
+            </summary>
+            <div className="drawer-content">
           <p className="eyebrow">Project browser</p>
           <h2>Start small</h2>
           <p className="sidebar-copy">Create from a prompt, open a saved .mfcad file, or load a local seed, then keep authoring directly on the canvas.</p>
@@ -1262,9 +1304,25 @@ function App() {
             ) : null}
             <PartTree parts={activeAssembly.parts} selectedPartId={selectedPart.id} onSelect={selectPart} />
           </details>
+            </div>
+          </details>
         </aside>
 
         <section className="canvas-column" aria-label="3D workspace and command line">
+          <PrimaryFlowStrip
+            activeAssemblyName={activeAssembly.name}
+            activePartName={selectedPart.name}
+            onAddGeometry={() => {
+              createPartFromPalette('beam');
+              setCanvasToolsOpen(true);
+              setCadToolsOpen(true);
+            }}
+            onOpenProject={showStartDrawer}
+            onOpenTools={showCadTools}
+            onSaveProject={exportCurrentProjectFile}
+            onShowSelected={showContextDrawer}
+            projectName={design.name}
+          />
           <section className="viewer-card panel primary-viewer" id="assembly-viewer" aria-label="Interactive visual CAD authoring workspace">
             <div className="viewer-toolbar">
               <div>
@@ -1272,10 +1330,12 @@ function App() {
                 <h2>{activeAssembly.name}</h2>
                 <small>Author visible primitives on an XYZ grid: select geometry, edit dimensions, place motors, and route harnesses.</small>
               </div>
-              <div className="viewer-controls" aria-label="3D view controls">
-                <button type="button" onClick={() => setExplodePercent((value) => (value > 0 ? 0 : 100))}>
-                  {explodePercent > 0 ? 'Collapse' : 'Explode'}
-                </button>
+              <details className="viewer-controls-menu">
+                <summary>View controls</summary>
+                <div className="viewer-controls" aria-label="3D view controls">
+                  <button type="button" onClick={() => setExplodePercent((value) => (value > 0 ? 0 : 100))}>
+                    {explodePercent > 0 ? 'Collapse' : 'Explode'}
+                  </button>
                 <label>
                   <span>Explode</span>
                   <input
@@ -1325,12 +1385,15 @@ function App() {
                 </label>
                 <button type="button" onClick={() => setViewPan((value) => ({ ...value, x: value.x - 32 }))}>Pan left</button>
                 <button type="button" onClick={() => setViewPan((value) => ({ ...value, x: value.x + 32 }))}>Pan right</button>
-                <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); }}>Reset view</button>
-              </div>
+                  <button type="button" onClick={() => { setRotationDeg(28); setOrbitPitchDeg(38); setViewZoom(1); setViewPan({ x: 0, y: 0 }); }}>Reset view</button>
+                </div>
+              </details>
             </div>
             <CanvasToolPalette
               onCreatePart={createPartFromPalette}
               onCreateAssembly={createAssemblyFromPalette}
+              onOpenChange={setCanvasToolsOpen}
+              open={canvasToolsOpen}
               selectedPartName={selectedPart.name}
             />
             <VisualCadWorkspace
@@ -1453,7 +1516,18 @@ function App() {
           </section>
 
           {workspaceMode === 'design' ? (
-            <section className="visual-authoring-dock" aria-label="Visual CAD authoring tools">
+            <details
+              className="visual-authoring-dock progressive-toolbox"
+              id="progressive-cad-tools"
+              aria-label="Visual CAD authoring tools"
+              onToggle={(event) => setCadToolsOpen(event.currentTarget.open)}
+              open={cadToolsOpen}
+            >
+              <summary>
+                <span>Sketch, extrude, assemble, and save</span>
+                <small>Open these focused tools when you are ready to edit dimensions, insert parts, add joints, route wiring, or export.</small>
+              </summary>
+              <div className="progressive-toolbox-grid">
               <section className="panel design-overview" aria-label="Design mode summary">
                 <p className="eyebrow">Design mode</p>
                 <h2>Build the model visually</h2>
@@ -1716,7 +1790,8 @@ function App() {
                 </ul>
                 <p className="microcopy">Wiring routes are intentionally visible in the canvas and portable project JSON. Bend radius, service loops, current, EMI, and collision checks are marked review-required.</p>
               </section>
-            </section>
+              </div>
+            </details>
           ) : (
             <section className="mode-deck" aria-label={`${activeMode.label} tools`}>
               <div className="panel mode-deck-heading">
@@ -1762,6 +1837,17 @@ function App() {
         </section>
 
         <aside className="panel inspector-panel context-sidebar" id="part-inspector" aria-label="Selected-part properties and context tools">
+          <details
+            className="progressive-drawer selected-object-drawer"
+            onToggle={(event) => setContextDrawerOpen(event.currentTarget.open)}
+            open={contextDrawerOpen}
+          >
+            <summary>
+              <span>Selected object</span>
+              <strong>{selectedPart.name}</strong>
+              <small>Open for material, factory, source, readiness, and status details.</small>
+            </summary>
+            <div className="drawer-content">
           <p className="eyebrow">Context inspector</p>
           <h2>{selectedPart.name}</h2>
           <p>{selectedPart.purpose}</p>
@@ -1821,23 +1907,84 @@ function App() {
             <PreSolverReadinessPanel readiness={activeAssembly.analysisReadiness} title="Assembly readiness" />
             <PreSolverReadinessPanel readiness={selectedPart.analysisReadiness} title="Part readiness" />
           </details>
+            </div>
+          </details>
         </aside>
       </section>
     </main>
   );
 }
 
+function PrimaryFlowStrip({
+  activeAssemblyName,
+  activePartName,
+  onAddGeometry,
+  onOpenProject,
+  onOpenTools,
+  onSaveProject,
+  onShowSelected,
+  projectName,
+}: {
+  activeAssemblyName: string;
+  activePartName: string;
+  onAddGeometry: () => void;
+  onOpenProject: () => void;
+  onOpenTools: () => void;
+  onSaveProject: () => void;
+  onShowSelected: () => void;
+  projectName: string;
+}) {
+  return (
+    <section className="primary-flow-strip panel" aria-label="Primary CAD flow">
+      <div>
+        <p className="eyebrow">Progressive CAD flow</p>
+        <h2>Open a part, shape it, save it, then insert it in an assembly.</h2>
+        <p>
+          Current project: <strong>{projectName}</strong>. Working assembly: <strong>{activeAssemblyName}</strong>. Selected part: <strong>{activePartName}</strong>.
+        </p>
+      </div>
+      <ol className="flow-step-list">
+        <li>
+          <span>1</span>
+          <button type="button" onClick={onOpenProject}>Create or open</button>
+        </li>
+        <li>
+          <span>2</span>
+          <button type="button" onClick={onAddGeometry}>Add a sketch block</button>
+        </li>
+        <li>
+          <span>3</span>
+          <button type="button" onClick={onOpenTools}>Extrude and dimension</button>
+        </li>
+        <li>
+          <span>4</span>
+          <button type="button" onClick={onShowSelected}>Inspect selected part</button>
+        </li>
+        <li>
+          <span>5</span>
+          <button type="button" onClick={onSaveProject}>Save .mfcad</button>
+        </li>
+      </ol>
+    </section>
+  );
+}
+
 function CanvasToolPalette({
   onCreatePart,
   onCreateAssembly,
+  onOpenChange,
+  open,
   selectedPartName,
 }: {
   onCreatePart: (kind: CADPrimitiveShape) => void;
   onCreateAssembly: () => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
   selectedPartName: string;
 }) {
   const jumpTo = (selector: string) => {
-    document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    onOpenChange(true);
+    window.setTimeout(() => document.querySelector(selector)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
   };
   const creationTools: Array<[CADPrimitiveShape, string, string]> = [
     ['base_plate', 'Base shape', 'flat base plate'],
@@ -1850,12 +1997,17 @@ function CanvasToolPalette({
     ['tool', 'Tool plate', 'end-effector mount'],
   ];
   return (
-    <section className="canvas-tool-palette" aria-label="Canvas CAD tool palette">
-      <div>
-        <p className="eyebrow">CAD tools</p>
-        <strong>Pick a tool, place a proxy primitive, then label and dimension it.</strong>
+    <details
+      className="canvas-tool-palette"
+      aria-label="Canvas CAD tool palette"
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+      open={open}
+    >
+      <summary>
+        <span>CAD tools</span>
+        <strong>Add sketch blocks, assemblies, joints, and wires only when needed.</strong>
         <small>MVP authoring primitives only, not imported manufacturing CAD.</small>
-      </div>
+      </summary>
       <div className="canvas-tool-grid">
         {creationTools.map(([kind, label, title]) => (
           <button key={kind} onClick={() => onCreatePart(kind)} title={`Add ${title}`} type="button">
@@ -1872,7 +2024,7 @@ function CanvasToolPalette({
         <button onClick={() => jumpTo('#assembly-authoring-editor')} type="button">Joint link</button>
         <button onClick={() => jumpTo('#assembly-authoring-editor')} type="button">Wire route</button>
       </div>
-    </section>
+    </details>
   );
 }
 
@@ -1897,8 +2049,14 @@ function SelectedPartCanvasCard({
     ?? part.analysisReadiness.thermal_guidance?.max_service_temp_c
     ?? null;
   return (
-    <section className="selected-part-canvas-card" aria-label="Selected part detail card">
-      <div className="selected-part-hero">
+    <details className="selected-part-canvas-card selected-part-drawer" aria-label="Selected part detail card">
+      <summary>
+        <span>Selected part details</span>
+        <strong>{part.name}</strong>
+        <small>{dimensionSummary(part, units)} - open for material, task, and review notes.</small>
+      </summary>
+      <div className="selected-part-expanded">
+        <div className="selected-part-hero">
         <p className="eyebrow">Selected actual part</p>
         <h3>Selected: {part.name}</h3>
         <p>{part.purpose}</p>
@@ -1960,8 +2118,9 @@ function SelectedPartCanvasCard({
           <strong>Review-required warnings</strong>
           {warnings.length > 0 ? <ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : <p>No additional warnings in the seed card, but engineering review is still required before release.</p>}
         </article>
+        </div>
       </div>
-    </section>
+    </details>
   );
 }
 
