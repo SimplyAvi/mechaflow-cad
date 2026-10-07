@@ -3128,3 +3128,288 @@ small,
 .inspector-panel .meta-grid dd > span {
   display: block;
 }
+
+/* Workshed progressive CAD flow overrides */
+.viewport-first-cockpit {
+  grid-template-columns: minmax(0, 1fr) !important;
+  margin: 0 auto;
+  max-width: 1760px;
+  width: 100%;
+}
+
+.viewport-first-cockpit .canvas-column {
+  order: 1;
+}
+
+.viewport-first-cockpit .project-browser,
+.viewport-first-cockpit .context-sidebar {
+  max-height: none;
+  order: 2;
+  padding: 0;
+}
+
+.viewport-first-cockpit .context-sidebar {
+  order: 3;
+}
+
+.workspace-mode-menu,
+.progressive-drawer,
+.viewer-controls-menu,
+.canvas-tool-palette,
+.progressive-toolbox,
+.selected-part-drawer {
+  min-width: 0;
+}
+
+.workspace-mode-menu > summary,
+.progressive-drawer > summary,
+.viewer-controls-menu > summary,
+.canvas-tool-palette > summary,
+.progressive-toolbox > summary,
+.selected-part-drawer > summary {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.56);
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 16px;
+  color: #e0f2fe;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  list-style: none;
+  padding: 12px 14px;
+}
+
+.workspace-mode-menu > summary::-webkit-details-marker,
+.progressive-drawer > summary::-webkit-details-marker,
+.viewer-controls-menu > summary::-webkit-details-marker,
+.canvas-tool-palette > summary::-webkit-details-marker,
+.progressive-toolbox > summary::-webkit-details-marker,
+.selected-part-drawer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.workspace-mode-menu > summary::after,
+.progressive-drawer > summary::after,
+.viewer-controls-menu > summary::after,
+.canvas-tool-palette > summary::after,
+.progressive-toolbox > summary::after,
+.selected-part-drawer > summary::after {
+  color: #7dd3fc;
+  content: 'Open';
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin-left: auto;
+  text-transform: uppercase;
+}
+
+.workspace-mode-menu[open] > summary::after,
+.progressive-drawer[open] > summary::after,
+.viewer-controls-menu[open] > summary::after,
+.canvas-tool-palette[open] > summary::after,
+.progressive-toolbox[open] > summary::after,
+.selected-part-drawer[open] > summary::after {
+  content: 'Close';
+}
+
+.workspace-mode-menu > summary:hover,
+.workspace-mode-menu > summary:focus-visible,
+.progressive-drawer > summary:hover,
+.progressive-drawer > summary:focus-visible,
+.viewer-controls-menu > summary:hover,
+.viewer-controls-menu > summary:focus-visible,
+.canvas-tool-palette > summary:hover,
+.canvas-tool-palette > summary:focus-visible,
+.progressive-toolbox > summary:hover,
+.progressive-toolbox > summary:focus-visible,
+.selected-part-drawer > summary:hover,
+.selected-part-drawer > summary:focus-visible {
+  border-color: rgba(125, 211, 252, 0.72);
+  outline: 3px solid rgba(56, 189, 248, 0.18);
+  outline-offset: 2px;
+}
+
+.workspace-mode-menu > summary span,
+.progressive-drawer > summary span,
+.canvas-tool-palette > summary span,
+.progressive-toolbox > summary span,
+.selected-part-drawer > summary span {
+  color: #7dd3fc;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspace-mode-menu > summary small,
+.progressive-drawer > summary small,
+.canvas-tool-palette > summary small,
+.progressive-toolbox > summary small,
+.selected-part-drawer > summary small {
+  color: #b8c7d8;
+}
+
+.workspace-mode-menu[open] {
+  position: relative;
+  z-index: 20;
+}
+
+.workspace-mode-menu .tool-rail {
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  margin-top: 8px;
+}
+
+.primary-flow-strip {
+  align-items: center;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(280px, 0.86fr) minmax(0, 1.4fr);
+  padding: 16px;
+}
+
+.primary-flow-strip h2 {
+  font-size: clamp(1.18rem, 2.4vw, 1.9rem);
+  margin-bottom: 8px;
+}
+
+.primary-flow-strip p {
+  color: #b8c7d8;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.flow-step-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.flow-step-list li {
+  background: rgba(2, 6, 23, 0.36);
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 16px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.flow-step-list span {
+  align-items: center;
+  background: rgba(56, 189, 248, 0.18);
+  border-radius: 999px;
+  color: #e0f2fe;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 950;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.flow-step-list button {
+  background: transparent;
+  border: 0;
+  color: #f8fafc;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  padding: 0;
+  text-align: left;
+}
+
+.flow-step-list button:hover,
+.flow-step-list button:focus-visible {
+  color: #7dd3fc;
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.drawer-content,
+.selected-part-expanded,
+.progressive-toolbox-grid {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.progressive-toolbox {
+  display: block;
+  margin-top: 14px;
+}
+
+.progressive-toolbox-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-inline: 0;
+}
+
+.progressive-toolbox-grid .design-overview,
+.progressive-toolbox-grid .part-inspector {
+  grid-column: 1 / -1;
+}
+
+.viewer-controls-menu {
+  justify-self: end;
+  min-width: min(420px, 100%);
+}
+
+.viewer-controls-menu > summary {
+  justify-content: space-between;
+}
+
+.viewer-controls-menu .viewer-controls {
+  margin-top: 8px;
+}
+
+.canvas-tool-palette {
+  display: block;
+}
+
+.canvas-tool-palette > summary,
+.selected-part-drawer > summary {
+  margin: 0;
+}
+
+.selected-part-expanded .selected-part-hero {
+  margin: 0;
+}
+
+.start-project-drawer .model-tree {
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.selected-object-drawer .drawer-content {
+  padding-inline: 0;
+}
+
+@media (max-width: 1180px) {
+  .primary-flow-strip,
+  .progressive-toolbox-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .flow-step-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .flow-step-list {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-mode-menu .tool-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .primary-flow-strip,
+  .drawer-content,
+  .selected-part-expanded {
+    padding: 12px;
+  }
+}
